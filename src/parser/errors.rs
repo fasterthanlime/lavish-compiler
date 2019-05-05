@@ -5,20 +5,77 @@ use nom::{
 };
 use std::iter::repeat;
 
+use super::super::ast;
+
+pub struct Source<'a> {
+    name: String,
+    input: &'a str,
+    lines: Vec<String>,
+}
+
+impl<'a> Source<'a> {
+    pub fn new(input_name: &'a str, input: &'a str) -> Self {
+        Self {
+            name: input_name.replace("./", ""),
+            input,
+            lines: input.lines().map(String::from).collect::<Vec<_>>(),
+        }
+    }
+}
+
+pub struct Position<'a> {
+    source: &'a Source<'a>,
+    line: usize,
+    column: usize,
+}
+
+impl<'a> Source<'a> {
+    pub fn name(&'a self) -> &'a str {
+        &self.name
+    }
+
+    pub fn position(&self, loc: &'a ast::Loc<'a>) -> Position {
+        let mut offset = self.input.offset(loc.slice);
+        let mut line = 0;
+        let mut column = 0;
+
+        for (j, l) in self.lines.iter().enumerate() {
+            if offset <= l.len() {
+                line = j;
+                column = offset;
+                break;
+            } else {
+                // 1 accounts for the '\n'
+                offset = offset - l.len() - 1;
+            }
+        }
+
+        Position {
+            source: &self,
+            line,
+            column,
+        }
+    }
+}
+
+impl<'a> Position<'a> {
+    pub fn print_message(&self, message: &str) {
+        let loc = format!(
+            "{}:{}:{}:",
+            self.source.name(),
+            self.line + 1,
+            self.column + 1
+        );
+        println!("{} {}", loc.bold(), message);
+        println!("{}", &self.source.lines[self.line].dimmed());
+        print!("{}", repeat(' ').take(self.column).collect::<String>());
+        println!("{}", "^".blue().bold());
+    }
+}
+
 pub fn print_errors(input_name: &str, input: &str, e: VerboseError<&str>) {
     let input_name = input_name.replace("./", "");
-
-    // FIXME: this only works with <LF> or <CR> line endings, not <CRLF>
     let lines: Vec<_> = input.lines().map(String::from).collect();
-    // println!(
-    //     "lines:\n{}",
-    //     lines
-    //         .iter()
-    //         .enumerate()
-    //         .map(|(i, line)| format!("{:5} | {}", i, line))
-    //         .collect::<Vec<String>>()
-    //         .join("\n")
-    // );
 
     let mut errors = e.errors.clone();
     errors.reverse();

@@ -38,12 +38,17 @@ fn id<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
 
 fn field<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Field, E> {
     let (i, comment) = opt(comment)(i)?;
+    let (i, loc) = spaced(|i| match tag("")(i) {
+        Ok((input, _)) => Ok((input, input)),
+        Err(err) => Err(err),
+    })(i)?;
     let (i, name) = spaced(id)(i)?;
     let ctx = spaced(context("field", preceded(spaced(char(':')), spaced(id))));
 
     map(ctx, move |typ| Field {
         comment: comment.clone(),
         name: name.into(),
+        loc: Loc { slice: loc },
         typ: typ.into(),
     })(i)
 }
@@ -119,6 +124,7 @@ fn structdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Struct
             move |(name, _)| StructDecl {
                 comment: comment.clone(),
                 name: name.into(),
+                fields: Vec::new(),
             },
         ),
     )(i)

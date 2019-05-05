@@ -12,5 +12,5 @@ namespace itchio {
     )
 
     // Woops, we're missing a type for b here
-    server fn ping(a: int64, b)
+    server fn ping(a: int64)
 }
