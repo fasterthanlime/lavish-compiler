@@ -1,0 +1,13 @@
+namespace itchio {
+    // An itch.io profile
+    struct Profile {}
+
+    // double a number
+    server fn double(
+        // the number to double
+        x: int64
+    ) -> (
+        // the number, doubled
+        y: int64
+    )
+}

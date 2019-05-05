@@ -46,37 +46,64 @@ fn fields<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Field>
     separated_list(preceded(sp, char(',')), field)(i)
 }
 
+fn fnmod<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionModifier, E> {
+    alt((
+        map(tag("server"), |_| FunctionModifier::Server),
+        map(tag("client"), |_| FunctionModifier::Client),
+    ))(i)
+}
+
+fn fnmods<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<FunctionModifier>, E> {
+    preceded(sp, separated_list(sp, fnmod))(i)
+}
+
 fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDecl, E> {
-    map(
-        tuple((
-            opt(preceded(sp, comment)),
-            preceded(sp, preceded(tag("fn"), preceded(sp, id))),
-            preceded(
-                sp,
-                delimited(char('('), context("function parameters", fields), char(')')),
-            ),
-            opt(preceded(
-                sp,
+    let (i, comment) = opt(comment)(i)?;
+    let (i, modifiers) = fnmods(i)?;
+    let (i, _) = preceded(sp, tag("fn"))(i)?;
+
+    context(
+        "fn",
+        map(
+            tuple((
+                preceded(sp, id),
                 preceded(
-                    tag("->"),
-                    preceded(
-                        sp,
-                        delimited(char('('), context("function results", fields), char(')')),
+                    sp,
+                    delimited(
+                        char('('),
+                        context("parameter list", fields),
+                        preceded(sp, char(')')),
                     ),
                 ),
+                opt(preceded(
+                    sp,
+                    preceded(
+                        tag("->"),
+                        preceded(
+                            sp,
+                            delimited(
+                                char('('),
+                                context("result list", fields),
+                                preceded(sp, char(')')),
+                            ),
+                        ),
+                    ),
+                )),
             )),
-        )),
-        |(comment, name, params, results)| FunctionDecl {
-            comment,
-            name: name.into(),
-            params,
-            results: results.unwrap_or_default(),
-        },
+            move |(name, params, results)| FunctionDecl {
+                comment: comment.clone(),
+                modifiers: modifiers.clone(),
+                name: name.into(),
+                params,
+                results: results.unwrap_or_default(),
+            },
+        ),
     )(i)
 }
 
 fn structdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, StructDecl, E> {
-    let (i, _) = tag("struct")(i)?;
+    let (i, comment) = opt(comment)(i)?;
+    let (i, _) = preceded(sp, tag("struct"))(i)?;
 
     context(
         "struct",
@@ -85,7 +112,10 @@ fn structdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Struct
                 preceded(sp, id),
                 preceded(sp, delimited(char('{'), sp, char('}'))),
             )),
-            |(name, _)| StructDecl { name: name.into() },
+            move |(name, _)| StructDecl {
+                comment: comment.clone(),
+                name: name.into(),
+            },
         ),
     )(i)
 }

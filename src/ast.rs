@@ -19,9 +19,16 @@ pub enum NamespaceItem {
 #[derive(Debug)]
 pub struct FunctionDecl {
     pub comment: Option<Comment>,
+    pub modifiers: Vec<FunctionModifier>,
     pub name: String,
     pub params: Vec<Field>,
     pub results: Vec<Field>,
+}
+
+#[derive(Debug, Clone)]
+pub enum FunctionModifier {
+    Server,
+    Client,
 }
 
 #[derive(Debug)]
@@ -33,6 +40,7 @@ pub struct Field {
 
 #[derive(Debug)]
 pub struct StructDecl {
+    pub comment: Option<Comment>,
     pub name: String,
 }
 
