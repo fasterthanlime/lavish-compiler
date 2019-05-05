@@ -1,11 +1,11 @@
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_until, take_while},
+    bytes::complete::{tag, take_until, take_while, take_while1},
     character::complete::char,
     combinator::{all_consuming, map, opt},
     error::{context, ParseError},
     multi::{many0, many1, separated_list},
-    sequence::{delimited, preceded, separated_pair, terminated, tuple},
+    sequence::{delimited, preceded, terminated, tuple},
     IResult,
 };
 
@@ -33,25 +33,26 @@ fn sp<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
 fn id<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
     let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
-    take_while(move |c| chars.contains(c))(i)
+    take_while1(move |c| chars.contains(c))(i)
 }
 
 fn field<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Field, E> {
-    map(
-        tuple((
-            opt(comment),
-            separated_pair(spaced(id), spaced(char(':')), spaced(id)),
-        )),
-        |(comment, (name, typ))| Field {
-            comment,
-            name: name.into(),
-            typ: typ.into(),
-        },
-    )(i)
+    let (i, comment) = opt(comment)(i)?;
+    let (i, name) = spaced(id)(i)?;
+    let ctx = spaced(context("field", preceded(spaced(char(':')), spaced(id))));
+
+    map(ctx, move |typ| Field {
+        comment: comment.clone(),
+        name: name.into(),
+        typ: typ.into(),
+    })(i)
 }
 
 fn fields<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Field>, E> {
-    separated_list(preceded(sp, char(',')), field)(i)
+    terminated(
+        separated_list(spaced(char(',')), field),
+        opt(spaced(char(','))),
+    )(i)
 }
 
 fn fnmod<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionModifier, E> {
@@ -80,7 +81,7 @@ fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDe
     let (i, _) = spaced(tag("fn"))(i)?;
 
     context(
-        "fn",
+        "function declaration",
         map(
             tuple((
                 preceded(sp, id),

@@ -13,11 +13,9 @@ fn main() {
         f.read_to_string(&mut data).unwrap();
     }
 
-    println!("================ input =================");
-    println!("{}", data);
-    println!("========================================");
     match parser::root::<VerboseError<&str>>(&data) {
         Err(Err::Error(e)) | Err(Err::Failure(e)) => {
+            println!();
             parser::print_errors(input_name, &data, e);
         }
         Ok(res) => println!("Parsed: {:#?}", res),

@@ -20,7 +20,10 @@ pub fn print_errors(input_name: &str, input: &str, e: VerboseError<&str>) {
     //         .join("\n")
     // );
 
-    for (_, (substring, kind)) in e.errors.iter().enumerate() {
+    let mut errors = e.errors.clone();
+    errors.reverse();
+
+    for (substring, kind) in errors.iter() {
         let mut offset = input.offset(substring);
         // result += &format!("offset: {:#?}\n", offset);
 
@@ -38,8 +41,19 @@ pub fn print_errors(input_name: &str, input: &str, e: VerboseError<&str>) {
             }
         }
 
-        let loc = format!("{}:{}:{}", input_name, line, column);
+        let loc = format!("{}:{}:{}", input_name, line + 1, column + 1);
         let loc = loc.bold();
+
+        let print_line = |highlight: bool| {
+            let line = &lines[line];
+            if highlight {
+                print!("{}", &line[0..column].dimmed());
+                print!("{}", &line[column..column + 1].red().bold());
+                print!("{}\n", &line[column + 1..].dimmed());
+            } else {
+                print!("{}\n", &line.dimmed());
+            }
+        };
 
         match kind {
             VerboseErrorKind::Char(c) => {
@@ -49,20 +63,20 @@ pub fn print_errors(input_name: &str, input: &str, e: VerboseError<&str>) {
                     substring.chars().next().unwrap()
                 );
                 println!("{}: {} {}", loc, "error:".red().bold(), error_msg);
-                println!("{}", lines[line]);
+                print_line(true);
                 if column > 0 {
                     print!("{}", repeat(' ').take(column).collect::<String>());
                 }
                 println!("{}", "^".red().bold());
             }
             VerboseErrorKind::Context(s) => {
-                let context_msg = format!("occured in {}", s);
-                println!("{}: {} {}", loc, "note:".blue().bold(), context_msg);
-                println!("{}", lines[line]);
+                let context_msg = format!("In {}", s);
+                println!("{}: {}", loc, context_msg);
+                print_line(false);
                 if column > 0 {
                     print!("{}", repeat(' ').take(column).collect::<String>());
                 }
-                println!("{}\n", "^".blue().bold());
+                println!("{}", "^".blue().bold());
             }
             VerboseErrorKind::Nom(ek) => {
                 println!("parsing error: {:#?}\n\n", ek);

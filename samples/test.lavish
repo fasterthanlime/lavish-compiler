@@ -5,9 +5,12 @@ namespace itchio {
     // double a number
     server fn double(
         // the number to double
-        x: int64
+        x: int64,
     ) -> (
         // the number, doubled
-        y: int64 j
+        y: int64,
     )
+
+    // Woops, we're missing a type for b here
+    server fn ping(a: int64, b)
 }
