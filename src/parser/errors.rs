@@ -1,27 +1,28 @@
+use colored::*;
 use nom::{
     error::{VerboseError, VerboseErrorKind},
     Offset,
 };
 use std::iter::repeat;
 
-pub fn convert_error(input: &str, e: VerboseError<&str>) -> String {
+pub fn print_errors(input_name: &str, input: &str, e: VerboseError<&str>) {
+    let input_name = input_name.replace("./", "");
+
     // FIXME: this only works with <LF> or <CR> line endings, not <CRLF>
     let lines: Vec<_> = input.lines().map(String::from).collect();
-    println!(
-        "lines:\n{}",
-        lines
-            .iter()
-            .enumerate()
-            .map(|(i, line)| format!("{:5} | {}", i, line))
-            .collect::<Vec<String>>()
-            .join("\n")
-    );
+    // println!(
+    //     "lines:\n{}",
+    //     lines
+    //         .iter()
+    //         .enumerate()
+    //         .map(|(i, line)| format!("{:5} | {}", i, line))
+    //         .collect::<Vec<String>>()
+    //         .join("\n")
+    // );
 
-    let mut result = String::new();
-
-    for (i, (substring, kind)) in e.errors.iter().enumerate() {
+    for (_, (substring, kind)) in e.errors.iter().enumerate() {
         let mut offset = input.offset(substring);
-        result += &format!("offset: {:#?}\n", offset);
+        // result += &format!("offset: {:#?}\n", offset);
 
         let mut line = 0;
         let mut column = 0;
@@ -32,39 +33,40 @@ pub fn convert_error(input: &str, e: VerboseError<&str>) -> String {
                 column = offset;
                 break;
             } else {
+                // 1 accounts for the '\n'
                 offset = offset - l.len() - 1;
             }
         }
 
+        let loc = format!("{}:{}:{}", input_name, line, column);
+        let loc = loc.bold();
+
         match kind {
             VerboseErrorKind::Char(c) => {
-                result += &format!("{}: at [{}, {}]:\n", i, line, column);
-                result += &lines[line];
-                result += "\n";
-                if column > 0 {
-                    result += &repeat(' ').take(column).collect::<String>();
-                }
-                result += "^\n";
-                result += &format!(
-                    "expected '{}', found {}\n\n",
+                let error_msg = format!(
+                    "expected '{}', found {}",
                     c,
                     substring.chars().next().unwrap()
                 );
+                println!("{}: {} {}", loc, "error:".red().bold(), error_msg);
+                println!("{}", lines[line]);
+                if column > 0 {
+                    print!("{}", repeat(' ').take(column).collect::<String>());
+                }
+                println!("{}", "^".red().bold());
             }
             VerboseErrorKind::Context(s) => {
-                result += &format!("{}: at [{}, {}], in {}:\n", i, line, column, s);
-                result += &lines[line];
-                result += "\n";
+                let context_msg = format!("occured in {}", s);
+                println!("{}: {} {}", loc, "note:".blue().bold(), context_msg);
+                println!("{}", lines[line]);
                 if column > 0 {
-                    result += &repeat(' ').take(column).collect::<String>();
+                    print!("{}", repeat(' ').take(column).collect::<String>());
                 }
-                result += "^\n\n";
+                println!("{}\n", "^".blue().bold());
             }
             VerboseErrorKind::Nom(ek) => {
-                result += &format!("nom error {:#?}\n\n", ek);
+                println!("parsing error: {:#?}\n\n", ek);
             }
         }
     }
-
-    result
 }

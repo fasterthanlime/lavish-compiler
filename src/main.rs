@@ -6,9 +6,10 @@ mod ast;
 mod parser;
 
 fn main() {
+    let input_name = "./samples/test.lavish";
     let mut data = String::new();
     {
-        let mut f = File::open("./samples/test.lavish").unwrap();
+        let mut f = File::open(input_name).unwrap();
         f.read_to_string(&mut data).unwrap();
     }
 
@@ -17,7 +18,7 @@ fn main() {
     println!("========================================");
     match parser::root::<VerboseError<&str>>(&data) {
         Err(Err::Error(e)) | Err(Err::Failure(e)) => {
-            println!("Errors:\n{}", parser::convert_error(&data, e));
+            parser::print_errors(input_name, &data, e);
         }
         Ok(res) => println!("Parsed: {:#?}", res),
         _ => println!("Something else happened :o"),
