@@ -7,7 +7,7 @@ fn main() {
     let data = "
 namespace sample {
     namespace double {
-        fn double(x: int64)
+        fn double(x: int64) -> (y: int64)
     }
 }
 ";

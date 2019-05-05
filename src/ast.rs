@@ -18,11 +18,12 @@ pub enum NamespaceItem {
 #[derive(Debug)]
 pub struct FunctionDecl {
     pub name: String,
-    pub args: Vec<FunctionArg>,
+    pub params: Vec<Field>,
+    pub results: Vec<Field>,
 }
 
 #[derive(Debug)]
-pub struct FunctionArg {
+pub struct Field {
     pub name: String,
     pub typ: String,
 }

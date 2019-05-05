@@ -2,7 +2,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_while},
     character::complete::char,
-    combinator::map,
+    combinator::{map, opt},
     error::{context, ParseError, VerboseError, VerboseErrorKind},
     multi::{many0, separated_list},
     sequence::{delimited, preceded, separated_pair, tuple},
@@ -28,18 +28,18 @@ fn id<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
     take_while(move |c| chars.contains(c))(i)
 }
 
-fn fnarg<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionArg, E> {
+fn field<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Field, E> {
     map(
         separated_pair(preceded(sp, id), preceded(sp, char(':')), preceded(sp, id)),
-        |(name, typ)| FunctionArg {
+        |(name, typ)| Field {
             name: name.into(),
             typ: typ.into(),
         },
     )(i)
 }
 
-fn fnargs<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<FunctionArg>, E> {
-    separated_list(preceded(sp, char(',')), fnarg)(i)
+fn fields<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Field>, E> {
+    separated_list(preceded(sp, char(',')), field)(i)
 }
 
 fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDecl, E> {
@@ -50,11 +50,19 @@ fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDe
         map(
             tuple((
                 preceded(sp, id),
-                preceded(sp, delimited(char('('), fnargs, char(')'))),
+                preceded(sp, delimited(char('('), fields, char(')'))),
+                opt(preceded(
+                    sp,
+                    preceded(
+                        tag("->"),
+                        preceded(sp, delimited(char('('), fields, char(')'))),
+                    ),
+                )),
             )),
-            |(name, args)| FunctionDecl {
+            |(name, params, results)| FunctionDecl {
                 name: name.into(),
-                args,
+                params,
+                results: results.unwrap_or_default(),
             },
         ),
     )(i)
