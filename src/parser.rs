@@ -1,11 +1,11 @@
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while},
-    character::complete::{alphanumeric1, char},
+    character::complete::char,
     combinator::map,
     error::{context, ParseError, VerboseError, VerboseErrorKind},
-    multi::many0,
-    sequence::{delimited, preceded, tuple},
+    multi::{many0, separated_list},
+    sequence::{delimited, preceded, separated_pair, tuple},
     IResult, Offset,
 };
 use std::iter::repeat;
@@ -28,6 +28,20 @@ fn id<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
     take_while(move |c| chars.contains(c))(i)
 }
 
+fn fnarg<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionArg, E> {
+    map(
+        separated_pair(preceded(sp, id), preceded(sp, char(':')), preceded(sp, id)),
+        |(name, typ)| FunctionArg {
+            name: name.into(),
+            typ: typ.into(),
+        },
+    )(i)
+}
+
+fn fnargs<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<FunctionArg>, E> {
+    separated_list(preceded(sp, char(',')), fnarg)(i)
+}
+
 fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDecl, E> {
     let (i, _) = tag("fn")(i)?;
 
@@ -36,9 +50,12 @@ fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDe
         map(
             tuple((
                 preceded(sp, id),
-                preceded(sp, delimited(char('('), sp, char(')'))),
+                preceded(sp, delimited(char('('), fnargs, char(')'))),
             )),
-            |(name, _)| FunctionDecl { name: name.into() },
+            |(name, args)| FunctionDecl {
+                name: name.into(),
+                args,
+            },
         ),
     )(i)
 }

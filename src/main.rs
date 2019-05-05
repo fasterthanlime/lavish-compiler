@@ -6,12 +6,8 @@ mod parser;
 fn main() {
     let data = "
 namespace sample {
-    fn get_version()
-
-    namespace pingpong {
-        fn ping()
-        fn pong()
-        struct a { }
+    namespace double {
+        fn double(x: int64)
     }
 }
 ";
