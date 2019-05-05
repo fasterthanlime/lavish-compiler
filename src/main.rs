@@ -5,10 +5,9 @@ mod parser;
 
 fn main() {
     let data = "
-namespace sample {
-    namespace double {
-        fn double(x: int64) -> (y: int64)
-    }
+namespace itchio {
+    // Woops
+    struct Profile {}
 }
 ";
     println!("================ input =================");

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct NamespaceDecl {
+    comment: Option<Comment>,
     name: String,
     functions: HashMap<String, FunctionDecl>,
     structs: HashMap<String, StructDecl>,
@@ -17,6 +18,7 @@ pub enum NamespaceItem {
 
 #[derive(Debug)]
 pub struct FunctionDecl {
+    pub comment: Option<Comment>,
     pub name: String,
     pub params: Vec<Field>,
     pub results: Vec<Field>,
@@ -24,6 +26,7 @@ pub struct FunctionDecl {
 
 #[derive(Debug)]
 pub struct Field {
+    pub comment: Option<Comment>,
     pub name: String,
     pub typ: String,
 }
@@ -33,10 +36,16 @@ pub struct StructDecl {
     pub name: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct Comment {
+    pub lines: Vec<String>,
+}
+
 impl NamespaceDecl {
-    pub fn new(name: &str, items: Vec<NamespaceItem>) -> Self {
+    pub fn new(name: &str, comment: Option<Comment>, items: Vec<NamespaceItem>) -> Self {
         let mut ns = NamespaceDecl {
             name: name.into(),
+            comment,
             functions: HashMap::new(),
             structs: HashMap::new(),
             namespaces: HashMap::new(),

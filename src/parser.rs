@@ -1,11 +1,11 @@
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_while},
+    bytes::complete::{tag, take_until, take_while},
     character::complete::char,
-    combinator::{map, opt},
+    combinator::{all_consuming, map, opt},
     error::{context, ParseError, VerboseError, VerboseErrorKind},
-    multi::{many0, separated_list},
-    sequence::{delimited, preceded, separated_pair, tuple},
+    multi::{many0, many1, separated_list},
+    sequence::{delimited, preceded, separated_pair, terminated, tuple},
     IResult, Offset,
 };
 use std::iter::repeat;
@@ -13,7 +13,7 @@ use std::iter::repeat;
 use super::ast::*;
 
 pub fn root<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<NamespaceDecl>, E> {
-    many0(preceded(sp, nsdecl))(i)
+    all_consuming(terminated(many0(preceded(sp, nsdecl)), sp))(i)
 }
 
 fn sp<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -30,8 +30,12 @@ fn id<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
 
 fn field<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Field, E> {
     map(
-        separated_pair(preceded(sp, id), preceded(sp, char(':')), preceded(sp, id)),
-        |(name, typ)| Field {
+        tuple((
+            opt(comment),
+            separated_pair(preceded(sp, id), preceded(sp, char(':')), preceded(sp, id)),
+        )),
+        |(comment, (name, typ))| Field {
+            comment,
             name: name.into(),
             typ: typ.into(),
         },
@@ -43,28 +47,31 @@ fn fields<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Field>
 }
 
 fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDecl, E> {
-    let (i, _) = tag("fn")(i)?;
-
-    context(
-        "fn",
-        map(
-            tuple((
-                preceded(sp, id),
-                preceded(sp, delimited(char('('), fields, char(')'))),
-                opt(preceded(
-                    sp,
+    map(
+        tuple((
+            opt(preceded(sp, comment)),
+            preceded(sp, preceded(tag("fn"), preceded(sp, id))),
+            preceded(
+                sp,
+                delimited(char('('), context("function parameters", fields), char(')')),
+            ),
+            opt(preceded(
+                sp,
+                preceded(
+                    tag("->"),
                     preceded(
-                        tag("->"),
-                        preceded(sp, delimited(char('('), fields, char(')'))),
+                        sp,
+                        delimited(char('('), context("function results", fields), char(')')),
                     ),
-                )),
+                ),
             )),
-            |(name, params, results)| FunctionDecl {
-                name: name.into(),
-                params,
-                results: results.unwrap_or_default(),
-            },
-        ),
+        )),
+        |(comment, name, params, results)| FunctionDecl {
+            comment,
+            name: name.into(),
+            params,
+            results: results.unwrap_or_default(),
+        },
     )(i)
 }
 
@@ -83,6 +90,16 @@ fn structdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Struct
     )(i)
 }
 
+fn comment_line<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
+    preceded(sp, preceded(tag("//"), preceded(sp, take_until("\n"))))(i)
+}
+
+fn comment<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Comment, E> {
+    map(many1(comment_line), |lines| Comment {
+        lines: lines.iter().map(|&x| x.into()).collect(),
+    })(i)
+}
+
 fn nsitem<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, NamespaceItem, E> {
     alt((
         map(fndecl, |i| NamespaceItem::Function(i)),
@@ -96,16 +113,21 @@ fn nsbody<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Namesp
 }
 
 fn nsdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, NamespaceDecl, E> {
-    let (i, _) = tag("namespace")(i)?;
+    let (i, comment) = opt(comment)(i)?;
+    let (i, _) = preceded(sp, tag("namespace"))(i)?;
 
     context(
         "namespace",
         map(
             tuple((
                 preceded(sp, id),
-                delimited(preceded(sp, char('{')), nsbody, preceded(sp, char('}'))),
+                delimited(
+                    preceded(sp, char('{')),
+                    context("namespace", nsbody),
+                    preceded(sp, char('}')),
+                ),
             )),
-            |(name, items)| NamespaceDecl::new(name, items),
+            move |(name, items)| NamespaceDecl::new(name, comment.clone(), items),
         ),
     )(i)
 }
