@@ -1,5 +1,4 @@
 use colored::*;
-use nom::{error::VerboseError, Err};
 use std::fs::File;
 use std::io::Read;
 
@@ -92,13 +91,13 @@ fn main() {
         let mut f = File::open(input_name).unwrap();
         f.read_to_string(&mut data).unwrap();
     }
+    let source = parser::Source::new(input_name, &data);
 
-    match parser::root::<VerboseError<&str>>(&data) {
-        Err(Err::Error(e)) | Err(Err::Failure(e)) => {
-            println!();
-            parser::print_errors(input_name, &data, e);
+    match parser::parse(&source) {
+        Err(e) => {
+            parser::print_errors(&source, e);
         }
-        Ok((_, output)) => {
+        Ok(output) => {
             // println!("Parsed: {:#?}", output);
             let source = parser::Source::new(input_name, &data);
             let v = Visitor { source: &source };
@@ -106,6 +105,5 @@ fn main() {
                 ns.visit(&v)
             }
         }
-        _ => println!("Something else happened :o"),
     }
 }

@@ -3,17 +3,27 @@ use nom::{
     bytes::complete::{tag, take_until, take_while, take_while1},
     character::complete::char,
     combinator::{all_consuming, map, opt},
-    error::{context, ParseError},
+    error::{context, ErrorKind, ParseError, VerboseError, VerboseErrorKind},
     multi::{many0, many1, separated_list},
     sequence::{delimited, preceded, terminated, tuple},
-    IResult,
+    Err, IResult,
 };
 
 mod errors;
 use super::ast::*;
 pub use errors::*;
 
-pub fn root<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<NamespaceDecl>, E> {
+pub fn parse<'a>(source: &Source<'a>) -> Result<Vec<NamespaceDecl<'a>>, VerboseError<&'a str>> {
+    match root::<VerboseError<&'a str>>(source.input) {
+        Err(Err::Error(e)) | Err(Err::Failure(e)) => Err(e),
+        Ok((_, res)) => Ok(res),
+        _ => Err(VerboseError {
+            errors: vec![(source.input, VerboseErrorKind::Nom(ErrorKind::Complete))],
+        }),
+    }
+}
+
+fn root<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<NamespaceDecl>, E> {
     all_consuming(terminated(many0(preceded(sp, nsdecl)), sp))(i)
 }
 
