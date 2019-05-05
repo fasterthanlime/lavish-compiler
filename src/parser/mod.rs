@@ -36,19 +36,23 @@ fn id<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
     take_while1(move |c| chars.contains(c))(i)
 }
 
+fn loc<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Loc<'a>, E> {
+    match tag("")(i) {
+        Ok((input, _)) => Ok((input, Loc { slice: input })),
+        Err(err) => Err(err),
+    }
+}
+
 fn field<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Field, E> {
     let (i, comment) = opt(comment)(i)?;
-    let (i, loc) = spaced(|i| match tag("")(i) {
-        Ok((input, _)) => Ok((input, input)),
-        Err(err) => Err(err),
-    })(i)?;
+    let (i, loc) = spaced(loc)(i)?;
     let (i, name) = spaced(id)(i)?;
     let ctx = spaced(context("field", preceded(spaced(char(':')), spaced(id))));
 
     map(ctx, move |typ| Field {
         comment: comment.clone(),
         name: name.into(),
-        loc: Loc { slice: loc },
+        loc: loc.clone(),
         typ: typ.into(),
     })(i)
 }
