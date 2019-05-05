@@ -87,6 +87,7 @@ fn results<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Field
 fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, modifiers) = fnmods(i)?;
+    let (i, loc) = spaced(loc)(i)?;
     let (i, _) = spaced(tag("fn"))(i)?;
 
     context(
@@ -104,6 +105,7 @@ fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDe
                 opt(results),
             )),
             move |(name, params, results)| FunctionDecl {
+                loc: loc.clone(),
                 comment: comment.clone(),
                 modifiers: modifiers.clone(),
                 name: name.into(),
@@ -116,6 +118,7 @@ fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDe
 
 fn structdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, StructDecl, E> {
     let (i, comment) = opt(comment)(i)?;
+    let (i, loc) = spaced(loc)(i)?;
     let (i, _) = preceded(sp, tag("struct"))(i)?;
 
     context(
@@ -126,6 +129,7 @@ fn structdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Struct
                 preceded(sp, delimited(char('{'), sp, char('}'))),
             )),
             move |(name, _)| StructDecl {
+                loc: loc.clone(),
                 comment: comment.clone(),
                 name: name.into(),
                 fields: Vec::new(),
@@ -158,6 +162,7 @@ fn nsbody<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Namesp
 
 fn nsdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, NamespaceDecl, E> {
     let (i, comment) = opt(comment)(i)?;
+    let (i, loc) = spaced(loc)(i)?;
     let (i, _) = terminated(preceded(sp, tag("namespace")), sp)(i)?;
 
     context(
@@ -167,7 +172,7 @@ fn nsdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, NamespaceD
                 spaced(id),
                 delimited(spaced(char('{')), nsbody, spaced(char('}'))),
             )),
-            move |(name, items)| NamespaceDecl::new(name, comment.clone(), items),
+            move |(name, items)| NamespaceDecl::new(name, loc.clone(), comment.clone(), items),
         ),
     )(i)
 }

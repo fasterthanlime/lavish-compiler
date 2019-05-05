@@ -7,6 +7,7 @@ pub struct Loc<'a> {
 
 #[derive(Debug)]
 pub struct NamespaceDecl<'a> {
+    pub loc: Loc<'a>,
     pub comment: Option<Comment>,
     pub name: String,
     pub functions: HashMap<String, FunctionDecl<'a>>,
@@ -23,6 +24,7 @@ pub enum NamespaceItem<'a> {
 
 #[derive(Debug)]
 pub struct FunctionDecl<'a> {
+    pub loc: Loc<'a>,
     pub comment: Option<Comment>,
     pub modifiers: Vec<FunctionModifier>,
     pub name: String,
@@ -46,6 +48,7 @@ pub struct Field<'a> {
 
 #[derive(Debug)]
 pub struct StructDecl<'a> {
+    pub loc: Loc<'a>,
     pub comment: Option<Comment>,
     pub name: String,
     pub fields: Vec<Field<'a>>,
@@ -63,9 +66,15 @@ impl std::default::Default for Comment {
 }
 
 impl<'a> NamespaceDecl<'a> {
-    pub fn new(name: &str, comment: Option<Comment>, items: Vec<NamespaceItem<'a>>) -> Self {
+    pub fn new(
+        name: &str,
+        loc: Loc<'a>,
+        comment: Option<Comment>,
+        items: Vec<NamespaceItem<'a>>,
+    ) -> Self {
         let mut ns = NamespaceDecl {
             name: name.into(),
+            loc,
             comment,
             functions: HashMap::new(),
             structs: HashMap::new(),

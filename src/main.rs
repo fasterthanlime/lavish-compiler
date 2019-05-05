@@ -1,5 +1,5 @@
 use colored::*;
-use nom::{error::VerboseError, Err, Offset};
+use nom::{error::VerboseError, Err};
 use std::fs::File;
 use std::io::Read;
 
@@ -16,7 +16,11 @@ trait Visitable {
 
 impl<'a> Visitable for ast::NamespaceDecl<'a> {
     fn visit(&self, v: &Visitor) {
-        println!("Visiting namespace {}", self.name);
+        v.source.position(&self.loc).print_message(&format!(
+            "namespace {}{}",
+            self.name.yellow(),
+            format_comment(&self.comment),
+        ));
         for (_, ns) in &self.namespaces {
             ns.visit(v);
         }
@@ -31,7 +35,11 @@ impl<'a> Visitable for ast::NamespaceDecl<'a> {
 
 impl<'a> Visitable for ast::StructDecl<'a> {
     fn visit(&self, v: &Visitor) {
-        println!("Visiting struct {}", self.name);
+        v.source.position(&self.loc).print_message(&format!(
+            "struct {}{}",
+            self.name.yellow(),
+            format_comment(&self.comment),
+        ));
         for p in &self.fields {
             p.visit(v);
         }
@@ -40,7 +48,11 @@ impl<'a> Visitable for ast::StructDecl<'a> {
 
 impl<'a> Visitable for ast::FunctionDecl<'a> {
     fn visit(&self, v: &Visitor) {
-        println!("Visiting function {}", self.name);
+        v.source.position(&self.loc).print_message(&format!(
+            "function {}{}",
+            self.name.yellow(),
+            format_comment(&self.comment),
+        ));
         for p in &self.params {
             p.visit(v);
         }
@@ -52,23 +64,25 @@ impl<'a> Visitable for ast::FunctionDecl<'a> {
 
 impl<'a> Visitable for ast::Field<'a> {
     fn visit(&self, v: &Visitor) {
-        let pos = v.source.position(&self.loc);
-        let mut comment = ColoredString::default();
-        if let Some(c) = self.comment.as_ref() {
-            comment = format!(
-                " — {}",
-                c.lines.iter().map(|x| x.clone()).collect::<String>()
-            )
-            .blue();
-        };
-
-        pos.print_message(&format!(
+        v.source.position(&self.loc).print_message(&format!(
             "field {}, of type {}{}",
             self.name.yellow(),
             self.typ.green(),
-            comment,
+            format_comment(&self.comment),
         ));
     }
+}
+
+fn format_comment(comment: &Option<ast::Comment>) -> ColoredString {
+    let mut result = ColoredString::default();
+    if let Some(comment) = comment.as_ref() {
+        result = format!(
+            " — {}",
+            comment.lines.iter().map(|x| x.clone()).collect::<String>()
+        )
+        .blue();
+    };
+    result
 }
 
 fn main() {
