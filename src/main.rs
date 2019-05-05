@@ -1,20 +1,21 @@
 use nom::{
+    branch::alt,
     bytes::complete::{tag, take_while},
     character::complete::{alphanumeric1, char},
     combinator::map,
     error::{context, ParseError, VerboseError, VerboseErrorKind},
     multi::many0,
-    sequence::{preceded, terminated},
+    sequence::{delimited, preceded, tuple},
     Err, IResult, Offset,
 };
 use std::iter::repeat;
 
 fn main() {
     let data = "namespace butlerd {
-
+        struct
     }
     namespace pingpong {
-       
+        fn ping
     }";
     match root::<VerboseError<&str>>(data) {
         Err(Err::Error(e)) | Err(Err::Failure(e)) => {
@@ -31,6 +32,13 @@ fn main() {
 #[derive(Debug)]
 struct Namespace {
     name: String,
+    items: Vec<NamespaceItem>,
+}
+
+#[derive(Debug)]
+enum NamespaceItem {
+    Fn { name: String },
+    Struct,
 }
 
 fn root<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Namespace>, E> {
@@ -47,19 +55,39 @@ fn id<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
     alphanumeric1(i)
 }
 
+fn nsbody<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<NamespaceItem>, E> {
+    many0(preceded(
+        sp,
+        alt((
+            |i| {
+                preceded(tag("fn"), preceded(sp, id))(i).map(|(i, name)| {
+                    (
+                        i,
+                        NamespaceItem::Fn {
+                            name: String::from(name),
+                        },
+                    )
+                })
+            },
+            |i| tag("struct")(i).map(|(i, _)| (i, NamespaceItem::Struct {})),
+        )),
+    ))(i)
+}
+
 fn ns<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Namespace, E> {
     let (i, _) = tag("namespace")(i)?;
 
     context(
         "namespace",
-        terminated(
-            preceded(
-                sp,
-                map(id, |name| Namespace {
-                    name: String::from(name),
-                }),
-            ),
-            preceded(preceded(sp, char('{')), preceded(sp, char('}'))),
+        map(
+            tuple((
+                preceded(sp, id),
+                delimited(preceded(sp, char('{')), nsbody, preceded(sp, char('}'))),
+            )),
+            |(name, items)| Namespace {
+                name: String::from(name),
+                items,
+            },
         ),
     )(i)
 }
