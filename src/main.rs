@@ -17,10 +17,7 @@ fn main() {
     println!("========================================");
     match parser::root::<VerboseError<&str>>(&data) {
         Err(Err::Error(e)) | Err(Err::Failure(e)) => {
-            println!(
-                "verbose errors - `root::<VerboseError>(data)`:\n{}",
-                parser::convert_error(&data, e)
-            );
+            println!("Errors:\n{}", parser::convert_error(&data, e));
         }
         Ok(res) => println!("Parsed: {:#?}", res),
         _ => println!("Something else happened :o"),

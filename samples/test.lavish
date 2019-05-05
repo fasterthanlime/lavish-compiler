@@ -8,6 +8,6 @@ namespace itchio {
         x: int64
     ) -> (
         // the number, doubled
-        y: int64
+        y: int64 j
     )
 }

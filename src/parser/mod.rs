@@ -3,17 +3,25 @@ use nom::{
     bytes::complete::{tag, take_until, take_while},
     character::complete::char,
     combinator::{all_consuming, map, opt},
-    error::{context, ParseError, VerboseError, VerboseErrorKind},
+    error::{context, ParseError},
     multi::{many0, many1, separated_list},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
-    IResult, Offset,
+    IResult,
 };
-use std::iter::repeat;
 
+mod errors;
 use super::ast::*;
+pub use errors::*;
 
 pub fn root<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<NamespaceDecl>, E> {
     all_consuming(terminated(many0(preceded(sp, nsdecl)), sp))(i)
+}
+
+fn spaced<'a, O, E: ParseError<&'a str>, F>(f: F) -> impl Fn(&'a str) -> IResult<&'a str, O, E>
+where
+    F: Fn(&'a str) -> IResult<&'a str, O, E>,
+{
+    terminated(preceded(sp, f), sp)
 }
 
 fn sp<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
@@ -32,7 +40,7 @@ fn field<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Field, E> {
     map(
         tuple((
             opt(comment),
-            separated_pair(preceded(sp, id), preceded(sp, char(':')), preceded(sp, id)),
+            separated_pair(spaced(id), spaced(char(':')), spaced(id)),
         )),
         |(comment, (name, typ))| Field {
             comment,
@@ -57,10 +65,19 @@ fn fnmods<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Functi
     preceded(sp, separated_list(sp, fnmod))(i)
 }
 
+fn results<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Field>, E> {
+    let (i, _) = spaced(tag("->"))(i)?;
+
+    context(
+        "result list",
+        delimited(char('('), fields, preceded(sp, char(')'))),
+    )(i)
+}
+
 fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, modifiers) = fnmods(i)?;
-    let (i, _) = preceded(sp, tag("fn"))(i)?;
+    let (i, _) = spaced(tag("fn"))(i)?;
 
     context(
         "fn",
@@ -69,26 +86,12 @@ fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDe
                 preceded(sp, id),
                 preceded(
                     sp,
-                    delimited(
-                        char('('),
-                        context("parameter list", fields),
-                        preceded(sp, char(')')),
+                    context(
+                        "parameter list",
+                        delimited(char('('), fields, preceded(sp, char(')'))),
                     ),
                 ),
-                opt(preceded(
-                    sp,
-                    preceded(
-                        tag("->"),
-                        preceded(
-                            sp,
-                            delimited(
-                                char('('),
-                                context("result list", fields),
-                                preceded(sp, char(')')),
-                            ),
-                        ),
-                    ),
-                )),
+                opt(results),
             )),
             move |(name, params, results)| FunctionDecl {
                 comment: comment.clone(),
@@ -144,75 +147,16 @@ fn nsbody<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Namesp
 
 fn nsdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, NamespaceDecl, E> {
     let (i, comment) = opt(comment)(i)?;
-    let (i, _) = preceded(sp, tag("namespace"))(i)?;
+    let (i, _) = terminated(preceded(sp, tag("namespace")), sp)(i)?;
 
     context(
         "namespace",
         map(
             tuple((
-                preceded(sp, id),
-                delimited(
-                    preceded(sp, char('{')),
-                    context("namespace", nsbody),
-                    preceded(sp, char('}')),
-                ),
+                spaced(id),
+                delimited(spaced(char('{')), nsbody, spaced(char('}'))),
             )),
             move |(name, items)| NamespaceDecl::new(name, comment.clone(), items),
         ),
     )(i)
-}
-
-pub fn convert_error(input: &str, e: VerboseError<&str>) -> String {
-    let lines: Vec<_> = input.lines().map(String::from).collect();
-    //println!("lines: {:#?}", lines);
-
-    let mut result = String::new();
-
-    for (i, (substring, kind)) in e.errors.iter().enumerate() {
-        let mut offset = input.offset(substring);
-
-        let mut line = 0;
-        let mut column = 0;
-
-        for (j, l) in lines.iter().enumerate() {
-            if offset <= l.len() {
-                line = j;
-                column = offset;
-                break;
-            } else {
-                offset = offset - l.len();
-            }
-        }
-
-        match kind {
-            VerboseErrorKind::Char(c) => {
-                result += &format!("{}: at line {}:\n", i, line);
-                result += &lines[line];
-                result += "\n";
-                if column > 0 {
-                    result += &repeat(' ').take(column - 1).collect::<String>();
-                }
-                result += "^\n";
-                result += &format!(
-                    "expected '{}', found {}\n\n",
-                    c,
-                    substring.chars().next().unwrap()
-                );
-            }
-            VerboseErrorKind::Context(s) => {
-                result += &format!("{}: at line {}, in {}:\n", i, line, s);
-                result += &lines[line];
-                result += "\n";
-                if column > 0 {
-                    result += &repeat(' ').take(column - 1).collect::<String>();
-                }
-                result += "^\n\n";
-            }
-            VerboseErrorKind::Nom(ek) => {
-                result += &format!("nom error {:#?}\n\n", ek);
-            }
-        }
-    }
-
-    result
 }
