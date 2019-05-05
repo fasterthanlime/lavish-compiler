@@ -15,8 +15,11 @@ fn main() {
         struct
     }
     namespace pingpong {
-        fn ping
+        fn ping(
     }";
+    println!("================ input =================");
+    println!("{}", data);
+    println!("========================================");
     match root::<VerboseError<&str>>(data) {
         Err(Err::Error(e)) | Err(Err::Failure(e)) => {
             println!(
@@ -55,22 +58,26 @@ fn id<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
     alphanumeric1(i)
 }
 
+fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, NamespaceItem, E> {
+    let (i, _) = tag("fn")(i)?;
+
+    context(
+        "fn",
+        map(
+            tuple((preceded(sp, id), delimited(char('('), sp, char(')')))),
+            |(name, _)| NamespaceItem::Fn {
+                name: String::from(name),
+            },
+        ),
+    )(i)
+}
+
 fn nsbody<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<NamespaceItem>, E> {
     many0(preceded(
         sp,
-        alt((
-            |i| {
-                preceded(tag("fn"), preceded(sp, id))(i).map(|(i, name)| {
-                    (
-                        i,
-                        NamespaceItem::Fn {
-                            name: String::from(name),
-                        },
-                    )
-                })
-            },
-            |i| tag("struct")(i).map(|(i, _)| (i, NamespaceItem::Struct {})),
-        )),
+        alt((fndecl, |i| {
+            tag("struct")(i).map(|(i, _)| (i, NamespaceItem::Struct {}))
+        })),
     ))(i)
 }
 
