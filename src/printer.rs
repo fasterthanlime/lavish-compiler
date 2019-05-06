@@ -2,17 +2,17 @@ use super::ast;
 use super::parser;
 use colored::*;
 
-pub struct Visitor<'a> {
+struct Visitor<'a> {
     indent: usize,
     source: &'a parser::Source<'a>,
 }
 
 impl<'a> Visitor<'a> {
-    pub fn new(source: &'a parser::Source<'a>) -> Self {
+    fn new(source: &'a parser::Source<'a>) -> Self {
         Self { indent: 0, source }
     }
 
-    pub fn visit<T>(&mut self, v: T)
+    fn visit<T>(&mut self, v: T)
     where
         T: Visitable,
     {
@@ -35,7 +35,7 @@ impl<'a> Visitor<'a> {
     }
 }
 
-pub trait Visitable {
+trait Visitable {
     fn visit(self, v: &mut Visitor);
 }
 

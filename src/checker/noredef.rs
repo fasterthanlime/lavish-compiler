@@ -3,13 +3,13 @@ use super::parser;
 use super::Error;
 use colored::*;
 
-pub struct Visitor<'a> {
+struct Visitor<'a> {
     num_errors: i64,
     source: &'a parser::Source<'a>,
 }
 
 impl<'a> Visitor<'a> {
-    pub fn visit<T>(&mut self, v: T)
+    fn visit<T>(&mut self, v: T)
     where
         T: Visitable,
     {
@@ -17,7 +17,7 @@ impl<'a> Visitor<'a> {
     }
 }
 
-pub trait Visitable {
+trait Visitable {
     fn visit(self, v: &mut Visitor);
 }
 
