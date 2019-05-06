@@ -3,107 +3,118 @@ use super::parser;
 use colored::*;
 
 pub struct Visitor<'a> {
+    indent: usize,
     source: &'a parser::Source<'a>,
 }
 
 impl<'a> Visitor<'a> {
     pub fn new(source: &'a parser::Source<'a>) -> Self {
-        Self { source }
+        Self { indent: 0, source }
     }
 
-    pub fn visit<T>(&self, v: T)
+    pub fn visit<T>(&mut self, v: T)
     where
         T: Visitable,
     {
-        v.visit(self)
+        self.indent += 1;
+        v.visit(self);
+        self.indent -= 1;
+    }
+
+    fn indent(&self) -> String {
+        let indent = match self.indent {
+            1 => 0,
+            x => x,
+        };
+        "  ".repeat(indent) + "|"
+    }
+
+    fn print(&self, loc: &ast::Loc, msg: &str) {
+        let pos = self.source.position(loc);
+        pos.print_colored_message_with_prefix(Color::Blue, &self.indent(), msg);
     }
 }
 
 pub trait Visitable {
-    fn visit<'a>(self, v: &'a Visitor<'a>);
+    fn visit(self, v: &mut Visitor);
 }
 
 impl<'a> Visitable for &ast::Module<'a> {
-    fn visit(self, v: &Visitor) {
-        {
-            use std::collections::HashMap;
-            let mut set: HashMap<&str, &ast::NamespaceDecl> = HashMap::new();
-            for ns in &self.namespaces {
-                let name = &ns.name;
-                if let Some(old) = set.insert(name, &ns) {
-                    v.source.position(&ns.loc).print_colored_message(
-                        Color::Red,
-                        &format!("{} namespace {} redefined", "error:".red().bold(), name),
-                    );
-                    v.source
-                        .position(&old.loc)
-                        .print_message(&format!("first definition was here"));
-                }
-            }
-        }
-
+    fn visit(self, v: &mut Visitor) {
         for ns in &self.namespaces {
-            ns.visit(v);
+            v.visit(ns);
         }
     }
 }
 
 impl<'a> Visitable for &ast::NamespaceDecl<'a> {
-    fn visit(self, v: &Visitor) {
-        v.source.position(&self.loc).print_message(&format!(
-            "namespace {}{}",
-            self.name.yellow(),
-            format_comment(&self.comment),
-        ));
+    fn visit(self, v: &mut Visitor) {
+        v.print(
+            &self.loc,
+            &format!(
+                "namespace {}{}",
+                self.name.yellow(),
+                format_comment(&self.comment),
+            ),
+        );
         for ns in &self.namespaces {
-            ns.visit(v);
+            v.visit(ns);
         }
         for s in &self.structs {
-            s.visit(v);
+            v.visit(s);
         }
         for f in &self.functions {
-            f.visit(v);
+            v.visit(f);
         }
     }
 }
 
 impl<'a> Visitable for &ast::StructDecl<'a> {
-    fn visit(self, v: &Visitor) {
-        v.source.position(&self.loc).print_message(&format!(
-            "struct {}{}",
-            self.name.yellow(),
-            format_comment(&self.comment),
-        ));
+    fn visit(self, v: &mut Visitor) {
+        v.print(
+            &self.loc,
+            &format!(
+                "struct {}{}",
+                self.name.yellow(),
+                format_comment(&self.comment),
+            ),
+        );
         for p in &self.fields {
-            p.visit(v);
+            v.visit(p);
         }
     }
 }
 
 impl<'a> Visitable for &ast::FunctionDecl<'a> {
-    fn visit(self, v: &Visitor) {
-        v.source.position(&self.loc).print_message(&format!(
-            "function {}{}",
-            self.name.yellow(),
-            format_comment(&self.comment),
-        ));
-        for p in &self.params {
-            p.visit(v);
+    fn visit(self, v: &mut Visitor) {
+        v.print(
+            &self.loc,
+            &format!(
+                "function {}{}",
+                self.name.yellow(),
+                format_comment(&self.comment),
+            ),
+        );
+        for f in &self.params {
+            v.visit(f);
         }
-        for p in &self.results {
-            p.visit(v);
+        for f in &self.results {
+            v.visit(f);
         }
     }
 }
 
 impl<'a> Visitable for &ast::Field<'a> {
-    fn visit(self, v: &Visitor) {
-        v.source.position(&self.loc).print_message(&format!(
-            "field {}, of type {}{}",
-            self.name.yellow(),
-            self.typ.green(),
-            format_comment(&self.comment),
-        ));
+    fn visit(self, v: &mut Visitor) {
+        v.print(
+            &self.loc,
+            &format!(
+                "field {}, of type {}{}",
+                self.name.yellow(),
+                self.typ.green(),
+                format_comment(&self.comment),
+            ),
+        );
     }
 }
 
@@ -120,6 +131,6 @@ fn format_comment(comment: &Option<ast::Comment>) -> ColoredString {
 }
 
 pub fn print(source: &parser::Source, module: &ast::Module) {
-    let v = Visitor::new(source);
+    let mut v = Visitor::new(source);
     v.visit(module);
 }

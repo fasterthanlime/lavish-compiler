@@ -64,15 +64,29 @@ impl<'a> Position<'a> {
     }
 
     pub fn print_colored_message(&self, caret_color: Color, message: &str) {
+        self.print_colored_message_with_prefix(caret_color, "", message)
+    }
+
+    pub fn print_colored_message_with_prefix(
+        &self,
+        caret_color: Color,
+        prefix: &str,
+        message: &str,
+    ) {
         let loc = format!(
             "{}:{}:{}:",
             self.source.name(),
             self.line + 1,
             self.column + 1
         );
-        println!("{} {}", loc.bold(), message);
-        println!("{}", &self.source.lines[self.line].dimmed());
-        print!("{}", repeat(' ').take(self.column).collect::<String>());
+        println!("{}{} {}", prefix, loc.bold(), message);
+        println!("{}{}", prefix, &self.source.lines[self.line].dimmed());
+
+        print!(
+            "{}{}",
+            prefix,
+            repeat(' ').take(self.column).collect::<String>()
+        );
         println!("{}", "^".color(caret_color).bold());
     }
 }

@@ -9,20 +9,20 @@ pub struct Visitor<'a> {
 }
 
 impl<'a> Visitor<'a> {
-    pub fn visit<'b, T>(&'b mut self, v: T)
+    pub fn visit<T>(&mut self, v: T)
     where
-        T: Visitable<'b>,
+        T: Visitable,
     {
         v.visit(self)
     }
 }
 
-pub trait Visitable<'a> {
-    fn visit(self, v: &'a mut Visitor);
+pub trait Visitable {
+    fn visit(self, v: &mut Visitor);
 }
 
-impl<'a> Visitable<'a> for &ast::Module<'a> {
-    fn visit(self, v: &'a mut Visitor) {
+impl<'a> Visitable for &ast::Module<'a> {
+    fn visit(self, v: &mut Visitor) {
         {
             use std::collections::HashMap;
             let mut set: HashMap<&str, &ast::NamespaceDecl> = HashMap::new();
@@ -42,46 +42,46 @@ impl<'a> Visitable<'a> for &ast::Module<'a> {
         }
 
         for ns in &self.namespaces {
-            ns.visit(v);
+            v.visit(ns);
         }
     }
 }
 
-impl<'a> Visitable<'a> for &ast::NamespaceDecl<'a> {
-    fn visit(self, v: &'a mut Visitor) {
+impl<'a> Visitable for &ast::NamespaceDecl<'a> {
+    fn visit(self, v: &mut Visitor) {
         for ns in &self.namespaces {
-            ns.visit(v);
+            v.visit(ns);
         }
         for s in &self.structs {
-            s.visit(v);
+            v.visit(s);
         }
         for f in &self.functions {
-            f.visit(v);
+            v.visit(f);
         }
     }
 }
 
-impl<'a> Visitable<'a> for &ast::StructDecl<'a> {
-    fn visit(self, v: &'a mut Visitor) {
+impl<'a> Visitable for &ast::StructDecl<'a> {
+    fn visit(self, v: &mut Visitor) {
         for p in &self.fields {
-            p.visit(v);
+            v.visit(p);
         }
     }
 }
 
-impl<'a> Visitable<'a> for &ast::FunctionDecl<'a> {
-    fn visit(self, v: &'a mut Visitor) {
+impl<'a> Visitable for &ast::FunctionDecl<'a> {
+    fn visit(self, v: &mut Visitor) {
         for p in &self.params {
-            p.visit(v);
+            v.visit(p);
         }
         for p in &self.results {
-            p.visit(v);
+            v.visit(p);
         }
     }
 }
 
-impl<'a> Visitable<'a> for &ast::Field<'a> {
-    fn visit(self, _v: &'a mut Visitor) {}
+impl<'a> Visitable for &ast::Field<'a> {
+    fn visit(self, _v: &mut Visitor) {}
 }
 
 pub fn check(source: &parser::Source, module: &ast::Module) -> Result<(), Error> {
