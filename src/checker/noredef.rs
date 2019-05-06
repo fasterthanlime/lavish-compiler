@@ -16,6 +16,26 @@ impl<'a> Visitor<'a> {
     {
         v.visit(self)
     }
+
+    fn check_dupes<'b, T>(&mut self, kind: &str, items: &'b Vec<T>)
+    where
+        T: Named<'b>,
+    {
+        let mut set: HashMap<&str, &T> = HashMap::new();
+        for item in items {
+            let name = item.name();
+            if let Some(old) = set.insert(name, item) {
+                self.num_errors += 1;
+                self.source.position(item.loc()).print_colored_message(
+                    Color::Red,
+                    &format!("{} {} {} redefined", "error:".red().bold(), kind, name),
+                );
+                self.source
+                    .position(old.loc())
+                    .print_message(&format!("first definition was here"));
+            }
+        }
+    }
 }
 
 trait Visitable {
@@ -27,39 +47,27 @@ trait Named<'a> {
     fn loc(&'a self) -> &'a ast::Loc<'a>;
 }
 
-fn check_dupes<'a, T>(v: &mut Visitor, kind: &str, items: &'a Vec<T>)
-where
-    T: Named<'a>,
-{
-    let mut set: HashMap<&str, &T> = HashMap::new();
-    for item in items {
-        let name = item.name();
-        if let Some(old) = set.insert(name, item) {
-            v.num_errors += 1;
-            v.source.position(item.loc()).print_colored_message(
-                Color::Red,
-                &format!("{} {} {} redefined", "error:".red().bold(), kind, name),
-            );
-            v.source
-                .position(old.loc())
-                .print_message(&format!("first definition was here"));
+macro_rules! impl_named {
+    ($x:ty) => {
+        impl<'a> Named<'a> for $x {
+            fn name(&'a self) -> &'a str {
+                &self.name
+            }
+            fn loc(&'a self) -> &'a ast::Loc<'a> {
+                &self.loc
+            }
         }
-    }
+    };
 }
 
-impl<'a> Named<'a> for ast::NamespaceDecl<'a> {
-    fn name(&'a self) -> &'a str {
-        &self.name
-    }
-    fn loc(&'a self) -> &'a ast::Loc<'a> {
-        &self.loc
-    }
-}
+impl_named!(ast::NamespaceDecl<'a>);
+impl_named!(ast::StructDecl<'a>);
+impl_named!(ast::FunctionDecl<'a>);
+impl_named!(ast::Field<'a>);
 
 impl<'a> Visitable for &ast::Module<'a> {
     fn visit(self, v: &mut Visitor) {
-        check_dupes(v, "namespace", &self.namespaces);
-
+        v.check_dupes("namespace", &self.namespaces);
         for ns in &self.namespaces {
             v.visit(ns);
         }
@@ -68,12 +76,15 @@ impl<'a> Visitable for &ast::Module<'a> {
 
 impl<'a> Visitable for &ast::NamespaceDecl<'a> {
     fn visit(self, v: &mut Visitor) {
+        v.check_dupes("namespace", &self.namespaces);
         for ns in &self.namespaces {
             v.visit(ns);
         }
+        v.check_dupes("struct", &self.structs);
         for s in &self.structs {
             v.visit(s);
         }
+        v.check_dupes("function", &self.functions);
         for f in &self.functions {
             v.visit(f);
         }
@@ -82,6 +93,7 @@ impl<'a> Visitable for &ast::NamespaceDecl<'a> {
 
 impl<'a> Visitable for &ast::StructDecl<'a> {
     fn visit(self, v: &mut Visitor) {
+        v.check_dupes("field", &self.fields);
         for p in &self.fields {
             v.visit(p);
         }
@@ -90,9 +102,11 @@ impl<'a> Visitable for &ast::StructDecl<'a> {
 
 impl<'a> Visitable for &ast::FunctionDecl<'a> {
     fn visit(self, v: &mut Visitor) {
+        v.check_dupes("param", &self.params);
         for p in &self.params {
             v.visit(p);
         }
+        v.check_dupes("result", &self.results);
         for p in &self.results {
             v.visit(p);
         }

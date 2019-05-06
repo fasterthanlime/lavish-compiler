@@ -11,7 +11,7 @@ namespace itchio {
         y: int64,
     )
 
-    server fn double()
+    server fn double(woops: double)
 
     server fn ping(a: int64)
 }
