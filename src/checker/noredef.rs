@@ -2,6 +2,7 @@ use super::ast;
 use super::parser;
 use super::Error;
 use colored::*;
+use std::collections::HashMap;
 
 struct Visitor<'a> {
     num_errors: i64,
@@ -21,25 +22,43 @@ trait Visitable {
     fn visit(self, v: &mut Visitor);
 }
 
+trait Named<'a> {
+    fn name(&'a self) -> &'a str;
+    fn loc(&'a self) -> &'a ast::Loc<'a>;
+}
+
+fn check_dupes<'a, T>(v: &mut Visitor, kind: &str, items: &'a Vec<T>)
+where
+    T: Named<'a>,
+{
+    let mut set: HashMap<&str, &T> = HashMap::new();
+    for item in items {
+        let name = item.name();
+        if let Some(old) = set.insert(name, item) {
+            v.num_errors += 1;
+            v.source.position(item.loc()).print_colored_message(
+                Color::Red,
+                &format!("{} {} {} redefined", "error:".red().bold(), kind, name),
+            );
+            v.source
+                .position(old.loc())
+                .print_message(&format!("first definition was here"));
+        }
+    }
+}
+
+impl<'a> Named<'a> for ast::NamespaceDecl<'a> {
+    fn name(&'a self) -> &'a str {
+        &self.name
+    }
+    fn loc(&'a self) -> &'a ast::Loc<'a> {
+        &self.loc
+    }
+}
+
 impl<'a> Visitable for &ast::Module<'a> {
     fn visit(self, v: &mut Visitor) {
-        {
-            use std::collections::HashMap;
-            let mut set: HashMap<&str, &ast::NamespaceDecl> = HashMap::new();
-            for ns in &self.namespaces {
-                let name = &ns.name;
-                if let Some(old) = set.insert(name, &ns) {
-                    v.num_errors += 1;
-                    v.source.position(&ns.loc).print_colored_message(
-                        Color::Red,
-                        &format!("{} namespace {} redefined", "error:".red().bold(), name),
-                    );
-                    v.source
-                        .position(&old.loc)
-                        .print_message(&format!("first definition was here"));
-                }
-            }
-        }
+        check_dupes(v, "namespace", &self.namespaces);
 
         for ns in &self.namespaces {
             v.visit(ns);

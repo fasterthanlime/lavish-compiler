@@ -16,4 +16,4 @@ namespace itchio {
     server fn ping(a: int64)
 }
 
-namespace itchio2 {}
+namespace itchio {}
