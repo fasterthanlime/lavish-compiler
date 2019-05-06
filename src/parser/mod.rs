@@ -3,27 +3,17 @@ use nom::{
     bytes::complete::{tag, take_until, take_while, take_while1},
     character::complete::char,
     combinator::{all_consuming, map, opt},
-    error::{context, ErrorKind, ParseError, VerboseError, VerboseErrorKind},
+    error::{context, ParseError},
     multi::{many0, many1, separated_list},
     sequence::{delimited, preceded, terminated, tuple},
-    Err, IResult,
+    IResult,
 };
 
 mod errors;
 use super::ast::*;
 pub use errors::*;
 
-pub fn parse<'a>(source: &Source<'a>) -> Result<Module<'a>, VerboseError<&'a str>> {
-    match module::<VerboseError<&'a str>>(source.input) {
-        Err(Err::Error(e)) | Err(Err::Failure(e)) => Err(e),
-        Ok((_, res)) => Ok(res),
-        _ => Err(VerboseError {
-            errors: vec![(source.input, VerboseErrorKind::Nom(ErrorKind::Complete))],
-        }),
-    }
-}
-
-fn module<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Module, E> {
+pub fn module<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Module, E> {
     all_consuming(terminated(
         map(many0(preceded(sp, nsdecl)), |namespaces| {
             Module::new(namespaces)

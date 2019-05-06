@@ -4,11 +4,11 @@ use colored::*;
 
 struct Visitor<'a> {
     indent: usize,
-    source: &'a parser::Source<'a>,
+    source: &'a parser::Source,
 }
 
 impl<'a> Visitor<'a> {
-    fn new(source: &'a parser::Source<'a>) -> Self {
+    fn new(source: &'a parser::Source) -> Self {
         Self { indent: 0, source }
     }
 
@@ -29,9 +29,12 @@ impl<'a> Visitor<'a> {
         "  ".repeat(indent) + "|"
     }
 
-    fn print(&self, loc: &ast::Loc, msg: &str) {
-        let pos = self.source.position(loc);
-        pos.print_colored_message_with_prefix(Color::Blue, &self.indent(), msg);
+    fn print(&self, loc: &ast::Loc, msg: String) {
+        self.source
+            .position(loc)
+            .diag_info(msg)
+            .prefix(&self.indent())
+            .print();
     }
 }
 
@@ -51,7 +54,7 @@ impl<'a> Visitable for &ast::NamespaceDecl<'a> {
     fn visit(self, v: &mut Visitor) {
         v.print(
             &self.loc,
-            &format!(
+            format!(
                 "namespace {}{}",
                 self.name.yellow(),
                 format_comment(&self.comment),
@@ -73,7 +76,7 @@ impl<'a> Visitable for &ast::StructDecl<'a> {
     fn visit(self, v: &mut Visitor) {
         v.print(
             &self.loc,
-            &format!(
+            format!(
                 "struct {}{}",
                 self.name.yellow(),
                 format_comment(&self.comment),
@@ -89,7 +92,7 @@ impl<'a> Visitable for &ast::FunctionDecl<'a> {
     fn visit(self, v: &mut Visitor) {
         v.print(
             &self.loc,
-            &format!(
+            format!(
                 "function {}{}",
                 self.name.yellow(),
                 format_comment(&self.comment),
@@ -108,7 +111,7 @@ impl<'a> Visitable for &ast::Field<'a> {
     fn visit(self, v: &mut Visitor) {
         v.print(
             &self.loc,
-            &format!(
+            format!(
                 "field {}, of type {}{}",
                 self.name.yellow(),
                 self.typ.green(),

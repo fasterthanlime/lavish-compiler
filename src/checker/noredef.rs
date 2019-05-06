@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 struct Visitor<'a> {
     num_errors: i64,
-    source: &'a parser::Source<'a>,
+    source: &'a parser::Source,
 }
 
 impl<'a> Visitor<'a> {
@@ -26,13 +26,19 @@ impl<'a> Visitor<'a> {
             let name = item.name();
             if let Some(old) = set.insert(name, item) {
                 self.num_errors += 1;
-                self.source.position(item.loc()).print_colored_message(
-                    Color::Red,
-                    &format!("{} {} {} redefined", "error:".red().bold(), kind, name),
-                );
+                self.source
+                    .position(item.loc())
+                    .diag_err(format!(
+                        "{} {} {} redefined",
+                        "error:".red().bold(),
+                        kind,
+                        name
+                    ))
+                    .print();
                 self.source
                     .position(old.loc())
-                    .print_message(&format!("first definition was here"));
+                    .diag_info("first definition was here".into())
+                    .print();
             }
         }
     }

@@ -1,8 +1,5 @@
-use colored::*;
-use std::fs::File;
-use std::io::Read;
-
 use clap::{App, Arg, SubCommand};
+use colored::*;
 
 mod ast;
 mod checker;
@@ -29,30 +26,18 @@ fn main() {
     match matches.subcommand() {
         ("check", Some(cmd)) => {
             let input_name = cmd.value_of("input").unwrap();
-            let mut data = String::new();
-            {
-                let mut f = File::open(input_name).unwrap();
-                f.read_to_string(&mut data).unwrap();
-            }
-            let source = parser::Source::new(input_name, &data);
+            let source = parser::Source::new(input_name).unwrap();
+            let module = source.parse().unwrap();
 
-            match parser::parse(&source) {
-                Err(e) => {
-                    parser::print_errors(&source, e);
-                }
-                Ok(module) => {
-                    let source = parser::Source::new(input_name, &data);
-                    checker::check(&source, &module).unwrap_or_else(|e| {
-                        println!(
-                            "{} found {} errors, existing",
-                            "error:".red().bold(),
-                            e.num_errors
-                        );
-                        std::process::exit(1);
-                    });
-                    printer::print(&source, &module);
-                }
-            }
+            checker::check(&source, &module).unwrap_or_else(|e| {
+                println!(
+                    "{} found {} errors, existing",
+                    "error:".red().bold(),
+                    e.num_errors
+                );
+                std::process::exit(1);
+            });
+            printer::print(&source, &module);
         }
         _ => {
             println!("{}", matches.usage());

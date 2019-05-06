@@ -8,6 +8,7 @@ edition = "2018"
 nom = "5.0.0-alpha2"
 colored = "1.8.0"
 clap = "2.33.0"
+derive_builder = "0.7.1"
 
 # work around https://github.com/rust-lang/rust/issues/59134
 bitflags = "=1.0.4"
