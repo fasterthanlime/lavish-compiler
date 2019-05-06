@@ -1,7 +1,9 @@
+use colored::*;
 use std::fs::File;
 use std::io::Read;
 
 mod ast;
+mod checker;
 mod parser;
 mod printer;
 
@@ -20,8 +22,15 @@ fn main() {
         }
         Ok(module) => {
             let source = parser::Source::new(input_name, &data);
-            let v = printer::Visitor::new(&source);
-            v.visit(module);
+            checker::check(&source, &module).unwrap_or_else(|e| {
+                println!(
+                    "{} found {} errors, existing",
+                    "error:".red().bold(),
+                    e.num_errors
+                );
+                std::process::exit(1);
+            });
+            printer::print(&source, &module);
         }
     }
 }

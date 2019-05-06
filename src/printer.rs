@@ -20,11 +20,11 @@ impl<'a> Visitor<'a> {
 }
 
 pub trait Visitable {
-    fn visit<'a>(&self, v: &'a Visitor<'a>);
+    fn visit<'a>(self, v: &'a Visitor<'a>);
 }
 
-impl<'a> Visitable for ast::Module<'a> {
-    fn visit(&self, v: &Visitor) {
+impl<'a> Visitable for &ast::Module<'a> {
+    fn visit(self, v: &Visitor) {
         {
             use std::collections::HashMap;
             let mut set: HashMap<&str, &ast::NamespaceDecl> = HashMap::new();
@@ -48,8 +48,8 @@ impl<'a> Visitable for ast::Module<'a> {
     }
 }
 
-impl<'a> Visitable for ast::NamespaceDecl<'a> {
-    fn visit(&self, v: &Visitor) {
+impl<'a> Visitable for &ast::NamespaceDecl<'a> {
+    fn visit(self, v: &Visitor) {
         v.source.position(&self.loc).print_message(&format!(
             "namespace {}{}",
             self.name.yellow(),
@@ -67,8 +67,8 @@ impl<'a> Visitable for ast::NamespaceDecl<'a> {
     }
 }
 
-impl<'a> Visitable for ast::StructDecl<'a> {
-    fn visit(&self, v: &Visitor) {
+impl<'a> Visitable for &ast::StructDecl<'a> {
+    fn visit(self, v: &Visitor) {
         v.source.position(&self.loc).print_message(&format!(
             "struct {}{}",
             self.name.yellow(),
@@ -80,8 +80,8 @@ impl<'a> Visitable for ast::StructDecl<'a> {
     }
 }
 
-impl<'a> Visitable for ast::FunctionDecl<'a> {
-    fn visit(&self, v: &Visitor) {
+impl<'a> Visitable for &ast::FunctionDecl<'a> {
+    fn visit(self, v: &Visitor) {
         v.source.position(&self.loc).print_message(&format!(
             "function {}{}",
             self.name.yellow(),
@@ -96,8 +96,8 @@ impl<'a> Visitable for ast::FunctionDecl<'a> {
     }
 }
 
-impl<'a> Visitable for ast::Field<'a> {
-    fn visit(&self, v: &Visitor) {
+impl<'a> Visitable for &ast::Field<'a> {
+    fn visit(self, v: &Visitor) {
         v.source.position(&self.loc).print_message(&format!(
             "field {}, of type {}{}",
             self.name.yellow(),
@@ -117,4 +117,9 @@ fn format_comment(comment: &Option<ast::Comment>) -> ColoredString {
         .blue();
     };
     result
+}
+
+pub fn print(source: &parser::Source, module: &ast::Module) {
+    let v = Visitor::new(source);
+    v.visit(module);
 }
