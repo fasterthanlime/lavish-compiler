@@ -1,8 +1,17 @@
-use std::collections::HashMap;
-
 #[derive(Debug, Clone)]
 pub struct Loc<'a> {
     pub slice: &'a str,
+}
+
+#[derive(Debug)]
+pub struct Module<'a> {
+    pub namespaces: Vec<NamespaceDecl<'a>>,
+}
+
+impl<'a> Module<'a> {
+    pub fn new(namespaces: Vec<NamespaceDecl<'a>>) -> Self {
+        Self { namespaces }
+    }
 }
 
 #[derive(Debug)]
@@ -10,9 +19,9 @@ pub struct NamespaceDecl<'a> {
     pub loc: Loc<'a>,
     pub comment: Option<Comment>,
     pub name: String,
-    pub functions: HashMap<String, FunctionDecl<'a>>,
-    pub structs: HashMap<String, StructDecl<'a>>,
-    pub namespaces: HashMap<String, NamespaceDecl<'a>>,
+    pub functions: Vec<FunctionDecl<'a>>,
+    pub structs: Vec<StructDecl<'a>>,
+    pub namespaces: Vec<NamespaceDecl<'a>>,
 }
 
 #[derive(Debug)]
@@ -76,9 +85,9 @@ impl<'a> NamespaceDecl<'a> {
             name: name.into(),
             loc,
             comment,
-            functions: HashMap::new(),
-            structs: HashMap::new(),
-            namespaces: HashMap::new(),
+            functions: Vec::new(),
+            structs: Vec::new(),
+            namespaces: Vec::new(),
         };
         for item in items {
             ns.add_item(item)
@@ -89,13 +98,13 @@ impl<'a> NamespaceDecl<'a> {
     fn add_item(&mut self, item: NamespaceItem<'a>) {
         match item {
             NamespaceItem::Function(i) => {
-                self.functions.insert(i.name.clone(), i);
+                self.functions.push(i);
             }
             NamespaceItem::Struct(i) => {
-                self.structs.insert(i.name.clone(), i);
+                self.structs.push(i);
             }
             NamespaceItem::Namespace(i) => {
-                self.namespaces.insert(i.name.clone(), i);
+                self.namespaces.push(i);
             }
         };
     }

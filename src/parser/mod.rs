@@ -13,8 +13,8 @@ mod errors;
 use super::ast::*;
 pub use errors::*;
 
-pub fn parse<'a>(source: &Source<'a>) -> Result<Vec<NamespaceDecl<'a>>, VerboseError<&'a str>> {
-    match root::<VerboseError<&'a str>>(source.input) {
+pub fn parse<'a>(source: &Source<'a>) -> Result<Module<'a>, VerboseError<&'a str>> {
+    match module::<VerboseError<&'a str>>(source.input) {
         Err(Err::Error(e)) | Err(Err::Failure(e)) => Err(e),
         Ok((_, res)) => Ok(res),
         _ => Err(VerboseError {
@@ -23,8 +23,13 @@ pub fn parse<'a>(source: &Source<'a>) -> Result<Vec<NamespaceDecl<'a>>, VerboseE
     }
 }
 
-fn root<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<NamespaceDecl>, E> {
-    all_consuming(terminated(many0(preceded(sp, nsdecl)), sp))(i)
+fn module<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Module, E> {
+    all_consuming(terminated(
+        map(many0(preceded(sp, nsdecl)), |namespaces| {
+            Module::new(namespaces)
+        }),
+        sp,
+    ))(i)
 }
 
 fn spaced<'a, O, E: ParseError<&'a str>, F>(f: F) -> impl Fn(&'a str) -> IResult<&'a str, O, E>
