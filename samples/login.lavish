@@ -1,0 +1,29 @@
+
+namespace butlerd {
+    namespace profile {
+        // Adds a new profile by password login
+        server fn login_with_password(
+            username: string,
+            password: string,
+        ) -> (
+            profile: Profile,
+            cookies: Map<string,string>,
+        ) {
+            client fn request_captcha(
+                recaptcha_url: string,
+            ) -> (
+                recaptcha_response: string,
+            )
+
+            client fn request_totp() -> (code: string)
+        }
+
+        // Adds a new profile by API key login
+        // No cookies are returned for this kind of login.
+        server fn login_with_api_key(
+            api_key: string,
+        ) -> (
+            profile: Profile,
+        )
+    }
+}
