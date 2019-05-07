@@ -50,7 +50,7 @@ trait Visitable {
 
 trait Named<'a> {
     fn name(&'a self) -> &'a str;
-    fn loc(&'a self) -> &'a ast::Loc<'a>;
+    fn loc(&'a self) -> &'a ast::Loc;
 }
 
 macro_rules! impl_named {
@@ -59,19 +59,19 @@ macro_rules! impl_named {
             fn name(&'a self) -> &'a str {
                 &self.name
             }
-            fn loc(&'a self) -> &'a ast::Loc<'a> {
+            fn loc(&'a self) -> &'a ast::Loc {
                 &self.loc
             }
         }
     };
 }
 
-impl_named!(ast::NamespaceDecl<'a>);
-impl_named!(ast::StructDecl<'a>);
-impl_named!(ast::FunctionDecl<'a>);
-impl_named!(ast::Field<'a>);
+impl_named!(ast::NamespaceDecl);
+impl_named!(ast::StructDecl);
+impl_named!(ast::FunctionDecl);
+impl_named!(ast::Field);
 
-impl<'a> Visitable for &ast::Module<'a> {
+impl Visitable for &ast::Module {
     fn visit(self, v: &mut Visitor) {
         v.check_dupes("namespace", &self.namespaces);
         for ns in &self.namespaces {
@@ -80,7 +80,7 @@ impl<'a> Visitable for &ast::Module<'a> {
     }
 }
 
-impl<'a> Visitable for &ast::NamespaceDecl<'a> {
+impl Visitable for &ast::NamespaceDecl {
     fn visit(self, v: &mut Visitor) {
         v.check_dupes("namespace", &self.namespaces);
         for ns in &self.namespaces {
@@ -97,7 +97,7 @@ impl<'a> Visitable for &ast::NamespaceDecl<'a> {
     }
 }
 
-impl<'a> Visitable for &ast::StructDecl<'a> {
+impl Visitable for &ast::StructDecl {
     fn visit(self, v: &mut Visitor) {
         v.check_dupes("field", &self.fields);
         for p in &self.fields {
@@ -106,7 +106,7 @@ impl<'a> Visitable for &ast::StructDecl<'a> {
     }
 }
 
-impl<'a> Visitable for &ast::FunctionDecl<'a> {
+impl Visitable for &ast::FunctionDecl {
     fn visit(self, v: &mut Visitor) {
         v.check_dupes("param", &self.params);
         for p in &self.params {
@@ -119,7 +119,7 @@ impl<'a> Visitable for &ast::FunctionDecl<'a> {
     }
 }
 
-impl<'a> Visitable for &ast::Field<'a> {
+impl Visitable for &ast::Field {
     fn visit(self, _v: &mut Visitor) {}
 }
 

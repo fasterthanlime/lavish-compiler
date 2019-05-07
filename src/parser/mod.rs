@@ -10,10 +10,13 @@ use nom::{
 };
 
 mod errors;
+mod span;
+
 use super::ast::*;
 pub use errors::*;
+pub use span::*;
 
-pub fn module<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Module, E> {
+pub fn module<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Module, E> {
     all_consuming(terminated(
         map(many0(preceded(sp, nsdecl)), |namespaces| {
             Module::new(namespaces)
@@ -22,39 +25,39 @@ pub fn module<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Module
     ))(i)
 }
 
-fn spaced<'a, O, E: ParseError<&'a str>, F>(f: F) -> impl Fn(&'a str) -> IResult<&'a str, O, E>
+fn spaced<'a, O, E: ParseError<Span>, F>(f: F) -> impl Fn(Span) -> IResult<Span, O, E>
 where
-    F: Fn(&'a str) -> IResult<&'a str, O, E>,
+    F: Fn(Span) -> IResult<Span, O, E>,
 {
     terminated(preceded(sp, f), sp)
 }
 
-fn sp<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
+fn sp<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     let chars = " \t\r\n";
 
     take_while(move |c| chars.contains(c))(i)
 }
 
-fn id<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
+fn id<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
     take_while1(move |c| chars.contains(c))(i)
 }
 
-fn typ<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
+fn typ<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_<>";
 
     take_while1(move |c| chars.contains(c))(i)
 }
 
-fn loc<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Loc<'a>, E> {
+fn loc<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Loc, E> {
     match tag("")(i) {
-        Ok((input, _)) => Ok((input, Loc { slice: input })),
+        Ok((input, _)) => Ok((input.clone(), Loc { slice: input })),
         Err(err) => Err(err),
     }
 }
 
-fn field<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Field, E> {
+fn field<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Field, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, loc) = spaced(loc)(i)?;
     let (i, name) = spaced(id)(i)?;
@@ -62,31 +65,31 @@ fn field<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Field, E> {
 
     map(ctx, move |typ| Field {
         comment: comment.clone(),
-        name: name.into(),
+        name: name.clone().into(),
         loc: loc.clone(),
         typ: typ.into(),
     })(i)
 }
 
-fn fields<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Field>, E> {
+fn fields<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
     terminated(
         separated_list(spaced(char(',')), field),
         opt(spaced(char(','))),
     )(i)
 }
 
-fn fnmod<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionModifier, E> {
+fn fnmod<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionModifier, E> {
     alt((
         map(tag("server"), |_| FunctionModifier::Server),
         map(tag("client"), |_| FunctionModifier::Client),
     ))(i)
 }
 
-fn fnmods<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<FunctionModifier>, E> {
+fn fnmods<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<FunctionModifier>, E> {
     preceded(sp, separated_list(sp, fnmod))(i)
 }
 
-fn results<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Field>, E> {
+fn results<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
     let (i, _) = spaced(tag("->"))(i)?;
 
     context(
@@ -95,7 +98,7 @@ fn results<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<Field
     )(i)
 }
 
-fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDecl, E> {
+fn fndecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, modifiers) = fnmods(i)?;
     let (i, loc) = spaced(loc)(i)?;
@@ -127,7 +130,7 @@ fn fndecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, FunctionDe
     )(i)
 }
 
-fn structdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, StructDecl, E> {
+fn structdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, StructDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, loc) = spaced(loc)(i)?;
     let (i, _) = preceded(sp, tag("struct"))(i)?;
@@ -149,17 +152,17 @@ fn structdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Struct
     )(i)
 }
 
-fn comment_line<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, &'a str, E> {
+fn comment_line<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     preceded(sp, preceded(tag("//"), preceded(sp, take_until("\n"))))(i)
 }
 
-fn comment<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Comment, E> {
+fn comment<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Comment, E> {
     map(many1(comment_line), |lines| Comment {
-        lines: lines.iter().map(|&x| x.into()).collect(),
+        lines: lines.iter().map(|x| x.clone().into()).collect(),
     })(i)
 }
 
-fn nsitem<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, NamespaceItem, E> {
+fn nsitem<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceItem, E> {
     alt((
         map(fndecl, |i| NamespaceItem::Function(i)),
         map(structdecl, |i| NamespaceItem::Struct(i)),
@@ -167,11 +170,11 @@ fn nsitem<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, NamespaceI
     ))(i)
 }
 
-fn nsbody<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, Vec<NamespaceItem>, E> {
+fn nsbody<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<NamespaceItem>, E> {
     many0(preceded(sp, nsitem))(i)
 }
 
-fn nsdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, NamespaceDecl, E> {
+fn nsdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, loc) = spaced(loc)(i)?;
     let (i, _) = terminated(preceded(sp, tag("namespace")), sp)(i)?;
@@ -183,7 +186,9 @@ fn nsdecl<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, NamespaceD
                 spaced(id),
                 delimited(spaced(char('{')), nsbody, spaced(char('}'))),
             )),
-            move |(name, items)| NamespaceDecl::new(name, loc.clone(), comment.clone(), items),
+            move |(name, items)| {
+                NamespaceDecl::new(name.into(), loc.clone(), comment.clone(), items)
+            },
         ),
     )(i)
 }

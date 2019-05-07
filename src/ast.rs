@@ -1,48 +1,53 @@
-#[derive(Debug, Clone)]
-pub struct Loc<'a> {
-    pub slice: &'a str,
+use super::parser::Span;
+use std::fmt;
+
+#[derive(Clone)]
+pub struct Loc {
+    pub slice: Span,
+}
+
+impl fmt::Debug for Loc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", "Loc")
+    }
 }
 
 #[derive(Debug)]
-pub struct Module<'a> {
-    pub namespaces: Vec<NamespaceDecl<'a>>,
+pub struct Module {
+    pub namespaces: Vec<NamespaceDecl>,
 }
 
-pub struct Module2 {
-    pub source: std::rc::Rc<super::parser::Source>,
-}
-
-impl<'a> Module<'a> {
-    pub fn new(namespaces: Vec<NamespaceDecl<'a>>) -> Self {
+impl Module {
+    pub fn new(namespaces: Vec<NamespaceDecl>) -> Self {
         Self { namespaces }
     }
 }
 
 #[derive(Debug)]
-pub struct NamespaceDecl<'a> {
-    pub loc: Loc<'a>,
+pub struct NamespaceDecl {
+    pub loc: Loc,
     pub comment: Option<Comment>,
     pub name: String,
-    pub functions: Vec<FunctionDecl<'a>>,
-    pub structs: Vec<StructDecl<'a>>,
-    pub namespaces: Vec<NamespaceDecl<'a>>,
+    pub functions: Vec<FunctionDecl>,
+    pub structs: Vec<StructDecl>,
+    pub namespaces: Vec<NamespaceDecl>,
 }
 
 #[derive(Debug)]
-pub enum NamespaceItem<'a> {
-    Function(FunctionDecl<'a>),
-    Struct(StructDecl<'a>),
-    Namespace(NamespaceDecl<'a>),
+pub enum NamespaceItem {
+    Function(FunctionDecl),
+    Struct(StructDecl),
+    Namespace(NamespaceDecl),
 }
 
 #[derive(Debug)]
-pub struct FunctionDecl<'a> {
-    pub loc: Loc<'a>,
+pub struct FunctionDecl {
+    pub loc: Loc,
     pub comment: Option<Comment>,
     pub modifiers: Vec<FunctionModifier>,
     pub name: String,
-    pub params: Vec<Field<'a>>,
-    pub results: Vec<Field<'a>>,
+    pub params: Vec<Field>,
+    pub results: Vec<Field>,
 }
 
 #[derive(Debug, Clone)]
@@ -52,19 +57,19 @@ pub enum FunctionModifier {
 }
 
 #[derive(Debug)]
-pub struct Field<'a> {
-    pub loc: Loc<'a>,
+pub struct Field {
+    pub loc: Loc,
     pub comment: Option<Comment>,
     pub name: String,
     pub typ: String,
 }
 
 #[derive(Debug)]
-pub struct StructDecl<'a> {
-    pub loc: Loc<'a>,
+pub struct StructDecl {
+    pub loc: Loc,
     pub comment: Option<Comment>,
     pub name: String,
-    pub fields: Vec<Field<'a>>,
+    pub fields: Vec<Field>,
 }
 
 #[derive(Debug, Clone)]
@@ -78,12 +83,12 @@ impl std::default::Default for Comment {
     }
 }
 
-impl<'a> NamespaceDecl<'a> {
+impl NamespaceDecl {
     pub fn new(
-        name: &str,
-        loc: Loc<'a>,
+        name: String,
+        loc: Loc,
         comment: Option<Comment>,
-        items: Vec<NamespaceItem<'a>>,
+        items: Vec<NamespaceItem>,
     ) -> Self {
         let mut ns = NamespaceDecl {
             name: name.into(),
@@ -99,7 +104,7 @@ impl<'a> NamespaceDecl<'a> {
         ns
     }
 
-    fn add_item(&mut self, item: NamespaceItem<'a>) {
+    fn add_item(&mut self, item: NamespaceItem) {
         match item {
             NamespaceItem::Function(i) => {
                 self.functions.push(i);

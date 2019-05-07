@@ -42,7 +42,7 @@ trait Visitable {
     fn visit(self, v: &mut Visitor);
 }
 
-impl<'a> Visitable for &ast::Module<'a> {
+impl Visitable for &ast::Module {
     fn visit(self, v: &mut Visitor) {
         for ns in &self.namespaces {
             v.visit(ns);
@@ -50,7 +50,7 @@ impl<'a> Visitable for &ast::Module<'a> {
     }
 }
 
-impl<'a> Visitable for &ast::NamespaceDecl<'a> {
+impl Visitable for &ast::NamespaceDecl {
     fn visit(self, v: &mut Visitor) {
         v.print(
             &self.loc,
@@ -72,7 +72,7 @@ impl<'a> Visitable for &ast::NamespaceDecl<'a> {
     }
 }
 
-impl<'a> Visitable for &ast::StructDecl<'a> {
+impl Visitable for &ast::StructDecl {
     fn visit(self, v: &mut Visitor) {
         v.print(
             &self.loc,
@@ -88,7 +88,7 @@ impl<'a> Visitable for &ast::StructDecl<'a> {
     }
 }
 
-impl<'a> Visitable for &ast::FunctionDecl<'a> {
+impl Visitable for &ast::FunctionDecl {
     fn visit(self, v: &mut Visitor) {
         v.print(
             &self.loc,
@@ -107,7 +107,7 @@ impl<'a> Visitable for &ast::FunctionDecl<'a> {
     }
 }
 
-impl<'a> Visitable for &ast::Field<'a> {
+impl Visitable for &ast::Field {
     fn visit(self, v: &mut Visitor) {
         v.print(
             &self.loc,

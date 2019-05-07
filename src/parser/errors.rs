@@ -1,37 +1,38 @@
 use colored::*;
 use nom::{
     error::{VerboseError, VerboseErrorKind},
-    Err, Offset,
+    Err,
 };
 use std::fmt;
 use std::iter::repeat;
+use std::rc::Rc;
 
 use super::super::ast;
 use super::super::parser;
+use parser::Span;
 
 #[derive(Debug)]
-pub enum Error<'a> {
+pub enum Error {
     IO(std::io::Error),
-    Source(SourceError<'a>),
-    Unknown(UnknownError<'a>),
+    Source(SourceError),
+    Unknown(UnknownError),
 }
 
-pub struct SourceError<'a> {
-    source: &'a Source,
-    inner: VerboseError<&'a str>,
+pub struct SourceError {
+    inner: VerboseError<parser::Span>,
 }
 
-impl<'a> fmt::Debug for SourceError<'a> {
+impl<'a> fmt::Debug for SourceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        print_errors(f, self.source, &self.inner)
+        print_errors(f, &self.inner)
     }
 }
 
-pub struct UnknownError<'a> {
-    source: &'a Source,
+pub struct UnknownError {
+    source: Rc<Source>,
 }
 
-impl<'a> fmt::Debug for UnknownError<'a> {
+impl fmt::Debug for UnknownError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -41,7 +42,7 @@ impl<'a> fmt::Debug for UnknownError<'a> {
     }
 }
 
-impl<'a> From<std::io::Error> for Error<'a> {
+impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
         Error::IO(e)
     }
@@ -71,21 +72,21 @@ impl Source {
             lines,
         })
     }
+}
 
-    pub fn parse2<'a>(source: std::rc::Rc<Self>) -> Result<ast::Module2, Error<'a>> {
-        Ok(ast::Module2 { source })
-    }
-
-    pub fn parse<'a>(&'a self) -> Result<ast::Module<'a>, Error<'a>> {
-        let res = parser::module::<VerboseError<&'a str>>(&self.input);
-        match res {
-            Err(Err::Error(e)) | Err(Err::Failure(e)) => Err(Error::Source(SourceError {
-                inner: e,
-                source: self,
-            })),
-            Err(_) => Err(Error::Unknown(UnknownError { source: self })),
-            Ok((_, module)) => Ok(module),
-        }
+pub fn parse<'a>(source: Rc<Source>) -> Result<ast::Module, Error> {
+    let span = parser::Span {
+        source: source.clone(),
+        offset: 0,
+        len: source.input.len(),
+    };
+    let res = parser::module::<VerboseError<parser::Span>>(span);
+    match res {
+        Err(Err::Error(e)) | Err(Err::Failure(e)) => Err(Error::Source(SourceError { inner: e })),
+        Err(_) => Err(Error::Unknown(UnknownError {
+            source: source.clone(),
+        })),
+        Ok((_, module)) => Ok(module),
     }
 }
 
@@ -100,27 +101,28 @@ impl<'a> Source {
         &self.name
     }
 
-    pub fn position(&self, loc: &'a ast::Loc<'a>) -> Position {
-        let mut offset = self.input.offset(loc.slice);
-        let mut line = 0;
-        let mut column = 0;
+    pub fn position(&self, _loc: &'a ast::Loc) -> Position {
+        unimplemented!();
+        // let mut offset = self.input.offset(loc.slice);
+        // let mut line = 0;
+        // let mut column = 0;
 
-        for (j, l) in self.lines.iter().enumerate() {
-            if offset <= l.len() {
-                line = j;
-                column = offset;
-                break;
-            } else {
-                // 1 accounts for the '\n'
-                offset = offset - l.len() - 1;
-            }
-        }
+        // for (j, l) in self.lines.iter().enumerate() {
+        //     if offset <= l.len() {
+        //         line = j;
+        //         column = offset;
+        //         break;
+        //     } else {
+        //         // 1 accounts for the '\n'
+        //         offset = offset - l.len() - 1;
+        //     }
+        // }
 
-        Position {
-            source: &self,
-            line,
-            column,
-        }
+        // Position {
+        //     source: &self,
+        //     line,
+        //     column,
+        // }
     }
 }
 
@@ -217,18 +219,17 @@ impl<'a> Position<'a> {
     }
 }
 
-pub fn print_errors(
-    f: &mut fmt::Formatter,
-    source: &Source,
-    e: &VerboseError<&str>,
-) -> fmt::Result {
+pub fn print_errors(f: &mut fmt::Formatter, e: &VerboseError<Span>) -> fmt::Result {
     let mut errors = e.errors.clone();
     errors.reverse();
 
     writeln!(f)?;
     for (slice, kind) in errors.iter() {
-        let loc = ast::Loc { slice };
-        let pos = source.position(&loc);
+        let loc = ast::Loc {
+            slice: slice.clone(),
+        };
+        // FIXME: jank
+        let pos = loc.slice.source.position(&loc);
 
         match kind {
             VerboseErrorKind::Char(c) => {
