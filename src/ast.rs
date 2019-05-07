@@ -8,6 +8,10 @@ pub struct Module<'a> {
     pub namespaces: Vec<NamespaceDecl<'a>>,
 }
 
+pub struct Module2 {
+    pub source: std::rc::Rc<super::parser::Source>,
+}
+
 impl<'a> Module<'a> {
     pub fn new(namespaces: Vec<NamespaceDecl<'a>>) -> Self {
         Self { namespaces }

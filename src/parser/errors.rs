@@ -72,6 +72,10 @@ impl Source {
         })
     }
 
+    pub fn parse2<'a>(source: std::rc::Rc<Self>) -> Result<ast::Module2, Error<'a>> {
+        Ok(ast::Module2 { source })
+    }
+
     pub fn parse<'a>(&'a self) -> Result<ast::Module<'a>, Error<'a>> {
         let res = parser::module::<VerboseError<&'a str>>(&self.input);
         match res {

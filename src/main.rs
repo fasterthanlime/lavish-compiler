@@ -23,25 +23,40 @@ fn main() {
         )
         .get_matches();
 
+    let mut units: Vec<Unit> = Vec::new();
+
     match matches.subcommand() {
         ("check", Some(cmd)) => {
             let input_name = cmd.value_of("input").unwrap();
             let source = parser::Source::new(input_name).unwrap();
-            let module = source.parse().unwrap();
+            let source = std::rc::Rc::new(source);
+            let module = parser::Source::parse2(source.clone()).unwrap();
 
-            checker::check(&source, &module).unwrap_or_else(|e| {
-                println!(
-                    "{} found {} errors, existing",
-                    "error:".red().bold(),
-                    e.num_errors
-                );
-                std::process::exit(1);
-            });
-            printer::print(&source, &module);
+            // checker::check(&source, &module).unwrap_or_else(|e| {
+            //     println!(
+            //         "{} found {} errors, existing",
+            //         "error:".red().bold(),
+            //         e.num_errors
+            //     );
+            //     std::process::exit(1);
+            // });
+            // printer::print(&source, &module);
+
+            let unit = Unit { source, module };
+            units.push(unit);
         }
         _ => {
             println!("{}", matches.usage());
             std::process::exit(1);
         }
     };
+
+    for unit in units {
+        println!("heyo");
+    }
+}
+
+struct Unit {
+    source: std::rc::Rc<parser::Source>,
+    module: ast::Module2,
 }
