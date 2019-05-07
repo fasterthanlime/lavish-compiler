@@ -1,5 +1,4 @@
 use super::ast;
-use super::parser;
 use super::Error;
 use colored::*;
 use std::collections::HashMap;
@@ -23,18 +22,19 @@ impl Visitor {
         let mut set: HashMap<&str, &T> = HashMap::new();
         for item in items {
             let name = item.name();
-            if let Some(old) = set.insert(name, item) {
+            if let Some(old) = set.insert(&name.text, item) {
                 self.num_errors += 1;
-                item.loc()
+                name.span
                     .position()
                     .diag_err(format!(
                         "{} {} {} redefined",
                         "error:".red().bold(),
                         kind,
-                        name
+                        name.text
                     ))
                     .print();
-                old.loc()
+                old.name()
+                    .span
                     .position()
                     .diag_info("first definition was here".into())
                     .print();
@@ -48,18 +48,14 @@ trait Visitable {
 }
 
 trait Named<'a> {
-    fn name(&'a self) -> &'a str;
-    fn loc(&'a self) -> &'a parser::Span;
+    fn name(&'a self) -> &'a ast::Identifier;
 }
 
 macro_rules! impl_named {
     ($x:ty) => {
         impl<'a> Named<'a> for $x {
-            fn name(&'a self) -> &'a str {
+            fn name(&'a self) -> &'a ast::Identifier {
                 &self.name
-            }
-            fn loc(&'a self) -> &'a parser::Span {
-                &self.loc
             }
         }
     };

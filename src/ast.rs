@@ -11,11 +11,17 @@ impl Module {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Identifier {
+    pub span: Span,
+    pub text: String,
+}
+
 #[derive(Debug)]
 pub struct NamespaceDecl {
     pub loc: Span,
     pub comment: Option<Comment>,
-    pub name: String,
+    pub name: Identifier,
     pub functions: Vec<FunctionDecl>,
     pub structs: Vec<StructDecl>,
     pub namespaces: Vec<NamespaceDecl>,
@@ -33,7 +39,7 @@ pub struct FunctionDecl {
     pub loc: Span,
     pub comment: Option<Comment>,
     pub modifiers: Vec<FunctionModifier>,
-    pub name: String,
+    pub name: Identifier,
     pub params: Vec<Field>,
     pub results: Vec<Field>,
 }
@@ -48,7 +54,7 @@ pub enum FunctionModifier {
 pub struct Field {
     pub loc: Span,
     pub comment: Option<Comment>,
-    pub name: String,
+    pub name: Identifier,
     pub typ: String,
 }
 
@@ -56,7 +62,7 @@ pub struct Field {
 pub struct StructDecl {
     pub loc: Span,
     pub comment: Option<Comment>,
-    pub name: String,
+    pub name: Identifier,
     pub fields: Vec<Field>,
 }
 
@@ -73,7 +79,7 @@ impl std::default::Default for Comment {
 
 impl NamespaceDecl {
     pub fn new(
-        name: String,
+        name: Identifier,
         loc: Span,
         comment: Option<Comment>,
         items: Vec<NamespaceItem>,

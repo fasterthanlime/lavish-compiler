@@ -51,7 +51,7 @@ impl Visitable for &ast::NamespaceDecl {
             &self.loc,
             format!(
                 "namespace {}{}",
-                self.name.yellow(),
+                self.name.text.yellow(),
                 format_comment(&self.comment),
             ),
         );
@@ -73,7 +73,7 @@ impl Visitable for &ast::StructDecl {
             &self.loc,
             format!(
                 "struct {}{}",
-                self.name.yellow(),
+                self.name.text.yellow(),
                 format_comment(&self.comment),
             ),
         );
@@ -89,7 +89,7 @@ impl Visitable for &ast::FunctionDecl {
             &self.loc,
             format!(
                 "function {}{}",
-                self.name.yellow(),
+                self.name.text.yellow(),
                 format_comment(&self.comment),
             ),
         );
@@ -108,7 +108,7 @@ impl Visitable for &ast::Field {
             &self.loc,
             format!(
                 "field {}, of type {}{}",
-                self.name.yellow(),
+                self.name.text.yellow(),
                 self.typ.green(),
                 format_comment(&self.comment),
             ),

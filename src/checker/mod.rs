@@ -1,5 +1,4 @@
 use super::ast;
-use super::parser;
 
 mod noredef;
 

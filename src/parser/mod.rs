@@ -38,10 +38,13 @@ fn sp<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     take_while(move |c| chars.contains(c))(i)
 }
 
-fn id<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
+fn id<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
     let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
-    take_while1(move |c| chars.contains(c))(i)
+    map(take_while1(move |c| chars.contains(c)), |span: Span| {
+        let text = span.clone().into();
+        Identifier { span, text }
+    })(i)
 }
 
 fn typ<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
@@ -63,7 +66,7 @@ fn field<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Field, E> {
 
     map(ctx, move |typ| Field {
         comment: comment.clone(),
-        name: name.clone().into(),
+        name: name.clone(),
         loc: loc.clone(),
         typ: typ.into(),
     })(i)
@@ -120,7 +123,7 @@ fn fndecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
                 loc: loc.clone(),
                 comment: comment.clone(),
                 modifiers: modifiers.clone(),
-                name: name.into(),
+                name: name.clone(),
                 params,
                 results: results.unwrap_or_default(),
             },
@@ -143,7 +146,7 @@ fn structdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, StructDecl, E> 
             move |(name, _)| StructDecl {
                 loc: loc.clone(),
                 comment: comment.clone(),
-                name: name.into(),
+                name: name.clone(),
                 fields: Vec::new(),
             },
         ),
