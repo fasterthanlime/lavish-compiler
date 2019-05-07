@@ -7,6 +7,8 @@ use std::fmt;
 use std::ops::RangeFrom;
 use std::rc::Rc;
 
+use super::Position;
+
 #[derive(Clone)]
 pub struct Span {
     pub source: Rc<Source>,
@@ -48,6 +50,29 @@ impl Span {
 
     pub fn slice<'a>(&'a self) -> &'a str {
         &self.source.input[self.offset..self.offset + self.len]
+    }
+
+    pub fn position<'a>(&'a self) -> Position<'a> {
+        let mut offset = self.offset;
+        let mut line = 0;
+        let mut column = 0;
+
+        for (j, l) in self.source.lines.iter().enumerate() {
+            if offset <= l.len() {
+                line = j;
+                column = offset;
+                break;
+            } else {
+                // 1 accounts for the '\n'
+                offset = offset - l.len() - 1;
+            }
+        }
+
+        Position {
+            span: self,
+            line,
+            column,
+        }
     }
 }
 

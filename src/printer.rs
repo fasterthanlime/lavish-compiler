@@ -2,14 +2,13 @@ use super::ast;
 use super::parser;
 use colored::*;
 
-struct Visitor<'a> {
+struct Visitor {
     indent: usize,
-    source: &'a parser::Source,
 }
 
-impl<'a> Visitor<'a> {
-    fn new(source: &'a parser::Source) -> Self {
-        Self { indent: 0, source }
+impl Visitor {
+    fn new() -> Self {
+        Self { indent: 0 }
     }
 
     fn visit<T>(&mut self, v: T)
@@ -29,12 +28,8 @@ impl<'a> Visitor<'a> {
         "  ".repeat(indent) + "|"
     }
 
-    fn print(&self, loc: &ast::Loc, msg: String) {
-        self.source
-            .position(loc)
-            .diag_info(msg)
-            .prefix(&self.indent())
-            .print();
+    fn print(&self, loc: &parser::Span, msg: String) {
+        loc.position().diag_info(msg).prefix(&self.indent()).print();
     }
 }
 
@@ -133,7 +128,7 @@ fn format_comment(comment: &Option<ast::Comment>) -> ColoredString {
     result
 }
 
-pub fn print(source: &parser::Source, module: &ast::Module) {
-    let mut v = Visitor::new(source);
+pub fn print(module: &ast::Module) {
+    let mut v = Visitor::new();
     v.visit(module);
 }

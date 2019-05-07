@@ -51,7 +51,7 @@ impl From<std::io::Error> for Error {
 pub struct Source {
     pub input: String,
     name: String,
-    lines: Vec<String>,
+    pub lines: Vec<String>,
 }
 
 impl Source {
@@ -90,38 +90,9 @@ pub fn parse<'a>(source: Rc<Source>) -> Result<ast::Module, Error> {
     }
 }
 
-pub struct Position<'a> {
-    source: &'a Source,
-    line: usize,
-    column: usize,
-}
-
 impl<'a> Source {
     pub fn name(&'a self) -> &'a str {
         &self.name
-    }
-
-    pub fn position(&self, loc: &'a ast::Loc) -> Position {
-        let mut offset = loc.slice.offset;
-        let mut line = 0;
-        let mut column = 0;
-
-        for (j, l) in self.lines.iter().enumerate() {
-            if offset <= l.len() {
-                line = j;
-                column = offset;
-                break;
-            } else {
-                // 1 accounts for the '\n'
-                offset = offset - l.len() - 1;
-            }
-        }
-
-        Position {
-            source: &self,
-            line,
-            column,
-        }
     }
 }
 
@@ -177,9 +148,14 @@ impl<'a> fmt::Display for Diagnostic<'a> {
                 let prefix = self.prefix;
                 let message = &self.message;
 
-                let loc = format!("{}:{}:{}:", pos.source.name(), pos.line + 1, pos.column + 1);
+                let loc = format!(
+                    "{}:{}:{}:",
+                    pos.span.source.name(),
+                    pos.line + 1,
+                    pos.column + 1
+                );
                 writeln!(f, "{}{} {}", prefix, loc.bold(), message)?;
-                writeln!(f, "{}{}", prefix, &pos.source.lines[pos.line].dimmed())?;
+                writeln!(f, "{}{}", prefix, &pos.span.source.lines[pos.line].dimmed())?;
 
                 writeln!(
                     f,
@@ -195,6 +171,12 @@ impl<'a> fmt::Display for Diagnostic<'a> {
         }
         Ok(())
     }
+}
+
+pub struct Position<'a> {
+    pub span: &'a Span,
+    pub line: usize,
+    pub column: usize,
 }
 
 impl<'a> Position<'a> {
@@ -223,19 +205,15 @@ pub fn print_errors(f: &mut fmt::Formatter, e: &VerboseError<Span>) -> fmt::Resu
     errors.reverse();
 
     writeln!(f)?;
-    for (slice, kind) in errors.iter() {
-        let loc = ast::Loc {
-            slice: slice.clone(),
-        };
-        // FIXME: jank
-        let pos = loc.slice.source.position(&loc);
+    for (span, kind) in errors.iter() {
+        let pos = span.position();
 
         match kind {
             VerboseErrorKind::Char(c) => {
                 pos.diag_err(format!(
                     "expected '{}', found {}",
                     c,
-                    slice.chars().next().unwrap()
+                    span.chars().next().unwrap()
                 ))
                 .write(f)?;
             }

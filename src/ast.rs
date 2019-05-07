@@ -1,16 +1,4 @@
 use super::parser::Span;
-use std::fmt;
-
-#[derive(Clone)]
-pub struct Loc {
-    pub slice: Span,
-}
-
-impl fmt::Debug for Loc {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", "Loc")
-    }
-}
 
 #[derive(Debug)]
 pub struct Module {
@@ -25,7 +13,7 @@ impl Module {
 
 #[derive(Debug)]
 pub struct NamespaceDecl {
-    pub loc: Loc,
+    pub loc: Span,
     pub comment: Option<Comment>,
     pub name: String,
     pub functions: Vec<FunctionDecl>,
@@ -42,7 +30,7 @@ pub enum NamespaceItem {
 
 #[derive(Debug)]
 pub struct FunctionDecl {
-    pub loc: Loc,
+    pub loc: Span,
     pub comment: Option<Comment>,
     pub modifiers: Vec<FunctionModifier>,
     pub name: String,
@@ -58,7 +46,7 @@ pub enum FunctionModifier {
 
 #[derive(Debug)]
 pub struct Field {
-    pub loc: Loc,
+    pub loc: Span,
     pub comment: Option<Comment>,
     pub name: String,
     pub typ: String,
@@ -66,7 +54,7 @@ pub struct Field {
 
 #[derive(Debug)]
 pub struct StructDecl {
-    pub loc: Loc,
+    pub loc: Span,
     pub comment: Option<Comment>,
     pub name: String,
     pub fields: Vec<Field>,
@@ -86,7 +74,7 @@ impl std::default::Default for Comment {
 impl NamespaceDecl {
     pub fn new(
         name: String,
-        loc: Loc,
+        loc: Span,
         comment: Option<Comment>,
         items: Vec<NamespaceItem>,
     ) -> Self {

@@ -32,7 +32,7 @@ fn main() {
             let source = std::rc::Rc::new(source);
             let module = parser::parse(source.clone()).unwrap();
 
-            checker::check(&source, &module).unwrap_or_else(|e| {
+            checker::check(&module).unwrap_or_else(|e| {
                 println!(
                     "{} found {} errors, existing",
                     "error:".red().bold(),
@@ -40,7 +40,7 @@ fn main() {
                 );
                 std::process::exit(1);
             });
-            printer::print(&source, &module);
+            printer::print(&module);
 
             let unit = Unit { source, module };
             units.push(unit);

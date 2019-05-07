@@ -4,12 +4,11 @@ use super::Error;
 use colored::*;
 use std::collections::HashMap;
 
-struct Visitor<'a> {
+struct Visitor {
     num_errors: i64,
-    source: &'a parser::Source,
 }
 
-impl<'a> Visitor<'a> {
+impl Visitor {
     fn visit<T>(&mut self, v: T)
     where
         T: Visitable,
@@ -26,8 +25,8 @@ impl<'a> Visitor<'a> {
             let name = item.name();
             if let Some(old) = set.insert(name, item) {
                 self.num_errors += 1;
-                self.source
-                    .position(item.loc())
+                item.loc()
+                    .position()
                     .diag_err(format!(
                         "{} {} {} redefined",
                         "error:".red().bold(),
@@ -35,8 +34,8 @@ impl<'a> Visitor<'a> {
                         name
                     ))
                     .print();
-                self.source
-                    .position(old.loc())
+                old.loc()
+                    .position()
                     .diag_info("first definition was here".into())
                     .print();
             }
@@ -50,7 +49,7 @@ trait Visitable {
 
 trait Named<'a> {
     fn name(&'a self) -> &'a str;
-    fn loc(&'a self) -> &'a ast::Loc;
+    fn loc(&'a self) -> &'a parser::Span;
 }
 
 macro_rules! impl_named {
@@ -59,7 +58,7 @@ macro_rules! impl_named {
             fn name(&'a self) -> &'a str {
                 &self.name
             }
-            fn loc(&'a self) -> &'a ast::Loc {
+            fn loc(&'a self) -> &'a parser::Span {
                 &self.loc
             }
         }
@@ -123,11 +122,8 @@ impl Visitable for &ast::Field {
     fn visit(self, _v: &mut Visitor) {}
 }
 
-pub fn check(source: &parser::Source, module: &ast::Module) -> Result<(), Error> {
-    let mut v = Visitor {
-        source,
-        num_errors: 0,
-    };
+pub fn check(module: &ast::Module) -> Result<(), Error> {
+    let mut v = Visitor { num_errors: 0 };
     v.visit(module);
     if v.num_errors > 0 {
         Err(Error {

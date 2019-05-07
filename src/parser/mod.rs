@@ -50,11 +50,9 @@ fn typ<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     take_while1(move |c| chars.contains(c))(i)
 }
 
-fn loc<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Loc, E> {
-    match tag("")(i) {
-        Ok((input, _)) => Ok((input.clone(), Loc { slice: input })),
-        Err(err) => Err(err),
-    }
+fn loc<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
+    let o = i.clone();
+    Ok((i, o))
 }
 
 fn field<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Field, E> {
