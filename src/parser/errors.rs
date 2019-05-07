@@ -101,28 +101,27 @@ impl<'a> Source {
         &self.name
     }
 
-    pub fn position(&self, _loc: &'a ast::Loc) -> Position {
-        unimplemented!();
-        // let mut offset = self.input.offset(loc.slice);
-        // let mut line = 0;
-        // let mut column = 0;
+    pub fn position(&self, loc: &'a ast::Loc) -> Position {
+        let mut offset = loc.slice.offset;
+        let mut line = 0;
+        let mut column = 0;
 
-        // for (j, l) in self.lines.iter().enumerate() {
-        //     if offset <= l.len() {
-        //         line = j;
-        //         column = offset;
-        //         break;
-        //     } else {
-        //         // 1 accounts for the '\n'
-        //         offset = offset - l.len() - 1;
-        //     }
-        // }
+        for (j, l) in self.lines.iter().enumerate() {
+            if offset <= l.len() {
+                line = j;
+                column = offset;
+                break;
+            } else {
+                // 1 accounts for the '\n'
+                offset = offset - l.len() - 1;
+            }
+        }
 
-        // Position {
-        //     source: &self,
-        //     line,
-        //     column,
-        // }
+        Position {
+            source: &self,
+            line,
+            column,
+        }
     }
 }
 

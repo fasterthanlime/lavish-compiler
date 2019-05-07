@@ -5,7 +5,6 @@ use nom::{
 };
 use std::ops::RangeFrom;
 use std::rc::Rc;
-use std::str::CharIndices;
 
 #[derive(Clone)]
 pub struct Span {
@@ -140,30 +139,65 @@ impl InputIter for Span {
 
 impl InputTake for Span {
     fn take(&self, count: usize) -> Self {
-        unimplemented!();
+        Self {
+            source: self.source.clone(),
+            offset: self.offset,
+            len: self.len - count,
+        }
     }
     fn take_split(&self, count: usize) -> (Self, Self) {
-        unimplemented!();
+        (
+            Self {
+                source: self.source.clone(),
+                offset: self.offset + count,
+                len: self.len - count,
+            },
+            Self {
+                source: self.source.clone(),
+                offset: self.offset,
+                len: self.len - count,
+            },
+        )
     }
 }
 
 impl UnspecializedInput for Span {}
 
 impl Compare<&str> for Span {
-    /// compares self to another value for equality
+    #[inline(always)]
     fn compare(&self, t: &str) -> CompareResult {
-        unimplemented!();
+        let pos = self.chars().zip(t.chars()).position(|(a, b)| a != b);
+
+        match pos {
+            Some(_) => CompareResult::Error,
+            None => {
+                if self.len() >= t.len() {
+                    CompareResult::Ok
+                } else {
+                    CompareResult::Incomplete
+                }
+            }
+        }
     }
 
-    /// compares self to another value for equality
-    /// independently of the case.
-    ///
-    /// warning: for `&str`, the comparison is done
-    /// by lowercasing both strings and comparing
-    /// the result. This is a temporary solution until
-    /// a better one appears
+    //FIXME: this version is too simple and does not use the current locale
+    #[inline(always)]
     fn compare_no_case(&self, t: &str) -> CompareResult {
-        unimplemented!();
+        let pos = self
+            .chars()
+            .zip(t.chars())
+            .position(|(a, b)| a.to_lowercase().zip(b.to_lowercase()).any(|(a, b)| a != b));
+
+        match pos {
+            Some(_) => CompareResult::Error,
+            None => {
+                if self.len() >= t.len() {
+                    CompareResult::Ok
+                } else {
+                    CompareResult::Incomplete
+                }
+            }
+        }
     }
 }
 
