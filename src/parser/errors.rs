@@ -159,10 +159,15 @@ impl<'a> fmt::Display for Diagnostic<'a> {
 
                 writeln!(
                     f,
-                    "{}{}{}",
+                    "{}{}{}{}",
                     prefix,
                     repeat(' ').take(pos.column).collect::<String>(),
-                    "^".color(caret_color).bold()
+                    "^".color(caret_color).bold(),
+                    repeat('~')
+                        .take(pos.span.len)
+                        .collect::<String>()
+                        .color(caret_color)
+                        .bold()
                 )?;
             }
             None => {
