@@ -164,7 +164,10 @@ impl<'a> fmt::Display for Diagnostic<'a> {
                     repeat(' ').take(pos.column).collect::<String>(),
                     "^".color(caret_color).bold(),
                     repeat('~')
-                        .take(pos.span.len)
+                        .take(match pos.span.len {
+                            0 => 0,
+                            x => x - 1,
+                        })
                         .collect::<String>()
                         .color(caret_color)
                         .bold()
