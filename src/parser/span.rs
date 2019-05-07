@@ -29,7 +29,6 @@ impl fmt::Debug for Span {
 
 impl Span {
     pub fn chars(&self) -> SpanIterElem {
-        println!("{:#?} chars", self);
         SpanIterElem {
             span: self.clone(),
             offset: 0,
@@ -37,7 +36,6 @@ impl Span {
     }
 
     pub fn char_indices(&self) -> SpanIter {
-        println!("{:#?} char_indices", self);
         SpanIter {
             span: self.clone(),
             offset: 0,
@@ -77,9 +75,8 @@ impl Iterator for SpanIterElem {
     type Item = char;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(c) = self.span.slice().chars().nth(self.offset) {
-            self.offset += 1;
-            println!("{:#?} SpanIter elem yields {:#?}", self.span, c);
+        if let Some(c) = self.span.slice()[self.offset..].chars().next() {
+            self.offset += c.len_utf8();
             Some(c)
         } else {
             None
@@ -98,7 +95,6 @@ impl Iterator for SpanIter {
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(c) = self.span.slice().char_indices().nth(self.offset) {
             self.offset += 1;
-            println!("{:#?} SpanIter yields {:#?}", self.span, c);
             Some(c)
         } else {
             None
@@ -149,7 +145,6 @@ impl InputIter for Span {
 
 impl InputTake for Span {
     fn take(&self, count: usize) -> Self {
-        println!("{:#?} take {}", self, count);
         Self {
             source: self.source.clone(),
             offset: self.offset,
@@ -157,7 +152,6 @@ impl InputTake for Span {
         }
     }
     fn take_split(&self, count: usize) -> (Self, Self) {
-        println!("{:#?} take_split {}", self, count);
         (
             Self {
                 source: self.source.clone(),
@@ -190,7 +184,6 @@ impl Compare<&str> for Span {
                 }
             }
         };
-        println!("{:#?} compare with {:#?} => {:#?}", self, t, res);
         res
     }
 
