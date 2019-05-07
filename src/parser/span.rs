@@ -93,9 +93,10 @@ impl Iterator for SpanIter {
     type Item = (usize, char);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(c) = self.span.slice().char_indices().nth(self.offset) {
-            self.offset += 1;
-            Some(c)
+        if let Some(c) = self.span.slice()[self.offset..].chars().next() {
+            let i = self.offset;
+            self.offset += c.len_utf8();
+            Some((i, c))
         } else {
             None
         }
