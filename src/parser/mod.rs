@@ -6,7 +6,7 @@ use nom::{
     error::{context, ParseError},
     multi::{many0, many1, separated_list},
     sequence::{delimited, preceded, terminated, tuple},
-    IResult,
+    IResult, InputTake,
 };
 
 mod errors;
@@ -54,7 +54,7 @@ fn typ<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
 }
 
 fn loc<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
-    let o = i.clone();
+    let o = i.take(0);
     Ok((i, o))
 }
 
@@ -102,8 +102,8 @@ fn results<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
 fn fndecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, modifiers) = fnmods(i)?;
-    let (i, loc) = spaced(loc)(i)?;
     let (i, _) = spaced(tag("fn"))(i)?;
+    let (i, loc) = spaced(loc)(i)?;
 
     context(
         "function declaration",
@@ -133,8 +133,8 @@ fn fndecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
 
 fn structdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, StructDecl, E> {
     let (i, comment) = opt(comment)(i)?;
-    let (i, loc) = spaced(loc)(i)?;
     let (i, _) = preceded(sp, tag("struct"))(i)?;
+    let (i, loc) = spaced(loc)(i)?;
 
     context(
         "struct",
@@ -177,8 +177,8 @@ fn nsbody<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<NamespaceItem>,
 
 fn nsdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceDecl, E> {
     let (i, comment) = opt(comment)(i)?;
-    let (i, loc) = spaced(loc)(i)?;
     let (i, _) = terminated(preceded(sp, tag("namespace")), sp)(i)?;
+    let (i, loc) = spaced(loc)(i)?;
 
     context(
         "namespace",
