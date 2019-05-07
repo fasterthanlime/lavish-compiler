@@ -3,6 +3,7 @@ use nom::{
     Compare, CompareResult, FindSubstring, InputIter, InputLength, InputTake, Slice,
     UnspecializedInput,
 };
+use std::fmt;
 use std::ops::RangeFrom;
 use std::rc::Rc;
 
@@ -13,8 +14,22 @@ pub struct Span {
     pub len: usize,
 }
 
+impl fmt::Debug for Span {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}(at {}, len={}, {:#?}..)",
+            self.source.name(),
+            self.offset,
+            self.len,
+            &self.slice()[..12]
+        )
+    }
+}
+
 impl Span {
     pub fn chars(&self) -> SpanIterElem {
+        println!("{:#?} chars", self);
         SpanIterElem {
             span: self.clone(),
             offset: 0,
@@ -22,6 +37,7 @@ impl Span {
     }
 
     pub fn char_indices(&self) -> SpanIter {
+        println!("{:#?} char_indices", self);
         SpanIter {
             span: self.clone(),
             offset: 0,
@@ -29,7 +45,11 @@ impl Span {
     }
 
     pub fn len(&self) -> usize {
-        self.source.input[self.offset..self.offset + self.len].len()
+        self.len
+    }
+
+    pub fn slice<'a>(&'a self) -> &'a str {
+        &self.source.input[self.offset..self.offset + self.len]
     }
 }
 
@@ -57,14 +77,9 @@ impl Iterator for SpanIterElem {
     type Item = char;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(c) = self
-            .span
-            .source
-            .input
-            .chars()
-            .nth(self.span.offset + self.offset)
-        {
+        if let Some(c) = self.span.slice().chars().nth(self.offset) {
             self.offset += 1;
+            println!("{:#?} SpanIter elem yields {:#?}", self.span, c);
             Some(c)
         } else {
             None
@@ -81,14 +96,9 @@ impl Iterator for SpanIter {
     type Item = (usize, char);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(c) = self
-            .span
-            .source
-            .input
-            .char_indices()
-            .nth(self.span.offset + self.offset)
-        {
+        if let Some(c) = self.span.slice().char_indices().nth(self.offset) {
             self.offset += 1;
+            println!("{:#?} SpanIter yields {:#?}", self.span, c);
             Some(c)
         } else {
             None
@@ -139,13 +149,15 @@ impl InputIter for Span {
 
 impl InputTake for Span {
     fn take(&self, count: usize) -> Self {
+        println!("{:#?} take {}", self, count);
         Self {
             source: self.source.clone(),
             offset: self.offset,
-            len: self.len - count,
+            len: count,
         }
     }
     fn take_split(&self, count: usize) -> (Self, Self) {
+        println!("{:#?} take_split {}", self, count);
         (
             Self {
                 source: self.source.clone(),
@@ -155,7 +167,7 @@ impl InputTake for Span {
             Self {
                 source: self.source.clone(),
                 offset: self.offset,
-                len: self.len - count,
+                len: count,
             },
         )
     }
@@ -168,7 +180,7 @@ impl Compare<&str> for Span {
     fn compare(&self, t: &str) -> CompareResult {
         let pos = self.chars().zip(t.chars()).position(|(a, b)| a != b);
 
-        match pos {
+        let res = match pos {
             Some(_) => CompareResult::Error,
             None => {
                 if self.len() >= t.len() {
@@ -177,7 +189,9 @@ impl Compare<&str> for Span {
                     CompareResult::Incomplete
                 }
             }
-        }
+        };
+        println!("{:#?} compare with {:#?} => {:#?}", self, t, res);
+        res
     }
 
     //FIXME: this version is too simple and does not use the current locale
@@ -188,7 +202,7 @@ impl Compare<&str> for Span {
             .zip(t.chars())
             .position(|(a, b)| a.to_lowercase().zip(b.to_lowercase()).any(|(a, b)| a != b));
 
-        match pos {
+        let res = match pos {
             Some(_) => CompareResult::Error,
             None => {
                 if self.len() >= t.len() {
@@ -197,24 +211,30 @@ impl Compare<&str> for Span {
                     CompareResult::Incomplete
                 }
             }
-        }
+        };
+        println!("{:#?} compare_no_case with {:#?} => {:#?}", self, t, res);
+        res
     }
 }
 
 impl Slice<RangeFrom<usize>> for Span {
     fn slice(&self, range: RangeFrom<usize>) -> Self {
-        unimplemented!();
+        Self {
+            source: self.source.clone(),
+            offset: self.offset + range.start,
+            len: self.len - range.start,
+        }
     }
 }
 
 impl Into<String> for Span {
     fn into(self) -> String {
-        self.source.input[self.offset..self.offset + self.len].into()
+        self.slice().into()
     }
 }
 
 impl FindSubstring<&str> for Span {
     fn find_substring(&self, substr: &str) -> Option<usize> {
-        unimplemented!();
+        self.slice().find(substr)
     }
 }
