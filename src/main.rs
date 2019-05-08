@@ -2,6 +2,7 @@ use clap::{App, Arg, SubCommand};
 
 mod ast;
 mod checker;
+mod codegen;
 mod parser;
 mod printer;
 
@@ -14,6 +15,14 @@ fn main() {
         .about("A service definition file compiler")
         .subcommand(
             SubCommand::with_name("check").arg(
+                Arg::with_name("input")
+                    .help("The file to check")
+                    .required(true)
+                    .index(1),
+            ),
+        )
+        .subcommand(
+            SubCommand::with_name("codegen").arg(
                 Arg::with_name("input")
                     .help("The file to compile")
                     .required(true)
@@ -28,6 +37,10 @@ fn main() {
             for module in modules {
                 printer::print(&module);
             }
+        }
+        ("compile", Some(cmd)) => {
+            let modules = check(cmd.value_of("input").unwrap()).unwrap();
+            codegen::codegen(&modules, codegen::Target::Rust).unwrap();
         }
         _ => {
             println!("{}", matches.usage());

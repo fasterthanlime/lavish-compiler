@@ -1,5 +1,11 @@
+use super::super::ast;
+use super::Error;
 
-pub fn codegen(module: &ast::Module) -> Result<(), Error> {
-    Err("unimplemented!")
+struct FnName {
+    full_name: String,
+}
+
+pub fn codegen(modules: &Vec<ast::Module>) -> Result<(), Error> {
+    Err("unimplemented!".into())
     // Ok(())
 }
