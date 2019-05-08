@@ -2,12 +2,13 @@ use super::parser::Span;
 
 #[derive(Debug)]
 pub struct Module {
+    pub loc: Span,
     pub namespaces: Vec<NamespaceDecl>,
 }
 
 impl Module {
-    pub fn new(namespaces: Vec<NamespaceDecl>) -> Self {
-        Self { namespaces }
+    pub fn new(loc: Span, namespaces: Vec<NamespaceDecl>) -> Self {
+        Self { loc, namespaces }
     }
 }
 

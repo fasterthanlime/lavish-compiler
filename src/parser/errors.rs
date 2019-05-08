@@ -18,6 +18,18 @@ pub enum Error {
     Unknown(UnknownError),
 }
 
+impl<'a> fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Error::IO(e) => write!(f, "{}", e),
+            Error::Source(e) => write!(f, "{:#?}", e),
+            Error::Unknown(_) => write!(f, "unknown error"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
 pub struct SourceError {
     inner: VerboseError<parser::Span>,
 }

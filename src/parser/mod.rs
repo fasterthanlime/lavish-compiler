@@ -17,9 +17,11 @@ pub use errors::*;
 pub use span::*;
 
 pub fn module<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Module, E> {
+    let (i, loc) = loc(i)?;
+
     all_consuming(terminated(
-        map(many0(preceded(sp, nsdecl)), |namespaces| {
-            Module::new(namespaces)
+        map(many0(preceded(sp, nsdecl)), move |namespaces| {
+            Module::new(loc.clone(), namespaces)
         }),
         sp,
     ))(i)

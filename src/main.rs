@@ -1,5 +1,4 @@
 use clap::{App, Arg, SubCommand};
-use colored::*;
 
 mod ast;
 mod checker;
@@ -23,44 +22,28 @@ fn main() {
         )
         .get_matches();
 
-    let mut units: Vec<Unit> = Vec::new();
-
     match matches.subcommand() {
         ("check", Some(cmd)) => {
-            let input_name = cmd.value_of("input").unwrap();
-            let source = parser::Source::new(input_name).unwrap();
-            let source = std::rc::Rc::new(source);
-            let module = parser::parse(source.clone()).unwrap();
-
-            checker::check(&module).unwrap_or_else(|e| {
-                println!(
-                    "{} found {} errors, existing",
-                    "error:".red().bold(),
-                    e.num_errors
-                );
-                std::process::exit(1);
-            });
-            printer::print(&module);
-
-            let unit = Unit { source, module };
-            units.push(unit);
+            let modules = check(cmd.value_of("input").unwrap()).unwrap();
+            for module in modules {
+                printer::print(&module);
+            }
         }
         _ => {
             println!("{}", matches.usage());
             std::process::exit(1);
         }
     };
-
-    for unit in units {
-        println!(
-            "{} has {} namespaces",
-            unit.source.name(),
-            unit.module.namespaces.len()
-        );
-    }
 }
 
-struct Unit {
-    source: std::rc::Rc<parser::Source>,
-    module: ast::Module,
+fn check(input_name: &str) -> Result<Vec<ast::Module>, Box<dyn std::error::Error>> {
+    let mut modules: Vec<ast::Module> = Vec::new();
+
+    let source = parser::Source::new(input_name)?;
+    let source = std::rc::Rc::new(source);
+    let module = parser::parse(source.clone())?;
+
+    checker::check(&module)?;
+    modules.push(module);
+    Ok(modules)
 }
