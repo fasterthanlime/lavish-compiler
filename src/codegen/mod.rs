@@ -12,6 +12,14 @@ pub struct Error {
     message: String,
 }
 
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Self {
+            message: format!("i/o error: {}", e),
+        }
+    }
+}
+
 impl From<&'static str> for Error {
     fn from(s: &'static str) -> Self {
         Self { message: s.into() }

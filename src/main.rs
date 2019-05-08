@@ -22,7 +22,7 @@ fn main() {
             ),
         )
         .subcommand(
-            SubCommand::with_name("codegen").arg(
+            SubCommand::with_name("compile").arg(
                 Arg::with_name("input")
                     .help("The file to compile")
                     .required(true)
