@@ -108,26 +108,53 @@ impl<'a> Source {
     }
 }
 
-use derive_builder::*;
-
-#[derive(Builder)]
-#[builder(default)]
 pub struct Diagnostic<'a> {
-    pos: Option<&'a Position<'a>>,
+    pos: Position,
     caret_color: Color,
     prefix: &'a str,
     message: String,
 }
 
+pub struct DiagnosticBuilder<'a> {
+    pos: Position,
+    caret_color: Color,
+    prefix: &'a str,
+    message: Option<String>,
+}
+
 const EMPTY_PREFIX: &'static str = "";
 
-impl<'a> Default for Diagnostic<'a> {
-    fn default() -> Self {
+impl<'a> DiagnosticBuilder<'a> {
+    pub fn new(pos: Position) -> Self {
         Self {
-            pos: None,
+            pos: pos.clone(),
             caret_color: Color::Blue,
             prefix: EMPTY_PREFIX,
-            message: "".into(),
+            message: None,
+        }
+    }
+
+    pub fn caret_color(mut self, caret_color: Color) -> Self {
+        self.caret_color = caret_color;
+        self
+    }
+
+    pub fn prefix(mut self, prefix: &'a str) -> Self {
+        self.prefix = prefix;
+        self
+    }
+
+    pub fn message(mut self, message: String) -> Self {
+        self.message = Some(message);
+        self
+    }
+
+    pub fn build(self) -> Diagnostic<'a> {
+        Diagnostic {
+            pos: self.pos,
+            caret_color: self.caret_color,
+            prefix: self.prefix,
+            message: self.message.unwrap_or_else(|| "".into()),
         }
     }
 }
@@ -143,80 +170,68 @@ impl<'a> Diagnostic<'a> {
 }
 
 impl<'a> DiagnosticBuilder<'a> {
-    pub fn print(&self) {
-        self.build().unwrap().print()
+    pub fn print(self) {
+        self.build().print()
     }
 
-    pub fn write(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.build().unwrap().write(f)
+    pub fn write(self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.build().write(f)
     }
 }
 
 impl<'a> fmt::Display for Diagnostic<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.pos {
-            Some(pos) => {
-                let caret_color = self.caret_color;
-                let prefix = self.prefix;
-                let message = &self.message;
+        let pos = &self.pos;
+        let caret_color = self.caret_color;
+        let prefix = self.prefix;
+        let message = &self.message;
 
-                let loc = format!(
-                    "{}:{}:{}:",
-                    pos.span.source.name(),
-                    pos.line + 1,
-                    pos.column + 1
-                );
-                writeln!(f, "{}{} {}", prefix, loc.bold(), message)?;
-                writeln!(f, "{}{}", prefix, &pos.span.source.lines[pos.line].dimmed())?;
+        let loc = format!(
+            "{}:{}:{}:",
+            pos.span.source.name(),
+            pos.line + 1,
+            pos.column + 1
+        );
+        writeln!(f, "{}{} {}", prefix, loc.bold(), message)?;
+        writeln!(f, "{}{}", prefix, &pos.span.source.lines[pos.line].dimmed())?;
 
-                writeln!(
-                    f,
-                    "{}{}{}{}",
-                    prefix,
-                    repeat(' ').take(pos.column).collect::<String>(),
-                    "^".color(caret_color).bold(),
-                    repeat('~')
-                        .take(match pos.span.len {
-                            0 => 0,
-                            x => x - 1,
-                        })
-                        .collect::<String>()
-                        .color(caret_color)
-                        .bold()
-                )?;
-            }
-            None => {
-                writeln!(f, "(no position information): {}", self.message)?;
-            }
-        }
+        writeln!(
+            f,
+            "{}{}{}{}",
+            prefix,
+            repeat(' ').take(pos.column).collect::<String>(),
+            "^".color(caret_color).bold(),
+            repeat('~')
+                .take(match pos.span.len {
+                    0 => 0,
+                    x => x - 1,
+                })
+                .collect::<String>()
+                .color(caret_color)
+                .bold()
+        )?;
         Ok(())
     }
 }
 
-pub struct Position<'a> {
-    pub span: &'a Span,
+#[derive(Clone)]
+pub struct Position {
+    pub span: Span,
     pub line: usize,
     pub column: usize,
 }
 
-impl<'a> Position<'a> {
-    fn diag(&'a self, message: String) -> DiagnosticBuilder<'a> {
-        let mut builder = DiagnosticBuilder::default();
-        builder.pos(Some(self));
-        builder.message(message);
-        builder
+impl Position {
+    fn diag<'a>(&self, message: String) -> DiagnosticBuilder<'a> {
+        DiagnosticBuilder::new(self.clone()).message(message)
     }
 
-    pub fn diag_info(&'a self, message: String) -> DiagnosticBuilder<'a> {
-        let mut builder = self.diag(message);
-        builder.caret_color(Color::Blue);
-        builder
+    pub fn diag_info<'a>(&self, message: String) -> DiagnosticBuilder<'a> {
+        self.diag(message).caret_color(Color::Blue)
     }
 
-    pub fn diag_err(&'a self, message: String) -> DiagnosticBuilder<'a> {
-        let mut builder = self.diag(message);
-        builder.caret_color(Color::Red);
-        builder
+    pub fn diag_err<'a>(&self, message: String) -> DiagnosticBuilder<'a> {
+        self.diag(message).caret_color(Color::Red)
     }
 }
 

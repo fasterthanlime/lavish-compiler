@@ -52,7 +52,7 @@ impl Span {
         &self.source.input[self.offset..self.offset + self.len]
     }
 
-    pub fn position<'a>(&'a self) -> Position<'a> {
+    pub fn position<'a>(&'a self) -> Position {
         let mut offset = self.offset;
         let mut line = 0;
         let mut column = 0;
@@ -69,7 +69,7 @@ impl Span {
         }
 
         Position {
-            span: self,
+            span: self.clone(),
             line,
             column,
         }
