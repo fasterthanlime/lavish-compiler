@@ -193,7 +193,8 @@ impl<'a> fmt::Display for Diagnostic<'a> {
             pos.column + 1
         );
         writeln!(f, "{}{} {}", prefix, loc.bold(), message)?;
-        writeln!(f, "{}{}", prefix, &pos.span.source.lines[pos.line].dimmed())?;
+        let text_line = &pos.span.source.lines[pos.line];
+        writeln!(f, "{}{}", prefix, text_line.dimmed())?;
 
         writeln!(
             f,
@@ -202,10 +203,13 @@ impl<'a> fmt::Display for Diagnostic<'a> {
             repeat(' ').take(pos.column).collect::<String>(),
             "^".color(caret_color).bold(),
             repeat('~')
-                .take(match pos.span.len {
-                    0 => 0,
-                    x => x - 1,
-                })
+                .take(std::cmp::min(
+                    match pos.span.len {
+                        0 => 0,
+                        x => x - 1,
+                    },
+                    text_line.len() - pos.column
+                ))
                 .collect::<String>()
                 .color(caret_color)
                 .bold()
