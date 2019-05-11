@@ -1,15 +1,48 @@
 use super::super::ast;
 use super::Error;
 use indexmap::IndexMap;
+use std::cell::RefCell;
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::path::Path;
+
+const INDENT_WIDTH: usize = 4;
+
+struct Output {
+    writer: RefCell<BufWriter<File>>,
+}
+
+impl Output {
+    fn new(file: File) -> Self {
+        Self {
+            writer: RefCell::new(BufWriter::new(file)),
+        }
+    }
+
+    fn write_indented(&self, indent: usize, line: &str) {
+        let mut w = self.writer.borrow_mut();
+        for _ in 0..indent {
+            write!(w, "{}", " ").unwrap();
+        }
+        write!(w, "{}\n", line).unwrap();
+    }
+}
 
 struct Context<'a> {
     namespaces: IndexMap<&'a str, Namespace<'a>>,
+    output: Output,
+}
+
+struct Scope<'a> {
+    output: &'a Output,
+    indent: usize,
 }
 
 impl<'a> Context<'a> {
-    fn new() -> Self {
+    fn new(file: File) -> Self {
         Self {
             namespaces: IndexMap::new(),
+            output: Output::new(file),
         }
     }
 
@@ -45,8 +78,39 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn funs(&self) -> impl Iterator<Item = &Fun<'a>> {
-        self.namespaces.values().map(|ns| ns.funs()).flatten()
+    fn funs(&self) -> Box<Iterator<Item = &'a Fun> + 'a> {
+        Box::new(self.namespaces.values().map(|ns| ns.funs()).flatten())
+    }
+}
+
+trait ScopeLike<'a> {
+    fn line(&self, line: &str);
+    fn scope<'b: 'a>(&'b self) -> Scope<'b>;
+}
+
+impl<'a> ScopeLike<'a> for Context<'a> {
+    fn line(&self, line: &str) {
+        self.output.write_indented(0, line)
+    }
+
+    fn scope<'b: 'a>(&'b self) -> Scope<'b> {
+        Scope {
+            output: &self.output,
+            indent: INDENT_WIDTH,
+        }
+    }
+}
+
+impl<'a> ScopeLike<'a> for Scope<'a> {
+    fn line(&self, line: &str) {
+        self.output.write_indented(self.indent, line)
+    }
+
+    fn scope<'b: 'a>(&'b self) -> Scope<'b> {
+        Scope {
+            output: &self.output,
+            indent: self.indent + INDENT_WIDTH,
+        }
     }
 }
 
@@ -66,12 +130,14 @@ impl<'a> Namespace<'a> {
         }
     }
 
-    fn funs(&self) -> impl Iterator<Item = &Fun<'a>> {
-        self.children
-            .values()
-            .map(|ns| ns.funs())
-            .flatten()
-            .chain(self.funs.values())
+    fn funs(&self) -> Box<Iterator<Item = &'a Fun> + 'a> {
+        Box::new(
+            self.children
+                .values()
+                .map(|ns| ns.funs())
+                .flatten()
+                .chain(self.funs.values()),
+        )
     }
 
     fn merge(&mut self, rhs: Self) {
@@ -99,11 +165,9 @@ struct Fun<'a> {
     full_name: String,
 }
 
-pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result<(), Error> {
-    use std::fs::File;
-    use std::io::Write;
-    use std::path::Path;
+type Result = std::result::Result<(), Error>;
 
+pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
     let p = Path::new("output/out.rs");
     std::fs::create_dir_all(p.parent().unwrap())?;
     let mut out = File::create(p).unwrap();
@@ -129,26 +193,47 @@ enum Message {
 "#
     )?;
 
-    let mut ctx = Context::new();
+    let mut ctx = Context::new(out);
     for module in modules {
         for decl in &module.namespaces {
             ctx.visit_toplevel_ns(decl);
         }
     }
 
-    for fun in ctx.funs() {
-        println!("Found {}", fun.full_name);
+    fn visit_ns<'a>(ctx: &'a ScopeLike<'a>, ns: &Namespace) -> Result {
+        ctx.line(&format!("pub mod {} {{", ns.name()));
+        {
+            let ctx = ctx.scope();
+            for (_, ns) in &ns.children {
+                visit_ns(&ctx, ns)?;
+            }
 
-        write!(
-            out,
-            r#"
-pub mod {} {{
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct Params
-}}
-        "#,
-            fun.full_name
-        )?;
+            for (_, fun) in &ns.funs {
+                ctx.line(&format!("pub mod {} {{", fun.decl.name.text));
+                {
+                    let ctx = ctx.scope();
+                    ctx.line("#[derive(Debug, Deserialize, Serialize)]");
+                    ctx.line("pub struct Params {{");
+                    {
+                        let ctx = ctx.scope();
+                        ctx.line("// TODO");
+                    }
+                    ctx.line("}}");
+                }
+                ctx.line("}}");
+            }
+        }
+        ctx.line("}}");
+        Ok(())
+    }
+
+    for (_, ns) in &ctx.namespaces {
+        ctx.line("");
+        visit_ns(&ctx, ns)?;
+    }
+
+    for f in ctx.funs() {
+        ctx.line(&format!("// Should list {} in params", f.full_name));
     }
 
     println!("All done!");
