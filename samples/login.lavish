@@ -11,8 +11,6 @@ namespace butlerd {
             cookies: Map,
         )
 
-        // FIXME: this should be in a subscope
-        // {
         client fn request_captcha(
             recaptcha_url: string,
         ) -> (
@@ -20,7 +18,6 @@ namespace butlerd {
         )
 
         client fn request_totp() -> (code: string)
-        // }
 
         // Adds a new profile by API key login
         // No cookies are returned for this kind of login.

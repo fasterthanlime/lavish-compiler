@@ -1,5 +1,6 @@
 use super::super::ast;
 use super::Error;
+use heck::{CamelCase, MixedCase, SnakeCase};
 use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::fs::File;
@@ -86,6 +87,24 @@ impl<'a> Context<'a> {
 trait ScopeLike<'a> {
     fn line(&self, line: &str);
     fn scope<'b: 'a>(&'b self) -> Scope<'b>;
+
+    fn comment(&self, comment: &Option<ast::Comment>) {
+        if let Some(comment) = comment.as_ref() {
+            for line in &comment.lines {
+                self.line(&format!("// {}", line))
+            }
+        }
+    }
+
+    fn def_struct<'b: 'a>(&'b self, name: &str, f: &Fn(&ScopeLike)) {
+        self.line("#[derive(Serialize, Deserialize, Debug)]");
+        self.line(&format!("pub struct {} {{", name));
+        {
+            let s = self.scope();
+            f(&s);
+        }
+        self.line("}");
+    }
 }
 
 impl<'a> ScopeLike<'a> for Context<'a> {
@@ -165,6 +184,33 @@ struct Fun<'a> {
     full_name: String,
 }
 
+impl<'a> Fun<'a> {
+    fn rpc_name(&self) -> String {
+        let tokens: Vec<_> = self.full_name.split(".").collect();
+        let last = tokens.len() - 1;
+        tokens
+            .iter()
+            .enumerate()
+            .map(|(i, x)| {
+                if i == last {
+                    x.to_camel_case()
+                } else {
+                    x.to_mixed_case()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(".")
+    }
+
+    fn qualified_mod_name(&self) -> String {
+        self.rpc_name().replace(".", "::")
+    }
+
+    fn mod_name(&self) -> String {
+        self.decl.name.text.to_snake_case()
+    }
+}
+
 type Result = std::result::Result<(), Error>;
 
 pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
@@ -209,21 +255,33 @@ enum Message {
             }
 
             for (_, fun) in &ns.funs {
-                ctx.line(&format!("pub mod {} {{", fun.decl.name.text));
+                ctx.comment(&fun.decl.comment);
+                ctx.line(&format!("pub mod {} {{", fun.mod_name()));
+
                 {
                     let ctx = ctx.scope();
-                    ctx.line("#[derive(Debug, Deserialize, Serialize)]");
-                    ctx.line("pub struct Params {{");
-                    {
-                        let ctx = ctx.scope();
-                        ctx.line("// TODO");
-                    }
-                    ctx.line("}}");
+                    ctx.line("use serde_derive::*;");
+                    ctx.line("");
+
+                    ctx.def_struct("Params", &|ctx| {
+                        for f in &fun.decl.params {
+                            ctx.line(&format!("{}: {},", f.name.text, f.typ));
+                        }
+                    });
+                    ctx.line("");
+
+                    ctx.def_struct("Results", &|ctx| {
+                        for f in &fun.decl.results {
+                            ctx.line(&format!("{}: {},", f.name.text, f.typ));
+                        }
+                    });
                 }
-                ctx.line("}}");
+                ctx.line("}");
+                ctx.line("");
             }
         }
-        ctx.line("}}");
+        ctx.line("}");
+        ctx.line("");
         Ok(())
     }
 
@@ -233,7 +291,7 @@ enum Message {
     }
 
     for f in ctx.funs() {
-        ctx.line(&format!("// Should list {} in params", f.full_name));
+        ctx.line(&format!("// Should list {:?} in params", f.rpc_name()));
     }
 
     println!("All done!");
