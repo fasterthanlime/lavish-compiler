@@ -270,20 +270,34 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
     });
     s.line("}"); // enum Message
 
+    fn write_enum<'a, I>(s: &ScopeLike, kind: &str, funs: I)
+    where
+        I: Iterator<Item = &'a Fun<'a>>,
+    {
+        let s = s.scope();
+        for fun in funs {
+            s.line(&format!(
+                "{}({}::{}),",
+                fun.variant_name(),
+                fun.qualified_name(),
+                kind,
+            ));
+        }
+    };
+
     s.line("");
     s.line("#[derive(Debug)]");
     s.line("#[allow(non_camel_case_types, unused)]");
     s.line("enum Params {");
-    s.in_scope(&|s| {
-        for fun in root.funs() {
-            s.line(&format!(
-                "{}({}),",
-                fun.variant_name(),
-                fun.qualified_name(),
-            ));
-        }
-    });
+    write_enum(s, "Params", root.funs());
     s.line("}"); // enum Params
+
+    s.line("");
+    s.line("#[derive(Debug)]");
+    s.line("#[allow(non_camel_case_types, unused)]");
+    s.line("enum Results {");
+    write_enum(s, "Results", root.funs());
+    s.line("}"); // enum Results
 
     s.line("");
     s.line("#[derive(Debug)]");
