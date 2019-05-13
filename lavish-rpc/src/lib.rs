@@ -4,6 +4,10 @@ use std::{fmt, fmt::Debug};
 pub use erased_serde;
 pub use serde_derive;
 
+pub trait PendingRequests {
+    fn get_pending<'a>(&self, id: u32) -> Option<&'a str>;
+}
+
 pub trait Atom: serde::Serialize + Debug + Sized {
     fn method(&self) -> &'static str;
     fn deserialize(method: &str, de: &mut erased_serde::Deserializer)
@@ -63,6 +67,14 @@ where
     pub fn request(id: u32, params: P) -> Self {
         Message::<P, NP, R>::Request { id, params }
     }
+
+    pub fn notification(params: NP) -> Self {
+        Message::<P, NP, R>::Notification { params }
+    }
+
+    pub fn response(id: u32, error: Option<String>, results: R) -> Self {
+        Message::<P, NP, R>::Response { id, error, results }
+    }
 }
 
 impl<P, NP, R> Serialize for Message<P, NP, R>
@@ -105,17 +117,18 @@ where
     }
 }
 
-impl<'de, P, NP, R> Deserialize<'de> for Message<P, NP, R>
+impl<P, NP, R> Message<P, NP, R>
 where
     P: Atom,
     NP: Atom,
     R: Atom,
 {
-    fn deserialize<D>(d: D) -> Result<Self, D::Error>
+    pub fn deserialize<'de, D>(d: D, pending: &'de dyn PendingRequests) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        d.deserialize_seq(MessageVisitor::<P, NP, R> {
+        d.deserialize_seq(MessageVisitor::<'de, P, NP, R> {
+            pending,
             _p: std::marker::PhantomData,
             _np: std::marker::PhantomData,
             _r: std::marker::PhantomData,
@@ -123,18 +136,19 @@ where
     }
 }
 
-struct MessageVisitor<P, NP, R>
+struct MessageVisitor<'de, P, NP, R>
 where
     P: Atom,
     NP: Atom,
     R: Atom,
 {
+    pending: &'de dyn PendingRequests,
     _p: std::marker::PhantomData<P>,
     _np: std::marker::PhantomData<NP>,
     _r: std::marker::PhantomData<R>,
 }
 
-impl<'de, P, NP, R> Visitor<'de> for MessageVisitor<P, NP, R>
+impl<'de, P, NP, R> Visitor<'de> for MessageVisitor<'de, P, NP, R>
 where
     P: Atom,
     NP: Atom,
@@ -176,6 +190,28 @@ where
                     .ok_or_else(|| missing("params"))?;
 
                 Ok(Message::Request { id, params })
+            }
+            // Response
+            1 => {
+                let id = access.next_element::<u32>()?.ok_or_else(|| missing("id"))?;
+                let error = access
+                    .next_element::<Option<String>>()?
+                    .ok_or_else(|| missing("error"))?;
+
+                let method = self
+                    .pending
+                    .get_pending(id)
+                    .ok_or_else(|| missing("no such pending request"))?;
+
+                let seed = AtomApply::<R> {
+                    kind: method.into(),
+                    phantom: std::marker::PhantomData,
+                };
+                let results = access
+                    .next_element_seed(seed)?
+                    .ok_or_else(|| missing("results"))?;
+
+                Ok(Message::Response { id, error, results })
             }
             _ => unimplemented!(),
         }
@@ -250,7 +286,9 @@ mod tests {
         m1.serialize(&mut rmp_serde::Serializer::new_named(&mut buf1))
             .unwrap();
 
-        let m2: Message = rmp_serde::decode::from_slice(&buf1[..]).unwrap();
+        let pr = TestPendingRequests {};
+        let m2: Message =
+            Message::deserialize(&mut rmp_serde::Deserializer::from_slice(&buf1[..]), &pr).unwrap();
         println!("m2 = {:#?}", m2);
 
         let mut buf2: Vec<u8> = Vec::new();
@@ -258,5 +296,13 @@ mod tests {
             .unwrap();
 
         assert_eq!(buf1, buf2);
+    }
+
+    struct TestPendingRequests {}
+
+    impl PendingRequests for TestPendingRequests {
+        fn get_pending<'a>(&self, _id: u32) -> Option<&'a str> {
+            None
+        }
     }
 }
