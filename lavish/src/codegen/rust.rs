@@ -318,16 +318,22 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
             });
             s.line(") -> erased_serde:Result<Self> {");
             s.in_scope(&|s| {
+                s.line("use erased_serde::deserialize as deser;");
+                s.line("");
                 s.line("match method {");
                 s.in_scope(&|s| {
                     for fun in root.funs() {
-                        s.line(&format!(
-                            "{:?} => Ok({}::{}(erased_serde::deserialize::<{}>(de)?)),",
-                            fun.rpc_name(),
-                            side,
-                            fun.variant_name(),
-                            fun.qualified_name(),
-                        ));
+                        s.line(&format!("{:?} =>", fun.rpc_name(),));
+                        {
+                            let s = s.scope();
+                            s.line(&format!(
+                                "Ok({}::{}(deser::<{}::{}>(de)?)),",
+                                side,
+                                fun.variant_name(),
+                                fun.qualified_name(),
+                                side,
+                            ));
+                        }
                     }
                     s.line("_ => Err(erased_serde::Error::custom(format!(");
                     s.in_scope(&|s| {
