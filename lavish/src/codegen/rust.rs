@@ -244,31 +244,12 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
     s.line("#![allow(unknown_lints)]");
     s.line("");
 
-    s.line("#[derive(Debug)]");
-    s.line("enum Message {");
-    s.in_scope(&|s| {
-        s.line("Request {");
-        s.in_scope(&|s| {
-            s.line("id: u32,");
-            s.line("params: Params,");
-        });
-        s.line("}"); // Request
+    s.line("use serde_derive::*;");
+    s.line("use erased_serde;");
+    s.line("");
 
-        s.line("Response {");
-        s.in_scope(&|s| {
-            s.line("id: u32,");
-            s.line("error: Option<string>,");
-            s.line("results: Results,");
-        });
-        s.line("}"); // Response
-
-        s.line("Notification {");
-        s.in_scope(&|s| {
-            s.line("params: NotificationParams,");
-        });
-        s.line("}"); // Response
-    });
-    s.line("}"); // enum Message
+    s.line("pub type Message = lavish_rpc::Message<Params, NotificationParams, Results>;");
+    s.line("");
 
     fn write_enum<'a, I>(s: &ScopeLike, kind: &str, funs: I)
     where
@@ -286,71 +267,81 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
     };
 
     s.line("");
-    s.line("#[derive(Debug)]");
+    s.line("#[derive(Serialize, Debug)]");
+    s.line("#[serde(untagged)]");
     s.line("#[allow(non_camel_case_types, unused)]");
     s.line("enum Params {");
     write_enum(s, "Params", root.funs());
     s.line("}"); // enum Params
 
     s.line("");
-    s.line("#[derive(Debug)]");
+    s.line("#[derive(Serialize, Debug)]");
+    s.line("#[serde(untagged)]");
     s.line("#[allow(non_camel_case_types, unused)]");
     s.line("enum Results {");
     write_enum(s, "Results", root.funs());
     s.line("}"); // enum Results
 
     s.line("");
-    s.line("#[derive(Debug)]");
+    s.line("#[derive(Serialize, Debug)]");
+    s.line("#[serde(untagged)]");
     s.line("#[allow(non_camel_case_types, unused)]");
     s.line("enum NotificationParams {");
     s.line("}"); // enum NotificationParams
 
-    s.line("");
-    s.line("impl Serialize for Message {");
-    s.in_scope(&|s| {
-        s.line("fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>");
-        s.in_scope(&|s| s.line("where S: Serializer,"));
-        s.line("{");
+    for side in vec!["Params", "Results"] {
+        s.line("");
+        s.line(&format!("impl lavish_rpc::Proto for {} {{", side));
         s.in_scope(&|s| {
-            s.line("match self {");
+            s.line("fn method(&self) -> &'static str {");
             s.in_scope(&|s| {
-                s.line("Message::Request { id, params, .. } => {");
+                s.line("match self {");
                 s.in_scope(&|s| {
-                    s.line("let mut seq = s.serialize_seq(Some(4))?;");
-                    s.line("seq.serialize_element(&0)?;");
-                    s.line("seq.serialize_element(&id)?;");
-                    s.line("seq.serialize_element(params.method())?;");
-                    s.line("seq.serialize_element(&params)?;");
-                    s.line("seq.end()");
+                    for fun in root.funs() {
+                        s.line(&format!(
+                            "{}::{}(_) => {:?},",
+                            side,
+                            fun.variant_name(),
+                            fun.rpc_name()
+                        ));
+                    }
                 });
-                s.line("}"); // Message::Request =>
-
-                s.line("Message::Response { id, error, results, .. } => {");
-                s.in_scope(&|s| {
-                    s.line("let mut seq = s.serialize_seq(Some(4))?;");
-                    s.line("seq.serialize_element(&1)?;");
-                    s.line("seq.serialize_element(&id)?;");
-                    s.line("seq.serialize_element(error)?;");
-                    s.line("seq.serialize_element(&results)?;");
-                    s.line("seq.end()");
-                });
-                s.line("}"); // Message::Response =>
-
-                s.line("Message::Notification { params, method, .. } => {");
-                s.in_scope(&|s| {
-                    s.line("let mut seq = s.serialize_seq(Some(4))?;");
-                    s.line("seq.serialize_element(&2)?;");
-                    s.line("seq.serialize_element(params.method())?;");
-                    s.line("seq.serialize_element(&params)?;");
-                    s.line("seq.end()");
-                });
-                s.line("}"); // Message::Notification =>
+                s.line("}");
             });
-            s.line("}"); // match self
+            s.line("}"); // fn method
+
+            s.line("");
+            s.line("fn deserialize(");
+            s.in_scope(&|s| {
+                s.line("method: &str,");
+                s.line("de: erased_serde::Deserializer,");
+            });
+            s.line(") -> erased_serde:Result<Self> {");
+            s.in_scope(&|s| {
+                s.line("match method {");
+                s.in_scope(&|s| {
+                    for fun in root.funs() {
+                        s.line(&format!(
+                            "{:?} => Ok({}::{}(erased_serde::deserialize::<{}>(de)?)),",
+                            fun.rpc_name(),
+                            side,
+                            fun.variant_name(),
+                            fun.qualified_name(),
+                        ));
+                    }
+                    s.line("_ => Err(erased_serde::Error::custom(format!(");
+                    s.in_scope(&|s| {
+                        s.line(&format!("{:?}", "unknown method: {},"));
+                        s.line("method");
+                    });
+                    s.line("))),");
+                });
+                s.line("}");
+            });
+            s.line("}"); // fn deserialize
         });
-        s.line("}");
-    });
-    s.line("}"); // impl Serialize for Message
+        s.line("}"); // impl Proto for Params
+    }
 
     fn visit_ns<'a>(ctx: &'a ScopeLike<'a>, ns: &Namespace) -> Result {
         ctx.line(&format!("pub mod {} {{", ns.name()));
