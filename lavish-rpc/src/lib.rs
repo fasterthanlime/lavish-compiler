@@ -1,8 +1,6 @@
 use serde::{de::*, ser::*};
 use std::{fmt, fmt::Debug};
 
-//----------------
-
 pub trait Proto: serde::Serialize + Debug + Sized {
     fn method(&self) -> &'static str;
     fn deserialize(method: &str, de: &mut erased_serde::Deserializer)
