@@ -5,10 +5,8 @@ use std::{fmt, fmt::Debug};
 
 pub trait Proto: serde::Serialize + Debug + Sized {
     fn method(&self) -> &'static str;
-    fn deserialize(
-        method: &str,
-        de: &mut erased_serde::Deserializer,
-    ) -> erased_serde::Result<Box<Self>>;
+    fn deserialize(method: &str, de: &mut erased_serde::Deserializer)
+        -> erased_serde::Result<Self>;
 }
 
 struct ProtoApply<T: ?Sized>
@@ -23,7 +21,7 @@ impl<'de, T: ?Sized> DeserializeSeed<'de> for ProtoApply<T>
 where
     T: Proto,
 {
-    type Value = Box<T>;
+    type Value = T;
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
@@ -34,6 +32,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub enum Message<P, NP, R>
 where
     P: Proto,
@@ -42,7 +41,7 @@ where
 {
     Request {
         id: u32,
-        params: Box<P>,
+        params: P,
     },
     Response {
         id: u32,
@@ -52,6 +51,17 @@ where
     Notification {
         params: NP,
     },
+}
+
+impl<P, NP, R> Message<P, NP, R>
+where
+    P: Proto,
+    NP: Proto,
+    R: Proto,
+{
+    pub fn request(id: u32, params: P) -> Self {
+        Message::<P, NP, R>::Request { id, params }
+    }
 }
 
 impl<P, NP, R> Serialize for Message<P, NP, R>
@@ -70,7 +80,7 @@ where
                 seq.serialize_element(&0)?;
                 seq.serialize_element(&id)?;
                 seq.serialize_element(params.method())?;
-                seq.serialize_element(&params)?;
+                seq.serialize_element(params)?;
                 seq.end()
             }
             Message::Response {
@@ -80,14 +90,14 @@ where
                 seq.serialize_element(&1)?;
                 seq.serialize_element(&id)?;
                 seq.serialize_element(&error)?;
-                seq.serialize_element(&results)?;
+                seq.serialize_element(results)?;
                 seq.end()
             }
             Message::Notification { params, .. } => {
                 let mut seq = s.serialize_seq(Some(3))?;
                 seq.serialize_element(&2)?;
                 seq.serialize_element(params.method())?;
-                seq.serialize_element(&params)?;
+                seq.serialize_element(params)?;
                 seq.end()
             }
         }
@@ -152,17 +162,20 @@ where
             // Request
             0 => {
                 let id = access.next_element::<u32>()?.ok_or_else(|| missing("id"))?;
+                println!("id = {}", id);
                 let method = access
                     .next_element::<String>()?
                     .ok_or_else(|| missing("method"))?;
+                println!("method = {}", method);
 
-                let seed = ProtoApply {
+                let seed = ProtoApply::<P> {
                     kind: method,
                     phantom: std::marker::PhantomData,
                 };
                 let params = access
                     .next_element_seed(seed)?
                     .ok_or_else(|| missing("params"))?;
+                println!("params = {:#?}", params);
 
                 Ok(Message::Request { id, params })
             }
@@ -177,6 +190,7 @@ mod tests {
     use serde_derive::*;
 
     #[derive(Serialize, Debug)]
+    #[serde(untagged)]
     enum Test {
         Foo(TestFoo),
         Bar(TestBar),
@@ -184,13 +198,17 @@ mod tests {
 
     #[derive(Serialize, Deserialize, Debug)]
     struct TestFoo {
-        val: String,
+        val: i64,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
     struct TestBar {
-        val: i64,
+        val: String,
+        #[serde(with = "serde_bytes")]
+        bs: Vec<u8>,
     }
+
+    type Message = super::Message<Test, Test, Test>;
 
     impl Proto for Test {
         fn method(&self) -> &'static str {
@@ -203,14 +221,10 @@ mod tests {
         fn deserialize(
             method: &str,
             de: &mut erased_serde::Deserializer,
-        ) -> erased_serde::Result<Box<Self>> {
+        ) -> erased_serde::Result<Self> {
             match method {
-                "Foo" => Ok(Box::new(Test::Foo(erased_serde::deserialize::<TestFoo>(
-                    de,
-                )?))),
-                "Bar" => Ok(Box::new(Test::Bar(erased_serde::deserialize::<TestBar>(
-                    de,
-                )?))),
+                "Foo" => Ok(Test::Foo(erased_serde::deserialize::<TestFoo>(de)?)),
+                "Bar" => Ok(Test::Bar(erased_serde::deserialize::<TestBar>(de)?)),
                 _ => Err(erased_serde::Error::custom(format!(
                     "unknown method: {}",
                     method
@@ -221,9 +235,30 @@ mod tests {
 
     #[test]
     fn internal() {
-        let m = Message::<Test, Test, Test>::Request {
-            id: 0,
-            params: Box::new(Test::Bar(TestBar { val: 420 })),
-        };
+        cycle(Message::request(420, Test::Foo(TestFoo { val: 69 })));
+        cycle(Message::request(
+            420,
+            Test::Bar(TestBar {
+                val: "success!".into(),
+                bs: vec![0x0, 0x15, 0x93],
+            }),
+        ));
+    }
+
+    fn cycle(m1: Message) {
+        println!("m1 = {:#?}", m1);
+
+        let mut buf1: Vec<u8> = Vec::new();
+        m1.serialize(&mut rmp_serde::Serializer::new_named(&mut buf1))
+            .unwrap();
+
+        let m2: Message = rmp_serde::decode::from_slice(&buf1[..]).unwrap();
+        println!("m2 = {:#?}", m2);
+
+        let mut buf2: Vec<u8> = Vec::new();
+        m2.serialize(&mut rmp_serde::Serializer::new_named(&mut buf2))
+            .unwrap();
+
+        assert_eq!(buf1, buf2);
     }
 }
