@@ -1,6 +1,9 @@
 use serde::{de::*, ser::*};
 use std::{fmt, fmt::Debug};
 
+pub use erased_serde;
+pub use serde_derive;
+
 pub trait Atom: serde::Serialize + Debug + Sized {
     fn method(&self) -> &'static str;
     fn deserialize(method: &str, de: &mut erased_serde::Deserializer)

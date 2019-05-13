@@ -16,6 +16,9 @@ use super::ast::*;
 pub use errors::*;
 pub use span::*;
 
+use std::collections::HashSet;
+use std::iter::FromIterator;
+
 pub fn module<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Module, E> {
     let (i, loc) = loc(i)?;
 
@@ -124,7 +127,7 @@ fn fndecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
             move |(name, params, results)| FunctionDecl {
                 loc: loc.clone(),
                 comment: comment.clone(),
-                modifiers: modifiers.clone(),
+                modifiers: HashSet::from_iter(modifiers.iter().cloned()),
                 name: name.clone(),
                 params,
                 results: results.unwrap_or_default(),
@@ -133,9 +136,10 @@ fn fndecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     )(i)
 }
 
-fn notifdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, NotificationDecl, E> {
+fn notifdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     let (i, comment) = opt(comment)(i)?;
-    let (i, _) = spaced(tag("notif"))(i)?;
+    let (i, modifiers) = fnmods(i)?;
+    let (i, _) = spaced(tag("nf"))(i)?;
     let (i, loc) = spaced(loc)(i)?;
 
     context(
@@ -151,11 +155,17 @@ fn notifdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, NotificationDecl
                     ),
                 ),
             )),
-            move |(name, params)| NotificationDecl {
+            move |(name, params)| FunctionDecl {
                 loc: loc.clone(),
                 comment: comment.clone(),
+                modifiers: {
+                    let mut hs = HashSet::from_iter(modifiers.iter().cloned());
+                    hs.insert(FunctionModifier::Notification);
+                    hs
+                },
                 name: name.clone(),
                 params,
+                results: Vec::new(),
             },
         ),
     )(i)
@@ -196,7 +206,7 @@ fn comment<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Comment, E> {
 fn nsitem<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceItem, E> {
     alt((
         map(fndecl, |i| NamespaceItem::Function(i)),
-        map(notifdecl, |i| NamespaceItem::Notification(i)),
+        map(notifdecl, |i| NamespaceItem::Function(i)),
         map(structdecl, |i| NamespaceItem::Struct(i)),
         map(nsdecl, |i| NamespaceItem::Namespace(i)),
     ))(i)

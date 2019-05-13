@@ -1,4 +1,5 @@
 use super::parser::Span;
+use std::collections::HashSet;
 
 #[derive(Debug)]
 pub struct Module {
@@ -24,7 +25,6 @@ pub struct NamespaceDecl {
     pub comment: Option<Comment>,
     pub name: Identifier,
     pub functions: Vec<FunctionDecl>,
-    pub notifications: Vec<NotificationDecl>,
     pub structs: Vec<StructDecl>,
     pub namespaces: Vec<NamespaceDecl>,
 }
@@ -32,7 +32,6 @@ pub struct NamespaceDecl {
 #[derive(Debug)]
 pub enum NamespaceItem {
     Function(FunctionDecl),
-    Notification(NotificationDecl),
     Struct(StructDecl),
     Namespace(NamespaceDecl),
 }
@@ -41,24 +40,17 @@ pub enum NamespaceItem {
 pub struct FunctionDecl {
     pub loc: Span,
     pub comment: Option<Comment>,
-    pub modifiers: Vec<FunctionModifier>,
+    pub modifiers: HashSet<FunctionModifier>,
     pub name: Identifier,
     pub params: Vec<Field>,
     pub results: Vec<Field>,
 }
 
-#[derive(Debug)]
-pub struct NotificationDecl {
-    pub loc: Span,
-    pub comment: Option<Comment>,
-    pub name: Identifier,
-    pub params: Vec<Field>,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FunctionModifier {
     Server,
     Client,
+    Notification,
 }
 
 #[derive(Debug)]
@@ -100,7 +92,6 @@ impl NamespaceDecl {
             loc,
             comment,
             functions: Vec::new(),
-            notifications: Vec::new(),
             structs: Vec::new(),
             namespaces: Vec::new(),
         };
@@ -114,9 +105,6 @@ impl NamespaceDecl {
         match item {
             NamespaceItem::Function(i) => {
                 self.functions.push(i);
-            }
-            NamespaceItem::Notification(i) => {
-                self.notifications.push(i);
             }
             NamespaceItem::Struct(i) => {
                 self.structs.push(i);

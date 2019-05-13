@@ -22,25 +22,35 @@ fn main() {
             ),
         )
         .subcommand(
-            SubCommand::with_name("compile").arg(
-                Arg::with_name("input")
-                    .help("The file to compile")
-                    .required(true)
-                    .index(1),
-            ),
+            SubCommand::with_name("compile")
+                .arg(
+                    Arg::with_name("input")
+                        .help("The file to compile")
+                        .required(true)
+                        .index(1),
+                )
+                .arg(
+                    Arg::with_name("output")
+                        .help("The file to generate")
+                        .required(true)
+                        .index(2),
+                ),
         )
         .get_matches();
 
     match matches.subcommand() {
         ("check", Some(cmd)) => {
-            let modules = check(cmd.value_of("input").unwrap()).unwrap();
+            let input = cmd.value_of("input").unwrap();
+            let modules = check(input).unwrap();
             for module in modules {
                 printer::print(&module);
             }
         }
         ("compile", Some(cmd)) => {
-            let modules = check(cmd.value_of("input").unwrap()).unwrap();
-            codegen::codegen(&modules, codegen::Target::Rust).unwrap();
+            let input = cmd.value_of("input").unwrap();
+            let modules = check(input).unwrap();
+            let output = cmd.value_of("output").unwrap();
+            codegen::codegen(&modules, codegen::Target::Rust, output).unwrap();
         }
         _ => {
             println!("{}", matches.usage());

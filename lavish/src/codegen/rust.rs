@@ -40,6 +40,12 @@ struct Scope<'a> {
     indent: usize,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum FunKind {
+    Request,
+    Notification,
+}
+
 impl<'a> Context<'a> {
     fn new(file: File) -> Self {
         Self {
@@ -66,10 +72,8 @@ impl<'a> Context<'a> {
         let prefix = format!("{}{}.", prefix, ns.name());
 
         for decl in &decl.functions {
-            let ff = Fun::<'a> {
-                decl,
-                full_name: format!("{}{}", prefix, decl.name.text),
-            };
+            let full_name = format!("{}{}", prefix, decl.name.text);
+            let ff = Fun::new(decl, full_name);
             ns.funs.insert(&decl.name.text, ff);
         }
 
@@ -80,8 +84,17 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn funs(&self) -> Box<Iterator<Item = &'a Fun> + 'a> {
+    fn all_funs(&self) -> Box<Iterator<Item = &'a Fun> + 'a> {
         Box::new(self.namespaces.values().map(|ns| ns.funs()).flatten())
+    }
+
+    fn funs(&self, kind: FunKind) -> Box<Iterator<Item = &'a Fun> + 'a> {
+        let is_notification = kind == FunKind::Notification;
+
+        Box::new(
+            self.all_funs()
+                .filter(move |x| x.is_notification() == is_notification),
+        )
     }
 }
 
@@ -182,16 +195,21 @@ impl<'a> Namespace<'a> {
 }
 
 struct Fun<'a> {
-    #[allow(unused)]
     decl: &'a ast::FunctionDecl,
-    full_name: String,
+    tokens: Vec<String>,
 }
 
 impl<'a> Fun<'a> {
+    fn new(decl: &'a ast::FunctionDecl, full_name: String) -> Self {
+        Self {
+            decl,
+            tokens: full_name.split(".").map(|x| x.into()).collect(),
+        }
+    }
+
     fn rpc_name(&self) -> String {
-        let tokens: Vec<_> = self.full_name.split(".").collect();
-        let last = tokens.len() - 1;
-        tokens
+        let last = self.tokens.len() - 1;
+        self.tokens
             .iter()
             .enumerate()
             .map(|(i, x)| {
@@ -210,20 +228,26 @@ impl<'a> Fun<'a> {
     }
 
     fn qualified_name(&self) -> String {
-        self.rpc_name().replace(".", "::")
+        self.tokens.join("::")
     }
 
     fn mod_name(&self) -> String {
         self.decl.name.text.to_snake_case()
     }
+
+    fn is_notification(&self) -> bool {
+        self.decl
+            .modifiers
+            .contains(&ast::FunctionModifier::Notification)
+    }
 }
 
 type Result = std::result::Result<(), Error>;
 
-pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
+pub fn codegen<'a>(modules: &'a Vec<ast::Module>, output: &str) -> Result {
     let start_instant = Instant::now();
 
-    let output_path = Path::new("output/out.rs");
+    let output_path = Path::new(output);
     std::fs::create_dir_all(output_path.parent().unwrap())?;
     let out = File::create(output_path).unwrap();
 
@@ -240,12 +264,12 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
     s.line("// https://github.com/fasterthanlime/lavish");
     s.line("");
     s.line("// Disable some lints, since this file is generated.");
-    s.line("#![allow(clippy)]");
+    s.line("#![allow(clippy::all)]");
     s.line("#![allow(unknown_lints)]");
     s.line("");
 
-    s.line("use serde_derive::*;");
-    s.line("use erased_serde;");
+    s.line("use lavish_rpc::serde_derive::*;");
+    s.line("use lavish_rpc::erased_serde;");
     s.line("");
 
     s.line("pub type Message = lavish_rpc::Message<Params, NotificationParams, Results>;");
@@ -269,26 +293,31 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
     s.line("#[derive(Serialize, Debug)]");
     s.line("#[serde(untagged)]");
     s.line("#[allow(non_camel_case_types, unused)]");
-    s.line("enum Params {");
-    write_enum(s, "Params", root.funs());
+    s.line("pub enum Params {");
+    write_enum(s, "Params", root.funs(FunKind::Request));
     s.line("}"); // enum Params
 
     s.line("");
     s.line("#[derive(Serialize, Debug)]");
     s.line("#[serde(untagged)]");
     s.line("#[allow(non_camel_case_types, unused)]");
-    s.line("enum Results {");
-    write_enum(s, "Results", root.funs());
+    s.line("pub enum Results {");
+    write_enum(s, "Results", root.funs(FunKind::Request));
     s.line("}"); // enum Results
 
     s.line("");
     s.line("#[derive(Serialize, Debug)]");
     s.line("#[serde(untagged)]");
     s.line("#[allow(non_camel_case_types, unused)]");
-    s.line("enum NotificationParams {");
+    s.line("pub enum NotificationParams {");
+    write_enum(s, "Params", root.funs(FunKind::Notification));
     s.line("}"); // enum NotificationParams
 
-    for side in vec!["Params", "Results"] {
+    for (strukt, side, kind) in vec![
+        ("Params", "Params", FunKind::Request),
+        ("Results", "Results", FunKind::Request),
+        ("Params", "NotificationParams", FunKind::Notification),
+    ] {
         s.line("");
         s.line(&format!("impl lavish_rpc::Atom for {} {{", side));
         s.in_scope(&|s| {
@@ -296,7 +325,7 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
             s.in_scope(&|s| {
                 s.line("match self {");
                 s.in_scope(&|s| {
-                    for fun in root.funs() {
+                    for fun in root.funs(kind) {
                         s.line(&format!(
                             "{}::{}(_) => {:?},",
                             side,
@@ -313,15 +342,16 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
             s.line("fn deserialize(");
             s.in_scope(&|s| {
                 s.line("method: &str,");
-                s.line("de: erased_serde::Deserializer,");
+                s.line("de: &mut erased_serde::Deserializer,");
             });
-            s.line(") -> erased_serde:Result<Self> {");
+            s.line(") -> erased_serde::Result<Self> {");
             s.in_scope(&|s| {
                 s.line("use erased_serde::deserialize as deser;");
+                s.line("use serde::de::Error;");
                 s.line("");
                 s.line("match method {");
                 s.in_scope(&|s| {
-                    for fun in root.funs() {
+                    for fun in root.funs(kind) {
                         s.line(&format!("{:?} =>", fun.rpc_name(),));
                         {
                             let s = s.scope();
@@ -330,14 +360,14 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
                                 side,
                                 fun.variant_name(),
                                 fun.qualified_name(),
-                                side,
+                                strukt,
                             ));
                         }
                     }
                     s.line("_ => Err(erased_serde::Error::custom(format!(");
                     s.in_scope(&|s| {
-                        s.line(&format!("{:?}", "unknown method: {},"));
-                        s.line("method");
+                        s.line(&format!("{:?},", "unknown method: {}"));
+                        s.line("method,");
                     });
                     s.line("))),");
                 });
@@ -362,21 +392,23 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
 
                 {
                     let ctx = ctx.scope();
-                    ctx.line("use serde_derive::*;");
+                    ctx.line("use lavish_rpc::serde_derive::*;");
                     ctx.line("");
 
                     ctx.def_struct("Params", &|ctx| {
                         for f in &fun.decl.params {
-                            ctx.line(&format!("{}: {},", f.name.text, f.typ));
+                            ctx.line(&format!("pub {}: {},", f.name.text, f.typ));
                         }
                     });
-                    ctx.line("");
 
-                    ctx.def_struct("Results", &|ctx| {
-                        for f in &fun.decl.results {
-                            ctx.line(&format!("{}: {},", f.name.text, f.typ));
-                        }
-                    });
+                    if !fun.is_notification() {
+                        ctx.line("");
+                        ctx.def_struct("Results", &|ctx| {
+                            for f in &fun.decl.results {
+                                ctx.line(&format!("pub {}: {},", f.name.text, f.typ));
+                            }
+                        });
+                    }
                 }
                 ctx.line("}");
                 ctx.line("");

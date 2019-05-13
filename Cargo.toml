@@ -5,6 +5,10 @@ members = [
     "lavish-rpc"
 ]
 
+exclude = [
+    "output"
+]
+
 [profile.release]
 debug = true
 
