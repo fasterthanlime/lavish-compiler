@@ -163,11 +163,9 @@ where
             // Request
             0 => {
                 let id = access.next_element::<u32>()?.ok_or_else(|| missing("id"))?;
-                println!("id = {}", id);
                 let method = access
                     .next_element::<String>()?
                     .ok_or_else(|| missing("method"))?;
-                println!("method = {}", method);
 
                 let seed = AtomApply::<P> {
                     kind: method,
@@ -176,7 +174,6 @@ where
                 let params = access
                     .next_element_seed(seed)?
                     .ok_or_else(|| missing("params"))?;
-                println!("params = {:#?}", params);
 
                 Ok(Message::Request { id, params })
             }
