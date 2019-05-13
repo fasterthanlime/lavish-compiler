@@ -1,0 +1,10 @@
+[package]
+name = "lavish-rpc"
+version = "0.1.0"
+authors = ["Amos Wenger <amoswenger@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+serde = "1.0.91"
+serde_derive = "1.0.91"
+erased-serde = "0.3.9"

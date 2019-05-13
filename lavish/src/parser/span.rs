@@ -130,7 +130,6 @@ impl Iterator for SpanIter {
 
 impl InputIter for Span {
     type Item = char;
-    type RawItem = char;
     type Iter = SpanIter;
     type IterElem = SpanIterElem;
 
@@ -144,7 +143,7 @@ impl InputIter for Span {
     }
     fn position<P>(&self, predicate: P) -> Option<usize>
     where
-        P: Fn(Self::RawItem) -> bool,
+        P: Fn(Self::Item) -> bool,
     {
         for (o, c) in self.char_indices() {
             if predicate(c) {

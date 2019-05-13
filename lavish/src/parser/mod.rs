@@ -133,6 +133,34 @@ fn fndecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     )(i)
 }
 
+fn notifdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, NotificationDecl, E> {
+    let (i, comment) = opt(comment)(i)?;
+    let (i, _) = spaced(tag("notif"))(i)?;
+    let (i, loc) = spaced(loc)(i)?;
+
+    context(
+        "notification declaration",
+        map(
+            tuple((
+                preceded(sp, id),
+                preceded(
+                    sp,
+                    context(
+                        "parameter list",
+                        delimited(char('('), fields, preceded(sp, char(')'))),
+                    ),
+                ),
+            )),
+            move |(name, params)| NotificationDecl {
+                loc: loc.clone(),
+                comment: comment.clone(),
+                name: name.clone(),
+                params,
+            },
+        ),
+    )(i)
+}
+
 fn structdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, StructDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, _) = preceded(sp, tag("struct"))(i)?;
@@ -168,6 +196,7 @@ fn comment<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Comment, E> {
 fn nsitem<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceItem, E> {
     alt((
         map(fndecl, |i| NamespaceItem::Function(i)),
+        map(notifdecl, |i| NamespaceItem::Notification(i)),
         map(structdecl, |i| NamespaceItem::Struct(i)),
         map(nsdecl, |i| NamespaceItem::Namespace(i)),
     ))(i)

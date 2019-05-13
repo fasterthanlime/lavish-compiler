@@ -1,4 +1,5 @@
 
 namespace double {
     server fn double(x: int64) -> (x: int64)
+    notif log(msg: string)
 }

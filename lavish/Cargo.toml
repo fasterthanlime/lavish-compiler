@@ -1,0 +1,15 @@
+[package]
+name = "lavish"
+version = "0.1.0"
+authors = ["Amos Wenger <amoswenger@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+nom = "5.0.0-alpha2"
+colored = "1.8.0"
+clap = "2.33.0"
+indexmap = "1.0.2"
+heck = "0.3.1"
+
+# work around https://github.com/rust-lang/rust/issues/59134
+bitflags = "=1.0.4"
