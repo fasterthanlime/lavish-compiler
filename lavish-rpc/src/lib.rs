@@ -1,23 +1,23 @@
 use serde::{de::*, ser::*};
 use std::{fmt, fmt::Debug};
 
-pub trait Proto: serde::Serialize + Debug + Sized {
+pub trait Atom: serde::Serialize + Debug + Sized {
     fn method(&self) -> &'static str;
     fn deserialize(method: &str, de: &mut erased_serde::Deserializer)
         -> erased_serde::Result<Self>;
 }
 
-struct ProtoApply<T: ?Sized>
+struct AtomApply<T: ?Sized>
 where
-    T: Proto,
+    T: Atom,
 {
     pub kind: String,
     pub phantom: std::marker::PhantomData<T>,
 }
 
-impl<'de, T: ?Sized> DeserializeSeed<'de> for ProtoApply<T>
+impl<'de, T: ?Sized> DeserializeSeed<'de> for AtomApply<T>
 where
-    T: Proto,
+    T: Atom,
 {
     type Value = T;
 
@@ -33,9 +33,9 @@ where
 #[derive(Debug)]
 pub enum Message<P, NP, R>
 where
-    P: Proto,
-    NP: Proto,
-    R: Proto,
+    P: Atom,
+    NP: Atom,
+    R: Atom,
 {
     Request {
         id: u32,
@@ -53,9 +53,9 @@ where
 
 impl<P, NP, R> Message<P, NP, R>
 where
-    P: Proto,
-    NP: Proto,
-    R: Proto,
+    P: Atom,
+    NP: Atom,
+    R: Atom,
 {
     pub fn request(id: u32, params: P) -> Self {
         Message::<P, NP, R>::Request { id, params }
@@ -64,9 +64,9 @@ where
 
 impl<P, NP, R> Serialize for Message<P, NP, R>
 where
-    P: Proto,
-    NP: Proto,
-    R: Proto,
+    P: Atom,
+    NP: Atom,
+    R: Atom,
 {
     fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
     where
@@ -104,9 +104,9 @@ where
 
 impl<'de, P, NP, R> Deserialize<'de> for Message<P, NP, R>
 where
-    P: Proto,
-    NP: Proto,
-    R: Proto,
+    P: Atom,
+    NP: Atom,
+    R: Atom,
 {
     fn deserialize<D>(d: D) -> Result<Self, D::Error>
     where
@@ -122,9 +122,9 @@ where
 
 struct MessageVisitor<P, NP, R>
 where
-    P: Proto,
-    NP: Proto,
-    R: Proto,
+    P: Atom,
+    NP: Atom,
+    R: Atom,
 {
     _p: std::marker::PhantomData<P>,
     _np: std::marker::PhantomData<NP>,
@@ -133,9 +133,9 @@ where
 
 impl<'de, P, NP, R> Visitor<'de> for MessageVisitor<P, NP, R>
 where
-    P: Proto,
-    NP: Proto,
-    R: Proto,
+    P: Atom,
+    NP: Atom,
+    R: Atom,
 {
     type Value = Message<P, NP, R>;
 
@@ -166,7 +166,7 @@ where
                     .ok_or_else(|| missing("method"))?;
                 println!("method = {}", method);
 
-                let seed = ProtoApply::<P> {
+                let seed = AtomApply::<P> {
                     kind: method,
                     phantom: std::marker::PhantomData,
                 };
@@ -208,7 +208,7 @@ mod tests {
 
     type Message = super::Message<Test, Test, Test>;
 
-    impl Proto for Test {
+    impl Atom for Test {
         fn method(&self) -> &'static str {
             match self {
                 Test::Foo(_) => "Foo",

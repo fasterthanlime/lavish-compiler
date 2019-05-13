@@ -291,7 +291,7 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
 
     for side in vec!["Params", "Results"] {
         s.line("");
-        s.line(&format!("impl lavish_rpc::Proto for {} {{", side));
+        s.line(&format!("impl lavish_rpc::Atom for {} {{", side));
         s.in_scope(&|s| {
             s.line("fn method(&self) -> &'static str {");
             s.in_scope(&|s| {
@@ -340,7 +340,7 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
             });
             s.line("}"); // fn deserialize
         });
-        s.line("}"); // impl Proto for Params
+        s.line("}"); // impl Atom for side
     }
 
     fn visit_ns<'a>(ctx: &'a ScopeLike<'a>, ns: &Namespace) -> Result {
