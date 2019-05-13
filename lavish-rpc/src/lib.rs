@@ -141,8 +141,8 @@ where
 {
     type Value = Message<P, NP, R>;
 
-    fn expecting(&self, _formatter: &mut fmt::Formatter) -> fmt::Result {
-        unimplemented!()
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", "a valid msgpack-RPC message (ie. a sequence)")
     }
 
     fn visit_seq<S>(self, mut access: S) -> Result<Self::Value, S::Error>
