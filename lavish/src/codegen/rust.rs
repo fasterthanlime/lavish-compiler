@@ -249,7 +249,6 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>) -> Result {
     s.line("");
 
     s.line("pub type Message = lavish_rpc::Message<Params, NotificationParams, Results>;");
-    s.line("");
 
     fn write_enum<'a, I>(s: &ScopeLike, kind: &str, funs: I)
     where
