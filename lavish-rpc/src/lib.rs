@@ -9,7 +9,7 @@ pub trait PendingRequests {
     fn get_pending(&self, id: u32) -> Option<&'static str>;
 }
 
-pub trait Atom: serde::Serialize + Debug + Sized + Send + 'static {
+pub trait Atom: serde::Serialize + Debug + Sized + Sync + Send + 'static {
     fn method(&self) -> &'static str;
     fn deserialize(method: &str, de: &mut erased_serde::Deserializer)
         -> erased_serde::Result<Self>;
