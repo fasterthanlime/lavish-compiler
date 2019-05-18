@@ -1,14 +1,15 @@
 use serde::{de::*, ser::*};
 use std::{fmt, fmt::Debug};
+use std::marker::{Send,PhantomData};
 
 pub use erased_serde;
 pub use serde_derive;
 
 pub trait PendingRequests {
-    fn get_pending<'a>(&self, id: u32) -> Option<&'a str>;
+    fn get_pending(&self, id: u32) -> Option<&'static str>;
 }
 
-pub trait Atom: serde::Serialize + Debug + Sized {
+pub trait Atom: serde::Serialize + Debug + Sized + Send + 'static {
     fn method(&self) -> &'static str;
     fn deserialize(method: &str, de: &mut erased_serde::Deserializer)
         -> erased_serde::Result<Self>;
@@ -19,7 +20,7 @@ where
     T: Atom,
 {
     pub kind: String,
-    pub phantom: std::marker::PhantomData<T>,
+    pub phantom: PhantomData<T>,
 }
 
 impl<'de, T: ?Sized> DeserializeSeed<'de> for AtomApply<T>
@@ -37,6 +38,55 @@ where
     }
 }
 
+struct AtomOptionApply<T: ?Sized>
+where T: Atom,
+{
+    pub kind: String,
+    pub phantom: PhantomData<T>,
+}
+
+impl<'de, T: ?Sized> DeserializeSeed<'de> for AtomOptionApply<T>
+where T: Atom,
+{
+    type Value = Option<T>;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where D: Deserializer<'de>,
+    {
+        deserializer.deserialize_option(AtomOptionVisitor {
+            kind: self.kind,
+            phantom: PhantomData,
+        })
+    }
+}
+
+struct AtomOptionVisitor<T: ?Sized>
+where T: Atom,
+{
+    pub kind: String,
+    pub phantom: PhantomData<T>,
+}
+
+impl<'de, T: ?Sized> Visitor<'de> for AtomOptionVisitor<T>
+where T: Atom,
+{
+    type Value = Option<T>;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", "a nullable msgpack-RPC payload (results, params, etc.)")
+    }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E> {
+        Ok(None)
+    }
+
+    fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where D: Deserializer<'de> {
+        let mut erased = erased_serde::Deserializer::erase(deserializer);
+        T::deserialize(&self.kind, &mut erased).map(|x| Some(x)).map_err(serde::de::Error::custom)
+    }
+}
+
 #[derive(Debug)]
 pub enum Message<P, NP, R>
 where
@@ -51,7 +101,7 @@ where
     Response {
         id: u32,
         error: Option<String>,
-        results: R,
+        results: Option<R>,
     },
     Notification {
         params: NP,
@@ -72,7 +122,7 @@ where
         Message::<P, NP, R>::Notification { params }
     }
 
-    pub fn response(id: u32, error: Option<String>, results: R) -> Self {
+    pub fn response(id: u32, error: Option<String>, results: Option<R>) -> Self {
         Message::<P, NP, R>::Response { id, error, results }
     }
 }
@@ -129,9 +179,7 @@ where
     {
         d.deserialize_seq(MessageVisitor::<'de, P, NP, R> {
             pending,
-            _p: std::marker::PhantomData,
-            _np: std::marker::PhantomData,
-            _r: std::marker::PhantomData,
+            phantom: PhantomData,
         })
     }
 }
@@ -143,9 +191,7 @@ where
     R: Atom,
 {
     pending: &'de dyn PendingRequests,
-    _p: std::marker::PhantomData<P>,
-    _np: std::marker::PhantomData<NP>,
-    _r: std::marker::PhantomData<R>,
+    phantom: PhantomData<(P, NP, R)>,
 }
 
 impl<'de, P, NP, R> Visitor<'de> for MessageVisitor<'de, P, NP, R>
@@ -203,7 +249,7 @@ where
                     .get_pending(id)
                     .ok_or_else(|| missing("no such pending request"))?;
 
-                let seed = AtomApply::<R> {
+                let seed = AtomOptionApply::<R> {
                     kind: method.into(),
                     phantom: std::marker::PhantomData,
                 };
@@ -301,7 +347,7 @@ mod tests {
     struct TestPendingRequests {}
 
     impl PendingRequests for TestPendingRequests {
-        fn get_pending<'a>(&self, _id: u32) -> Option<&'a str> {
+        fn get_pending(&self, _id: u32) -> Option<&'static str> {
             None
         }
     }
