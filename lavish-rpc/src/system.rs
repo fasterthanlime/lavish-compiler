@@ -92,7 +92,7 @@ where
 
     #[allow(clippy::needless_lifetimes)]
     pub async fn call_raw(
-        &mut self,
+        &self,
         params: P,
     ) -> Result<Message<P, NP, R>, Box<dyn std::error::Error>> {
         let id = {
@@ -110,12 +110,15 @@ where
             queue.in_flight_requests.insert(id, in_flight);
         }
 
-        self.sink.send(m).await?;
+        {
+            let mut sink = self.sink.clone();
+            sink.send(m).await?;
+        }
         Ok(rx.await?)
     }
 
     #[allow(clippy::needless_lifetimes)]
-    pub async fn call<D, RR>(&mut self, params: P, downgrade: D) -> Result<RR, Error>
+    pub async fn call<D, RR>(&self, params: P, downgrade: D) -> Result<RR, Error>
     where
         D: Fn(R) -> Option<RR>,
     {
