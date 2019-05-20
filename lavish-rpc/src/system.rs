@@ -3,6 +3,7 @@ use super::{Atom, Error, Message, PendingRequests};
 use serde::Serialize;
 use std::io::Cursor;
 use std::marker::{PhantomData, Unpin};
+use std::pin::Pin;
 
 use futures::lock::Mutex;
 use std::collections::HashMap;
@@ -405,3 +406,15 @@ where
         self.in_flight_requests.get(&id).map(|req| req.method)
     }
 }
+
+pub struct Call<T, P, NP, R> where P: Atom, NP: Atom, R: Atom {
+    pub state: Arc<T>,
+    pub handle: Handle<P, NP, R>,
+    pub params: P,
+}
+
+pub type MethodHandler<'a, T, P, NP, R> = Option<
+    Box<
+        (Fn(Call<T, P, NP, R>) -> (Pin<Box<Future<Output = Result<R, Error>> + Send + 'static>>)) + Sync + Send + 'a
+    >
+>;
