@@ -83,7 +83,7 @@ where T: Atom,
     fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where D: Deserializer<'de> {
         let mut erased = erased_serde::Deserializer::erase(deserializer);
-        T::deserialize(&self.kind, &mut erased).map(|x| Some(x)).map_err(serde::de::Error::custom)
+        T::deserialize(&self.kind, &mut erased).map(Some).map_err(serde::de::Error::custom)
     }
 }
 

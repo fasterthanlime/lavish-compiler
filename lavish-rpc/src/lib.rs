@@ -1,4 +1,5 @@
 #![feature(async_await)]
+#![warn(clippy::all)]
 
 mod message;
 pub use message::*;

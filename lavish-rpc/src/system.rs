@@ -91,7 +91,7 @@ where
     pub async fn call(
         &mut self,
         params: P,
-    ) -> Result<Message<P, NP, R>, Box<dyn std::error::Error + 'static>> {
+    ) -> Result<Message<P, NP, R>, Box<dyn std::error::Error>> {
         let id = {
             let mut queue = self.queue.lock().await;
             queue.next_id()
@@ -169,16 +169,13 @@ where
                 while let Some(m) = stream.next().await {
                     let res =
                         m.map(|m| pool.spawn(handle_message(m, handler.clone(), handle.clone())));
-                    match res {
-                        Err(e) => {
-                            eprintln!("message stream error: {:#?}", e);
-                        }
-                        _ => {}
+                    if let Err(e) = res {
+                        eprintln!("message stream error: {:#?}", e);
                     }
 
                 }
             })
-            .map_err(|e| Error::SpawnError(e))?;
+            .map_err(Error::SpawnError)?;
 
         Ok(system)
     }
