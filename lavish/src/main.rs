@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 use clap::{App, Arg, SubCommand};
 
 mod ast;

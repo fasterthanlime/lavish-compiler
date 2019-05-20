@@ -48,11 +48,11 @@ impl Span {
         self.len
     }
 
-    pub fn slice<'a>(&'a self) -> &'a str {
+    pub fn slice(&self) -> &str {
         &self.source.input[self.offset..self.offset + self.len]
     }
 
-    pub fn position<'a>(&'a self) -> Position {
+    pub fn position(&self) -> Position {
         let mut offset = self.offset;
         let mut line = 0;
         let mut column = 0;
@@ -199,7 +199,7 @@ impl Compare<&str> for Span {
     fn compare(&self, t: &str) -> CompareResult {
         let pos = self.chars().zip(t.chars()).position(|(a, b)| a != b);
 
-        let res = match pos {
+        match pos {
             Some(_) => CompareResult::Error,
             None => {
                 if self.len() >= t.len() {
@@ -208,8 +208,7 @@ impl Compare<&str> for Span {
                     CompareResult::Incomplete
                 }
             }
-        };
-        res
+        }
     }
 
     //FIXME: this version is too simple and does not use the current locale

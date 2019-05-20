@@ -19,7 +19,7 @@ pub use span::*;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 
-pub fn module<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Module, E> {
+pub fn module<E: ParseError<Span>>(i: Span) -> IResult<Span, Module, E> {
     let (i, loc) = loc(i)?;
 
     all_consuming(terminated(
@@ -30,20 +30,20 @@ pub fn module<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Module, E> {
     ))(i)
 }
 
-fn spaced<'a, O, E: ParseError<Span>, F>(f: F) -> impl Fn(Span) -> IResult<Span, O, E>
+fn spaced<O, E: ParseError<Span>, F>(f: F) -> impl Fn(Span) -> IResult<Span, O, E>
 where
     F: Fn(Span) -> IResult<Span, O, E>,
 {
     terminated(preceded(sp, f), sp)
 }
 
-fn sp<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
+fn sp<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     let chars = " \t\r\n";
 
     take_while(move |c| chars.contains(c))(i)
 }
 
-fn id<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
+fn id<E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
     let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
     map(take_while1(move |c| chars.contains(c)), |span: Span| {
@@ -52,18 +52,18 @@ fn id<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
     })(i)
 }
 
-fn typ<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
+fn typ<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_<>";
 
     take_while1(move |c| chars.contains(c))(i)
 }
 
-fn loc<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
+fn loc<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     let o = i.take(0);
     Ok((i, o))
 }
 
-fn field<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Field, E> {
+fn field<E: ParseError<Span>>(i: Span) -> IResult<Span, Field, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, loc) = spaced(loc)(i)?;
     let (i, name) = spaced(id)(i)?;
@@ -77,25 +77,25 @@ fn field<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Field, E> {
     })(i)
 }
 
-fn fields<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
+fn fields<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
     terminated(
         separated_list(spaced(char(',')), field),
         opt(spaced(char(','))),
     )(i)
 }
 
-fn fnmod<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionModifier, E> {
+fn fnmod<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionModifier, E> {
     alt((
         map(tag("server"), |_| FunctionModifier::Server),
         map(tag("client"), |_| FunctionModifier::Client),
     ))(i)
 }
 
-fn fnmods<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<FunctionModifier>, E> {
+fn fnmods<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<FunctionModifier>, E> {
     preceded(sp, separated_list(sp, fnmod))(i)
 }
 
-fn results<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
+fn results<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
     let (i, _) = spaced(tag("->"))(i)?;
 
     context(
@@ -104,7 +104,7 @@ fn results<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
     )(i)
 }
 
-fn fndecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
+fn fndecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, modifiers) = fnmods(i)?;
     let (i, _) = spaced(tag("fn"))(i)?;
@@ -136,7 +136,7 @@ fn fndecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     )(i)
 }
 
-fn notifdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
+fn notifdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, modifiers) = fnmods(i)?;
     let (i, _) = spaced(tag("nf"))(i)?;
@@ -171,7 +171,7 @@ fn notifdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E>
     )(i)
 }
 
-fn structdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, StructDecl, E> {
+fn structdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, StructDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, _) = preceded(sp, tag("struct"))(i)?;
     let (i, loc) = spaced(loc)(i)?;
@@ -193,30 +193,30 @@ fn structdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, StructDecl, E> 
     )(i)
 }
 
-fn comment_line<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
+fn comment_line<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     preceded(sp, preceded(tag("//"), preceded(sp, take_until("\n"))))(i)
 }
 
-fn comment<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Comment, E> {
+fn comment<E: ParseError<Span>>(i: Span) -> IResult<Span, Comment, E> {
     map(many1(comment_line), |lines| Comment {
         lines: lines.iter().map(|x| x.clone().into()).collect(),
     })(i)
 }
 
-fn nsitem<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceItem, E> {
+fn nsitem<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceItem, E> {
     alt((
-        map(fndecl, |i| NamespaceItem::Function(i)),
-        map(notifdecl, |i| NamespaceItem::Function(i)),
-        map(structdecl, |i| NamespaceItem::Struct(i)),
-        map(nsdecl, |i| NamespaceItem::Namespace(i)),
+        map(fndecl, NamespaceItem::Function),
+        map(notifdecl, NamespaceItem::Function),
+        map(structdecl, NamespaceItem::Struct),
+        map(nsdecl, NamespaceItem::Namespace),
     ))(i)
 }
 
-fn nsbody<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<NamespaceItem>, E> {
+fn nsbody<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<NamespaceItem>, E> {
     many0(preceded(sp, nsitem))(i)
 }
 
-fn nsdecl<'a, E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceDecl, E> {
+fn nsdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, _) = terminated(preceded(sp, tag("namespace")), sp)(i)?;
     let (i, loc) = spaced(loc)(i)?;

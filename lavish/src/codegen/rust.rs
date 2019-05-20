@@ -85,7 +85,7 @@ impl<'a> Context<'a> {
     }
 
     fn all_funs(&self) -> Box<Iterator<Item = &'a Fun> + 'a> {
-        Box::new(self.namespaces.values().map(|ns| ns.funs()).flatten())
+        Box::new(self.namespaces.values().map(Namespace::funs).flatten())
     }
 
     fn funs(&self, kind: FunKind) -> Box<Iterator<Item = &'a Fun> + 'a> {
@@ -169,7 +169,7 @@ impl<'a> Namespace<'a> {
         Box::new(
             self.children
                 .values()
-                .map(|ns| ns.funs())
+                .map(Namespace::funs)
                 .flatten()
                 .chain(self.funs.values()),
         )

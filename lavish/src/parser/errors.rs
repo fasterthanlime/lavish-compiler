@@ -86,7 +86,7 @@ impl Source {
     }
 }
 
-pub fn parse<'a>(source: Rc<Source>) -> Result<ast::Module, Error> {
+pub fn parse(source: Rc<Source>) -> Result<ast::Module, Error> {
     let span = parser::Span {
         source: source.clone(),
         offset: 0,
@@ -122,7 +122,7 @@ pub struct DiagnosticBuilder<'a> {
     message: Option<String>,
 }
 
-const EMPTY_PREFIX: &'static str = "";
+const EMPTY_PREFIX: &str = "";
 
 impl<'a> DiagnosticBuilder<'a> {
     pub fn new(pos: Position) -> Self {

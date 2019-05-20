@@ -121,7 +121,7 @@ fn format_comment(comment: &Option<ast::Comment>) -> ColoredString {
     if let Some(comment) = comment.as_ref() {
         result = format!(
             " — {}",
-            comment.lines.iter().map(|x| x.clone()).collect::<String>()
+            comment.lines.iter().map(Clone::clone).collect::<String>()
         )
         .blue();
     };
