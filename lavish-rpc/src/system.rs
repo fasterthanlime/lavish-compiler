@@ -402,8 +402,3 @@ where
         self.in_flight_requests.get(&id).map(|req| req.method)
     }
 }
-
-pub trait IntoHandleRef<P, NP, R>
-where P: Atom, NP: Atom, R: Atom {
-    fn into_handle_ref<'a>() -> &'a mut Handle<P, NP, R>;
-}
