@@ -88,6 +88,7 @@ where
         }
     }
 
+    #[allow(clippy::needless_lifetimes)]
     pub async fn call(
         &mut self,
         params: P,

@@ -73,7 +73,7 @@ where T: Atom,
     type Value = Option<T>;
 
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", "a nullable msgpack-RPC payload (results, params, etc.)")
+        write!(f, "a nullable msgpack-RPC payload (results, params, etc.)")
     }
 
     fn visit_none<E>(self) -> Result<Self::Value, E> {
@@ -203,7 +203,7 @@ where
     type Value = Message<P, NP, R>;
 
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", "a valid msgpack-RPC message (ie. a sequence)")
+        write!(f, "a valid msgpack-RPC message (ie. a sequence)")
     }
 
     fn visit_seq<S>(self, mut access: S) -> Result<Self::Value, S::Error>
