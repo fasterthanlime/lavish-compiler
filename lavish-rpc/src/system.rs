@@ -34,6 +34,7 @@ where
     NP: Atom,
     R: Atom,
 {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             phantom: PhantomData,
@@ -215,7 +216,7 @@ async fn handle_message<P, NP, R, H, FT>(
                 _ => Message::Response {
                     id,
                     results: None,
-                    error: Some(format!("no method handler")),
+                    error: Some("no method handler".into()),
                 },
             };
             handle.sink.send(m).await.unwrap();
@@ -294,7 +295,7 @@ where
     type Error = std::io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        if src.len() == 0 {
+        if src.is_empty() {
             return Ok(None);
         }
 
