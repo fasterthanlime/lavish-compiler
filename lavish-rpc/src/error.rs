@@ -6,9 +6,11 @@ pub enum Error {
     WrongResults,
     MissingResults,
     WrongMessageType,
+    MethodUnimplemented(&'static str),
     RemoteError(String),
     TransportError(String),
     SpawnError(SpawnError),
+    InternalError(String),
 }
 
 use std::fmt;

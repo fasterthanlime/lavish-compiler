@@ -49,7 +49,7 @@ where
     P: Atom,
     NP: Atom,
     R: Atom,
-    FT: Future<Output = Result<R, String>> + Send + 'static,
+    FT: Future<Output = Result<R, Error>> + Send + 'static,
 {
     fn handle(&self, h: Handle<P, NP, R>, params: P) -> FT;
 }
@@ -60,7 +60,7 @@ where
     R: Atom,
     NP: Atom,
     F: (Fn(Handle<P, NP, R>, P) -> FT) + Send + Sync,
-    FT: Future<Output = Result<R, String>> + Send + 'static,
+    FT: Future<Output = Result<R, Error>> + Send + 'static,
 {
     fn handle(&self, h: Handle<P, NP, R>, params: P) -> FT {
         self(h, params)
@@ -165,7 +165,7 @@ where
     where
         T: IO,
         H: Handler<P, NP, R, FT> + 'static,
-        FT: Future<Output = Result<R, String>> + Send + 'static,
+        FT: Future<Output = Result<R, Error>> + Send + 'static,
     {
         let queue = Arc::new(Mutex::new(Queue::new(protocol)));
 
@@ -223,7 +223,7 @@ async fn handle_message<P, NP, R, H, FT>(
     NP: Atom,
     R: Atom,
     H: Handler<P, NP, R, FT>,
-    FT: Future<Output = Result<R, String>> + Send + 'static,
+    FT: Future<Output = Result<R, Error>> + Send + 'static,
 {
     match inbound {
         Message::Request { id, params } => {
@@ -237,7 +237,7 @@ async fn handle_message<P, NP, R, H, FT>(
                     Err(error) => Message::Response::<P, NP, R> {
                         id,
                         results: None,
-                        error: Some(error),
+                        error: Some(format!("internal error: {:#?}", error)),
                     },
                 },
                 _ => Message::Response {
@@ -407,14 +407,22 @@ where
     }
 }
 
-pub struct Call<T, P, NP, R> where P: Atom, NP: Atom, R: Atom {
+pub struct Call<T, P, NP, R, PP>
+where
+    P: Atom,
+    NP: Atom,
+    R: Atom,
+{
     pub state: Arc<T>,
     pub handle: Handle<P, NP, R>,
-    pub params: P,
+    pub params: PP,
 }
 
-pub type MethodHandler<'a, T, P, NP, R> = Option<
+pub type MethodHandler<'a, T, P, NP, R, PP, RR> = Option<
     Box<
-        (Fn(Call<T, P, NP, R>) -> (Pin<Box<Future<Output = Result<R, Error>> + Send + 'static>>)) + Sync + Send + 'a
-    >
+        (Fn(Call<T, P, NP, R, PP>) -> (Pin<Box<Future<Output = Result<RR, Error>> + Send + 'static>>))
+            + Sync
+            + Send
+            + 'a,
+    >,
 >;
