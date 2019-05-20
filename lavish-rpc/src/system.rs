@@ -1,4 +1,5 @@
-use super::{Atom, Message, PendingRequests};
+use super::{Atom, Error, Message, PendingRequests};
+
 use serde::Serialize;
 use std::io::Cursor;
 use std::marker::{PhantomData, Unpin};
@@ -111,6 +112,28 @@ where
 
         self.sink.send(m).await?;
         Ok(rx.await?)
+    }
+
+    #[allow(clippy::needless_lifetimes)]
+    pub async fn call_downgrade<D, RR>(&mut self, params: P, downgrade: D) -> Result<RR, Error>
+    where
+        D: Fn(R) -> Option<RR>,
+    {
+        match self.call(params).await {
+            Ok(m) => match m {
+                Message::Response { results, error, .. } => {
+                    if let Some(error) = error {
+                        Err(Error::RemoteError(error))
+                    } else if let Some(results) = results {
+                        downgrade(results).ok_or_else(|| Error::WrongResults)
+                    } else {
+                        Err(Error::MissingResults)
+                    }
+                }
+                _ => Err(Error::WrongMessageType),
+            },
+            Err(msg) => Err(Error::TransportError(format!("{:#?}", msg))),
+        }
     }
 }
 
@@ -377,25 +400,5 @@ where
 {
     fn get_pending(&self, id: u32) -> Option<&'static str> {
         self.in_flight_requests.get(&id).map(|req| req.method)
-    }
-}
-
-#[derive(Debug)]
-pub enum Error {
-    SpawnError(futures::task::SpawnError),
-}
-
-use std::fmt;
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:#?}", self)
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<futures::task::SpawnError> for Error {
-    fn from(e: futures::task::SpawnError) -> Self {
-        Error::SpawnError(e)
     }
 }

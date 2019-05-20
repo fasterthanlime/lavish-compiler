@@ -6,3 +6,6 @@ pub use message::*;
 
 mod system;
 pub use system::*;
+
+mod error;
+pub use error::*;
