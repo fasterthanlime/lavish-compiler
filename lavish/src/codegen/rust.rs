@@ -224,7 +224,7 @@ impl<'a> Fun<'a> {
     }
 
     fn variant_name(&self) -> String {
-        self.rpc_name().replace(".", "_")
+        self.rpc_name().replace(".", "_").to_lowercase()
     }
 
     fn qualified_name(&self) -> String {
@@ -296,6 +296,7 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
         s.line("// Notes: as of 2019-05-21, futures-preview is required");
         s.line("use futures::prelude::*;");
         s.line("use std::pin::Pin;");
+        s.line("use std::sync::Arc;");
         s.line("");
         s.line("use lavish_rpc as rpc;");
         s.line("use lavish_rpc::serde_derive::*;");
@@ -403,7 +404,25 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
                 s.line("}"); // fn deserialize
             });
             s.line("}"); // impl Atom for side
-        }
+        } // impl rpc::Atom for P, NP, R
+
+        s.line("");
+        s.line("pub struct Handler<'a, T> {");
+        s.in_scope(&|s| {
+            s.line("state: Arc<T>,");
+            for fun in root.funs(FunKind::Request) {
+                s.line(&format!("{}: MethodHandler<'a, T,", fun.variant_name()));
+                s.in_scope(&|s| {
+                    s.line(&format!(
+                        "{}::Params, {}::Results,",
+                        fun.qualified_name(),
+                        fun.qualified_name()
+                    ));
+                });
+                s.line(">,");
+            }
+        });
+        s.line("}"); // struct Handler
 
         for (_, ns) in &root.namespaces {
             s.line("");
