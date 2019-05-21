@@ -228,9 +228,7 @@ fn nsdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceDecl, E> {
                 spaced(id),
                 delimited(spaced(char('{')), nsbody, spaced(char('}'))),
             )),
-            move |(name, items)| {
-                NamespaceDecl::new(name.into(), loc.clone(), comment.clone(), items)
-            },
+            move |(name, items)| NamespaceDecl::new(name, loc.clone(), comment.clone(), items),
         ),
     )(i)
 }

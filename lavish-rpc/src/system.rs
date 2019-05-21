@@ -67,7 +67,6 @@ where
     }
 }
 
-
 pub struct Handle<P, NP, R>
 where
     P: Atom,
@@ -201,7 +200,6 @@ where
                     if let Err(e) = res {
                         eprintln!("message stream error: {:#?}", e);
                     }
-
                 }
             })
             .map_err(Error::SpawnError)?;
@@ -420,7 +418,9 @@ where
 
 pub type MethodHandler<'a, T, P, NP, R, PP, RR> = Option<
     Box<
-        (Fn(Call<T, P, NP, R, PP>) -> (Pin<Box<Future<Output = Result<RR, Error>> + Send + 'static>>))
+        (Fn(
+                Call<T, P, NP, R, PP>,
+            ) -> (Pin<Box<Future<Output = Result<RR, Error>> + Send + 'static>>))
             + Sync
             + Send
             + 'a,

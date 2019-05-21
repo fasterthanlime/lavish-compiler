@@ -24,9 +24,9 @@ impl Output {
     fn write_indented(&self, indent: usize, line: &str) {
         let mut w = self.writer.borrow_mut();
         for _ in 0..indent {
-            write!(w, "{}", " ").unwrap();
+            write!(w, " ").unwrap();
         }
-        write!(w, "{}\n", line).unwrap();
+        writeln!(w, "{}", line).unwrap();
     }
 }
 
@@ -203,7 +203,7 @@ impl<'a> Fun<'a> {
     fn new(decl: &'a ast::FunctionDecl, full_name: String) -> Self {
         Self {
             decl,
-            tokens: full_name.split(".").map(|x| x.into()).collect(),
+            tokens: full_name.split('.').map(|x| x.into()).collect(),
         }
     }
 
@@ -244,7 +244,7 @@ impl<'a> Fun<'a> {
 
 type Result = std::result::Result<(), Error>;
 
-pub fn codegen<'a>(modules: &'a Vec<ast::Module>, output: &str) -> Result {
+pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
     let start_instant = Instant::now();
 
     let output_path = Path::new(output);
@@ -266,6 +266,7 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>, output: &str) -> Result {
     s.line("// Disable some lints, since this file is generated.");
     s.line("#![allow(clippy::all)]");
     s.line("#![allow(unknown_lints)]");
+    s.line("#![allow(unused)]");
     s.line("");
 
     s.line("use lavish_rpc::serde_derive::*;");
@@ -289,93 +290,101 @@ pub fn codegen<'a>(modules: &'a Vec<ast::Module>, output: &str) -> Result {
         }
     };
 
-    s.line("");
-    s.line("#[derive(Serialize, Debug)]");
-    s.line("#[serde(untagged)]");
-    s.line("#[allow(non_camel_case_types, unused)]");
-    s.line("pub enum Params {");
-    write_enum(s, "Params", root.funs(FunKind::Request));
-    s.line("}"); // enum Params
-
-    s.line("");
-    s.line("#[derive(Serialize, Debug)]");
-    s.line("#[serde(untagged)]");
-    s.line("#[allow(non_camel_case_types, unused)]");
-    s.line("pub enum Results {");
-    write_enum(s, "Results", root.funs(FunKind::Request));
-    s.line("}"); // enum Results
-
-    s.line("");
-    s.line("#[derive(Serialize, Debug)]");
-    s.line("#[serde(untagged)]");
-    s.line("#[allow(non_camel_case_types, unused)]");
-    s.line("pub enum NotificationParams {");
-    write_enum(s, "Params", root.funs(FunKind::Notification));
-    s.line("}"); // enum NotificationParams
-
-    for (strukt, side, kind) in vec![
-        ("Params", "Params", FunKind::Request),
-        ("Results", "Results", FunKind::Request),
-        ("Params", "NotificationParams", FunKind::Notification),
-    ] {
+    {
         s.line("");
-        s.line(&format!("impl lavish_rpc::Atom for {} {{", side));
-        s.in_scope(&|s| {
-            s.line("fn method(&self) -> &'static str {");
-            s.in_scope(&|s| {
-                s.line("match self {");
-                s.in_scope(&|s| {
-                    for fun in root.funs(kind) {
-                        s.line(&format!(
-                            "{}::{}(_) => {:?},",
-                            side,
-                            fun.variant_name(),
-                            fun.rpc_name()
-                        ));
-                    }
-                });
-                s.line("}");
-            });
-            s.line("}"); // fn method
+        s.line("mod __root {");
+        let s = s.scope();
 
+        s.line("");
+        s.line("#[derive(Serialize, Debug)]");
+        s.line("#[serde(untagged)]");
+        s.line("#[allow(non_camel_case_types, unused)]");
+        s.line("pub enum Params {");
+        write_enum(&s, "Params", root.funs(FunKind::Request));
+        s.line("}"); // enum Params
+
+        s.line("");
+        s.line("#[derive(Serialize, Debug)]");
+        s.line("#[serde(untagged)]");
+        s.line("#[allow(non_camel_case_types, unused)]");
+        s.line("pub enum Results {");
+        write_enum(&s, "Results", root.funs(FunKind::Request));
+        s.line("}"); // enum Results
+
+        s.line("");
+        s.line("#[derive(Serialize, Debug)]");
+        s.line("#[serde(untagged)]");
+        s.line("#[allow(non_camel_case_types, unused)]");
+        s.line("pub enum NotificationParams {");
+        write_enum(&s, "Params", root.funs(FunKind::Notification));
+        s.line("}"); // enum NotificationParams
+
+        for (strukt, side, kind) in &[
+            ("Params", "Params", FunKind::Request),
+            ("Results", "Results", FunKind::Request),
+            ("Params", "NotificationParams", FunKind::Notification),
+        ] {
             s.line("");
-            s.line("fn deserialize(");
+            s.line(&format!("impl lavish_rpc::Atom for {} {{", side));
             s.in_scope(&|s| {
-                s.line("method: &str,");
-                s.line("de: &mut erased_serde::Deserializer,");
-            });
-            s.line(") -> erased_serde::Result<Self> {");
-            s.in_scope(&|s| {
-                s.line("use erased_serde::deserialize as deser;");
-                s.line("use serde::de::Error;");
-                s.line("");
-                s.line("match method {");
+                s.line("fn method(&self) -> &'static str {");
                 s.in_scope(&|s| {
-                    for fun in root.funs(kind) {
-                        s.line(&format!("{:?} =>", fun.rpc_name(),));
-                        {
-                            let s = s.scope();
+                    s.line("match self {");
+                    s.in_scope(&|s| {
+                        for fun in root.funs(*kind) {
                             s.line(&format!(
-                                "Ok({}::{}(deser::<{}::{}>(de)?)),",
+                                "{}::{}(_) => {:?},",
                                 side,
                                 fun.variant_name(),
-                                fun.qualified_name(),
-                                strukt,
+                                fun.rpc_name()
                             ));
                         }
-                    }
-                    s.line("_ => Err(erased_serde::Error::custom(format!(");
-                    s.in_scope(&|s| {
-                        s.line(&format!("{:?},", "unknown method: {}"));
-                        s.line("method,");
                     });
-                    s.line("))),");
+                    s.line("}");
                 });
-                s.line("}");
+                s.line("}"); // fn method
+
+                s.line("");
+                s.line("fn deserialize(");
+                s.in_scope(&|s| {
+                    s.line("method: &str,");
+                    s.line("de: &mut erased_serde::Deserializer,");
+                });
+                s.line(") -> erased_serde::Result<Self> {");
+                s.in_scope(&|s| {
+                    s.line("use erased_serde::deserialize as deser;");
+                    s.line("use serde::de::Error;");
+                    s.line("");
+                    s.line("match method {");
+                    s.in_scope(&|s| {
+                        for fun in root.funs(*kind) {
+                            s.line(&format!("{:?} =>", fun.rpc_name(),));
+                            {
+                                let s = s.scope();
+                                s.line(&format!(
+                                    "Ok({}::{}(deser::<{}::{}>(de)?)),",
+                                    side,
+                                    fun.variant_name(),
+                                    fun.qualified_name(),
+                                    strukt,
+                                ));
+                            }
+                        }
+                        s.line("_ => Err(erased_serde::Error::custom(format!(");
+                        s.in_scope(&|s| {
+                            s.line(&format!("{:?},", "unknown method: {}"));
+                            s.line("method,");
+                        });
+                        s.line("))),");
+                    });
+                    s.line("}");
+                });
+                s.line("}"); // fn deserialize
             });
-            s.line("}"); // fn deserialize
-        });
-        s.line("}"); // impl Atom for side
+            s.line("}"); // impl Atom for side
+        }
+
+        s.line("}"); // mod __root
     }
 
     fn visit_ns<'a>(ctx: &'a ScopeLike<'a>, ns: &Namespace) -> Result {
