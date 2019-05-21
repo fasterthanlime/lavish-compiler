@@ -404,25 +404,3 @@ where
         self.in_flight_requests.get(&id).map(|req| req.method)
     }
 }
-
-pub struct Call<T, P, NP, R, PP>
-where
-    P: Atom,
-    NP: Atom,
-    R: Atom,
-{
-    pub state: Arc<T>,
-    pub handle: Handle<P, NP, R>,
-    pub params: PP,
-}
-
-pub type MethodHandler<'a, T, P, NP, R, PP, RR> = Option<
-    Box<
-        (Fn(
-                Call<T, P, NP, R, PP>,
-            ) -> (Pin<Box<Future<Output = Result<RR, Error>> + Send + 'static>>))
-            + Sync
-            + Send
-            + 'a,
-    >,
->;

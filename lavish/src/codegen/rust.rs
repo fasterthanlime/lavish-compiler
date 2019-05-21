@@ -330,8 +330,6 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
         s.line("pub type Message = rpc::Message<Params, NotificationParams, Results>;");
         s.line("pub type Handle = rpc::Handle<Params, NotificationParams, Results>;");
         s.line("pub type System = rpc::System<Params, NotificationParams, Results>;");
-        s.line("pub type Call<T, PP> = rpc::Call<T, Params, NotificationParams, Results, PP>;");
-        s.line("pub type MethodHandler<'a, T, PP, RR> = rpc::MethodHandler<'a, T, Params, NotificationParams, Results, PP, RR>;");
         s.line("pub type Protocol = rpc::Protocol<Params, NotificationParams, Results>;");
         s.line("pub type HandlerRet = Pin<Box<dyn Future<Output = Result<Results, rpc::Error>> + Send + 'static>>;");
         s.line("");
@@ -407,19 +405,38 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
         } // impl rpc::Atom for P, NP, R
 
         s.line("");
+        s.line("pub struct Call<T, PP> {");
+        s.in_scope(&|s| {
+            s.line("pub state: Arc<T>,");
+            s.line("pub handle: Handle,");
+            s.line("pub params: PP,");
+        });
+        s.line("}"); // struct Call
+
+        s.line("");
+        s.line("pub type SlotFuture = ");
+        s.in_scope(&|s| {
+            s.line("Future<Output = Result<Results, rpc::Error>> + Send + 'static;");
+        });
+
+        s.line("");
+        s.line("pub type SlotReturn = Pin<Box<SlotFuture>>;");
+
+        s.line("");
+        s.line("pub type SlotFn<'a, T> = ");
+        s.in_scope(&|s| {
+            s.line("Fn(Arc<T>, Handle, Params) -> SlotReturn + 'a + Send + Sync;");
+        });
+
+        s.line("");
+        s.line("pub type Slot<'a, T> = Option<Box<SlotFn<'a, T>>>;");
+
+        s.line("");
         s.line("pub struct Handler<'a, T> {");
         s.in_scope(&|s| {
             s.line("state: Arc<T>,");
             for fun in root.funs(FunKind::Request) {
-                s.line(&format!("{}: MethodHandler<'a, T,", fun.variant_name()));
-                s.in_scope(&|s| {
-                    s.line(&format!(
-                        "{}::Params, {}::Results,",
-                        fun.qualified_name(),
-                        fun.qualified_name()
-                    ));
-                });
-                s.line(">,");
+                s.line(&format!("{}: Slot<'a, T>,", fun.variant_name()));
             }
         });
         s.line("}"); // struct Handler
@@ -460,11 +477,42 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
                 s.line(&format!("use {}__;", super_ref));
                 s.line("");
 
+                let write_downgrade = |side: &str| {
+                    s.in_scope(&|s| {
+                        s.line(&format!(
+                            "pub fn downgrade(p: __::{}) -> Option<Self> {{",
+                            side,
+                        ));
+                        s.in_scope(&|s| {
+                            s.line("match p {");
+                            s.in_scope(&|s| {
+                                s.line(&format!(
+                                    "__::{}::{}(p) => Some(p),",
+                                    side,
+                                    fun.variant_name()
+                                ));
+                                s.line("_ => None,");
+                            });
+                            s.line("}"); // match p
+                        });
+                        s.line("}"); // fn downgrade
+                    });
+                };
+
                 s.def_struct("Params", &|s| {
                     for f in &fun.decl.params {
                         s.line(&format!("pub {}: {},", f.name.text, f.typ));
                     }
                 });
+
+                s.line("");
+                s.line("impl Params {");
+                write_downgrade(if fun.is_notification() {
+                    "NotificationParams"
+                } else {
+                    "Params"
+                });
+                s.line("}"); // impl Params
 
                 if !fun.is_notification() {
                     s.line("");
@@ -476,21 +524,7 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
 
                     s.line("");
                     s.line("impl Results {");
-                    s.in_scope(&|s| {
-                        s.line("pub fn downgrade(p: __::Results) -> Option<Self> {");
-                        s.in_scope(&|s| {
-                            s.line("match p {");
-                            s.in_scope(&|s| {
-                                s.line(&format!(
-                                    "__::Results::{}(p) => Some(p),",
-                                    fun.variant_name()
-                                ));
-                                s.line("_ => None,");
-                            });
-                            s.line("}"); // match p
-                        });
-                        s.line("}"); // fn downgrade
-                    });
+                    write_downgrade("Results");
                     s.line("}"); // impl Results
 
                     s.line("");
