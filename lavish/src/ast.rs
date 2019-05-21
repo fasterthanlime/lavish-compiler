@@ -58,7 +58,40 @@ pub struct Field {
     pub loc: Span,
     pub comment: Option<Comment>,
     pub name: Identifier,
-    pub typ: String,
+    pub typ: Type,
+}
+
+#[derive(Debug)]
+pub struct Type {
+    pub span: Span,
+    pub kind: TypeKind,
+}
+
+#[derive(Debug)]
+pub enum TypeKind {
+    User,
+    Base(BaseType),
+    Array(ArrayType),
+    Option(OptionType),
+}
+
+#[derive(Debug)]
+pub enum BaseType {
+    Int64,
+    Int32,
+    UInt64,
+    UInt32,
+    String,
+}
+
+#[derive(Debug)]
+pub struct ArrayType {
+    pub inner: Box<Type>,
+}
+
+#[derive(Debug)]
+pub struct OptionType {
+    pub inner: Box<Type>,
 }
 
 #[derive(Debug)]

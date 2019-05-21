@@ -52,10 +52,30 @@ fn id<E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
     })(i)
 }
 
-fn typ<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
+fn basetyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
+    map(
+        alt((
+            map(tag("int64"), |span| (span, BaseType::Int64)),
+            map(tag("int32"), |span| (span, BaseType::Int32)),
+        )),
+        |(span, basetyp)| Type {
+            span,
+            kind: TypeKind::Base(basetyp),
+        },
+    )(i)
+}
+
+fn usertyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_<>";
 
-    take_while1(move |c| chars.contains(c))(i)
+    map(take_while1(move |c| chars.contains(c)), |span: Span| Type {
+        span,
+        kind: TypeKind::User,
+    })(i)
+}
+
+fn typ<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
+    alt((basetyp, usertyp))(i)
 }
 
 fn loc<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
