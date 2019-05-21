@@ -472,6 +472,7 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
 
             {
                 let s = s.scope();
+                s.line("use futures::prelude::*;");
                 s.line("use lavish_rpc::serde_derive::*;");
                 let super_ref = "super::".repeat(depth + 2);
                 s.line(&format!("use {}__;", super_ref));
@@ -538,6 +539,21 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
                         s.line(").await"); // h.call
                     });
                     s.line("}"); // async fn call
+
+                    s.line("");
+                    s.line("pub fn register<'a, T, F, FT>(h: &mut __::Handler<'a, T>, f: F)");
+                    s.line("where");
+                    s.in_scope(&|s| {
+                        s.line("F: Fn(__::Call<T, Params>) -> FT + Sync + Send + 'a,");
+                        s.line(
+                            "FT: Future<Output = Result<Results, lavish_rpc::Error>> + Send + 'static,",
+                        );
+                    });
+                    s.line("{");
+                    s.in_scope(&|s| {
+                        s.line("unimplemented!()");
+                    });
+                    s.line("}"); // fn register
                 }
             }
             s.line("}");
