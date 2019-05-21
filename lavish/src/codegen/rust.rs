@@ -299,8 +299,7 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
         s.line("use std::sync::Arc;");
         s.line("");
         s.line("use lavish_rpc as rpc;");
-        s.line("use lavish_rpc::serde_derive::*;");
-        s.line("use lavish_rpc::erased_serde;");
+        s.line("use rpc::{Atom, erased_serde, serde_derive::*};");
 
         s.line("");
         s.line("#[derive(Serialize, Debug)]");
@@ -331,7 +330,6 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
         s.line("pub type Handle = rpc::Handle<Params, NotificationParams, Results>;");
         s.line("pub type System = rpc::System<Params, NotificationParams, Results>;");
         s.line("pub type Protocol = rpc::Protocol<Params, NotificationParams, Results>;");
-        s.line("pub type HandlerRet = Pin<Box<dyn Future<Output = Result<Results, rpc::Error>> + Send + 'static>>;");
         s.line("");
         s.line("pub fn protocol() -> Protocol {");
         s.in_scope(&|s| {
@@ -440,6 +438,65 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
             }
         });
         s.line("}"); // struct Handler
+
+        s.line("");
+        s.line("impl<'a, T> Handler<'a, T> {");
+        s.in_scope(&|s| {
+            s.line("pub fn new(state: T) -> Self {");
+            s.in_scope(&|s| {
+                s.line("Self {");
+                s.in_scope(&|s| {
+                    s.line("state: Arc::new(state),");
+                    for fun in root.funs(FunKind::Request) {
+                        s.line(&format!("{}: None,", fun.variant_name()));
+                    }
+                });
+                s.line("}");
+            });
+            s.line("}");
+        });
+        s.line("}"); // impl Handler
+
+        s.line("");
+        s.line("type HandlerRet = Pin<Box<dyn Future<Output = Result<Results, rpc::Error>> + Send + 'static>>;");
+        s.line("");
+        s.line("impl<'a, T> rpc::Handler<Params, NotificationParams, Results, HandlerRet> for Handler<'a, T>");
+        s.line("where");
+        s.in_scope(&|s| {
+            s.line("T: Send + Sync,");
+        });
+        s.line("{");
+        s.in_scope(&|s| {
+            s.line("fn handle(&self, handle: Handle, params: Params) -> HandlerRet {");
+            s.in_scope(&|s| {
+                s.line("let method = params.method();");
+                s.line("let slot = match params {");
+                s.in_scope(&|s| {
+                    for fun in root.funs(FunKind::Request) {
+                        s.line(&format!(
+                            "Params::{}(_) => self.{}.as_ref(),",
+                            fun.variant_name(),
+                            fun.variant_name()
+                        ));
+                    }
+                    s.line("_ => None,");
+                });
+                s.line("};");
+                s.line("match slot {");
+                s.in_scope(&|s| {
+                    s.line("Some(slot_fn) => {");
+                    s.in_scope(&|s| {
+                        s.line("let res = slot_fn(self.state.clone(), handle, params);");
+                        s.line("Box::pin(async move { Ok(res.await?) })");
+                    });
+                    s.line("}"); // Some(slot_fn)
+                    s.line("None => Box::pin(async move { Err(rpc::Error::MethodUnimplemented(method)) }),");
+                });
+                s.line("}"); // match slot
+            });
+            s.line("}");
+        });
+        s.line("}"); // impl rpc::Handler for Handler
 
         for (_, ns) in &root.namespaces {
             s.line("");
