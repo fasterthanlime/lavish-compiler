@@ -551,7 +551,23 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
                     });
                     s.line("{");
                     s.in_scope(&|s| {
-                        s.line("unimplemented!()");
+                        s.line(&format!(
+                            "h.{} = Some(Box::new(move |state, handle, params| {{",
+                            fun.variant_name(),
+                        ));
+                        s.in_scope(&|s| {
+                            s.line("Box::pin(");
+                            s.in_scope(&|s| {
+                                s.line("f(__::Call {");
+                                s.in_scope(&|s| {
+                                    s.line("state, handle,");
+                                    s.line("params: Params::downgrade(params).unwrap(),");
+                                });
+                                s.line(&format!("}}).map_ok(__::Results::{})", fun.variant_name()));
+                            });
+                            s.line(")");
+                        });
+                        s.line("}));");
                     });
                     s.line("}"); // fn register
                 }
