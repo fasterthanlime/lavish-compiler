@@ -15,7 +15,7 @@ impl Visitor {
         v.visit(self)
     }
 
-    fn check_dupes<'b, T>(&mut self, kind: &str, items: &'b Vec<T>)
+    fn check_dupes<'b, T>(&mut self, kind: &str, items: &'b [T])
     where
         T: Named<'b>,
     {

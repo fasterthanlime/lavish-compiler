@@ -88,7 +88,7 @@ impl NamespaceDecl {
         items: Vec<NamespaceItem>,
     ) -> Self {
         let mut ns = NamespaceDecl {
-            name: name.into(),
+            name,
             loc,
             comment,
             functions: Vec::new(),

@@ -32,7 +32,7 @@ impl fmt::Display for Error {
     }
 }
 
-pub fn codegen(modules: &Vec<ast::Module>, target: Target, output: &str) -> Result<(), Error> {
+pub fn codegen(modules: &[ast::Module], target: Target, output: &str) -> Result<(), Error> {
     match target {
         Target::Rust => rust::codegen(modules, output),
     }
