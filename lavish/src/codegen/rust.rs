@@ -288,9 +288,9 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
     };
 
     {
-        s.line("pub use __root::*;");
+        s.line("pub use __::*;");
         s.line("");
-        s.line("mod __root {");
+        s.line("mod __ {");
         let s = s.scope();
 
         s.line("// Notes: as of 2019-05-21, futures-preview is required");
@@ -407,7 +407,7 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
 
         for (_, ns) in &root.namespaces {
             s.line("");
-            visit_ns(&s, ns)?;
+            visit_ns(&s, ns, 1)?;
         }
     }
     s.line("}"); // mod __root
@@ -422,43 +422,76 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
     Ok(())
 }
 
-fn visit_ns<'a>(ctx: &'a ScopeLike<'a>, ns: &Namespace) -> Result {
-    ctx.line(&format!("pub mod {} {{", ns.name()));
+fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
+    s.line(&format!("pub mod {} {{", ns.name()));
     {
-        let ctx = ctx.scope();
+        let s = s.scope();
         for (_, ns) in &ns.children {
-            visit_ns(&ctx, ns)?;
+            visit_ns(&s, ns, depth + 1)?;
         }
 
         for (_, fun) in &ns.funs {
-            ctx.comment(&fun.decl.comment);
-            ctx.line(&format!("pub mod {} {{", fun.mod_name()));
+            s.comment(&fun.decl.comment);
+            s.line(&format!("pub mod {} {{", fun.mod_name()));
 
             {
-                let ctx = ctx.scope();
-                ctx.line("use lavish_rpc::serde_derive::*;");
-                ctx.line("");
+                let s = s.scope();
+                s.line("use lavish_rpc::serde_derive::*;");
+                let super_ref = "super::".repeat(depth + 2);
+                s.line(&format!("use {}__;", super_ref));
+                s.line("");
 
-                ctx.def_struct("Params", &|ctx| {
+                s.def_struct("Params", &|s| {
                     for f in &fun.decl.params {
-                        ctx.line(&format!("pub {}: {},", f.name.text, f.typ));
+                        s.line(&format!("pub {}: {},", f.name.text, f.typ));
                     }
                 });
 
                 if !fun.is_notification() {
-                    ctx.line("");
-                    ctx.def_struct("Results", &|ctx| {
+                    s.line("");
+                    s.def_struct("Results", &|s| {
                         for f in &fun.decl.results {
-                            ctx.line(&format!("pub {}: {},", f.name.text, f.typ));
+                            s.line(&format!("pub {}: {},", f.name.text, f.typ));
                         }
                     });
+
+                    s.line("");
+                    s.line("impl Results {");
+                    s.in_scope(&|s| {
+                        s.line("pub fn downgrade(p: __::Results) -> Option<Self> {");
+                        s.in_scope(&|s| {
+                            s.line("match p {");
+                            s.in_scope(&|s| {
+                                s.line(&format!(
+                                    "__::Results::{}(p) => Some(p),",
+                                    fun.variant_name()
+                                ));
+                                s.line("_ => None,");
+                            });
+                            s.line("}"); // match p
+                        });
+                        s.line("}"); // fn downgrade
+                    });
+                    s.line("}"); // impl Results
+
+                    s.line("");
+                    s.line("pub async fn call(h: &__::Handle, p: Params) -> Result<Results, lavish_rpc::Error> {");
+                    s.in_scope(&|s| {
+                        s.line("h.call(");
+                        s.in_scope(&|s| {
+                            s.line(&format!("__::Params::{}(p),", fun.variant_name()));
+                            s.line("Results::downgrade,");
+                        }); // h.call arguments
+                        s.line(").await"); // h.call
+                    });
+                    s.line("}"); // async fn call
                 }
             }
-            ctx.line("}");
-            ctx.line("");
+            s.line("}");
+            s.line("");
         }
     }
-    ctx.line("}");
-    ctx.line("");
+    s.line("}");
+    s.line("");
     Ok(())
 }
