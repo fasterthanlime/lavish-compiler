@@ -4,29 +4,33 @@ use heck::{CamelCase, MixedCase, SnakeCase};
 use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{self, Write};
 use std::path::Path;
 use std::time::Instant;
 
 const INDENT_WIDTH: usize = 4;
 
 struct Output {
-    writer: RefCell<BufWriter<File>>,
+    writer: RefCell<io::BufWriter<File>>,
 }
 
 impl Output {
     fn new(file: File) -> Self {
         Self {
-            writer: RefCell::new(BufWriter::new(file)),
+            writer: RefCell::new(io::BufWriter::new(file)),
         }
     }
+}
 
-    fn write_indented(&self, indent: usize, line: &str) {
+impl<'a> io::Write for &'a Output {
+    fn write(&mut self, b: &[u8]) -> io::Result<usize> {
         let mut w = self.writer.borrow_mut();
-        for _ in 0..indent {
-            write!(w, " ").unwrap();
-        }
-        writeln!(w, "{}", line).unwrap();
+        w.write(b)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        let mut w = self.writer.borrow_mut();
+        w.flush()
     }
 }
 
@@ -99,8 +103,13 @@ impl<'a> Context<'a> {
 }
 
 trait ScopeLike<'a> {
-    fn line(&self, line: &str);
+    fn output(&self) -> &Output;
+    fn indent(&self) -> usize;
     fn scope(&self) -> Scope;
+
+    fn line(&self, line: &str) {
+        writeln!(self.output(), "{}{}", " ".repeat(self.indent()), line).unwrap();
+    }
 
     fn comment(&self, comment: &Option<ast::Comment>) {
         if let Some(comment) = comment.as_ref() {
@@ -124,8 +133,12 @@ trait ScopeLike<'a> {
 }
 
 impl<'a> ScopeLike<'a> for Context<'a> {
-    fn line(&self, line: &str) {
-        self.output.write_indented(0, line)
+    fn output(&self) -> &Output {
+        &self.output
+    }
+
+    fn indent(&self) -> usize {
+        0
     }
 
     fn scope(&self) -> Scope {
@@ -137,8 +150,12 @@ impl<'a> ScopeLike<'a> for Context<'a> {
 }
 
 impl<'a> ScopeLike<'a> for Scope<'a> {
-    fn line(&self, line: &str) {
-        self.output.write_indented(self.indent, line)
+    fn output(&self) -> &Output {
+        &self.output
+    }
+
+    fn indent(&self) -> usize {
+        self.indent
     }
 
     fn scope(&self) -> Scope {
@@ -242,7 +259,7 @@ impl<'a> Fun<'a> {
     }
 }
 
-type Result = std::result::Result<(), Error>;
+pub type Result = std::result::Result<(), Error>;
 
 pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
     let start_instant = Instant::now();
@@ -349,13 +366,18 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
                 s.in_scope(&|s| {
                     s.line("match self {");
                     s.in_scope(&|s| {
+                        let mut count = 0;
                         for fun in root.funs(*kind) {
+                            count += 1;
                             s.line(&format!(
                                 "{}::{}(_) => {:?},",
                                 side,
                                 fun.variant_name(),
                                 fun.rpc_name()
                             ));
+                        }
+                        if count == 0 {
+                            s.line("_ => unimplemented!()")
                         }
                     });
                     s.line("}");
@@ -515,6 +537,40 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
     Ok(())
 }
 
+trait AsRust {
+    fn as_rust<'a>(&'a self) -> Box<fmt::Display + 'a>;
+}
+
+struct RustType<'a>(pub &'a ast::Type);
+
+impl AsRust for ast::Type {
+    fn as_rust<'a>(&'a self) -> Box<fmt::Display + 'a> {
+        Box::new(RustType(self))
+    }
+}
+
+use std::fmt;
+impl<'a> fmt::Display for RustType<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use ast::{BaseType, TypeKind};
+
+        match &self.0.kind {
+            TypeKind::Base(base) => {
+                let name = match base {
+                    BaseType::Int32 => "i32",
+                    BaseType::Int64 => "i64",
+                    BaseType::UInt32 => "u32",
+                    BaseType::UInt64 => "u64",
+                    BaseType::String => "String",
+                };
+                write!(f, "{}", name)
+            }
+            TypeKind::User => unimplemented!(),
+            _ => unimplemented!(),
+        }
+    }
+}
+
 fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
     s.line(&format!("pub mod {} {{", ns.name()));
     {
@@ -559,7 +615,7 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
 
                 s.def_struct("Params", &|s| {
                     for f in &fun.decl.params {
-                        s.line(&format!("pub {}: {},", f.name.text, f.typ));
+                        s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
                     }
                 });
 
@@ -576,7 +632,7 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
                     s.line("");
                     s.def_struct("Results", &|s| {
                         for f in &fun.decl.results {
-                            s.line(&format!("pub {}: {},", f.name.text, f.typ));
+                            s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
                         }
                     });
 

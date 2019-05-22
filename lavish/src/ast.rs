@@ -67,6 +67,12 @@ pub struct Type {
     pub kind: TypeKind,
 }
 
+impl Type {
+    pub fn text(&self) -> &str {
+        self.span.slice()
+    }
+}
+
 #[derive(Debug)]
 pub enum TypeKind {
     User,

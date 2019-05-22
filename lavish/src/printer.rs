@@ -109,7 +109,7 @@ impl Visitable for &ast::Field {
             format!(
                 "field {}, of type {}{}",
                 self.name.text.yellow(),
-                self.typ.green(),
+                self.typ.text().green(),
                 format_comment(&self.comment),
             ),
         );

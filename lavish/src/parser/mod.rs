@@ -55,12 +55,37 @@ fn id<E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
 fn basetyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     map(
         alt((
-            map(tag("int64"), |span| (span, BaseType::Int64)),
             map(tag("int32"), |span| (span, BaseType::Int32)),
+            map(tag("int64"), |span| (span, BaseType::Int64)),
+            map(tag("uint32"), |span| (span, BaseType::UInt32)),
+            map(tag("uint64"), |span| (span, BaseType::UInt64)),
+            map(tag("string"), |span| (span, BaseType::String)),
         )),
         |(span, basetyp)| Type {
             span,
             kind: TypeKind::Base(basetyp),
+        },
+    )(i)
+}
+
+fn arraytyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
+    let span = i.clone();
+    map(
+        preceded(tag("Array<"), terminated(basetyp, tag(">"))),
+        move |t| Type {
+            span: span.clone(),
+            kind: TypeKind::Array(ArrayType { inner: Box::new(t) }),
+        },
+    )(i)
+}
+
+fn optiontyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
+    let span = i.clone();
+    map(
+        preceded(tag("Option<"), terminated(basetyp, tag(">"))),
+        move |t| Type {
+            span: span.clone(),
+            kind: TypeKind::Option(OptionType { inner: Box::new(t) }),
         },
     )(i)
 }
@@ -75,7 +100,7 @@ fn usertyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
 }
 
 fn typ<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
-    alt((basetyp, usertyp))(i)
+    alt((arraytyp, optiontyp, basetyp, usertyp))(i)
 }
 
 fn loc<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
@@ -93,7 +118,7 @@ fn field<E: ParseError<Span>>(i: Span) -> IResult<Span, Field, E> {
         comment: comment.clone(),
         name: name.clone(),
         loc: loc.clone(),
-        typ: typ.into(),
+        typ,
     })(i)
 }
 

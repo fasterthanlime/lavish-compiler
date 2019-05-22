@@ -12,6 +12,8 @@ pub struct Error {
     message: String,
 }
 
+pub type Result = std::result::Result<(), Error>;
+
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
         Self {
@@ -32,7 +34,7 @@ impl fmt::Display for Error {
     }
 }
 
-pub fn codegen(modules: &[ast::Module], target: Target, output: &str) -> Result<(), Error> {
+pub fn codegen(modules: &[ast::Module], target: Target, output: &str) -> Result {
     match target {
         Target::Rust => rust::codegen(modules, output),
     }

@@ -3,7 +3,6 @@ use super::{Atom, Error, Message, PendingRequests};
 use serde::Serialize;
 use std::io::Cursor;
 use std::marker::{PhantomData, Unpin};
-use std::pin::Pin;
 
 use futures::lock::Mutex;
 use std::collections::HashMap;
