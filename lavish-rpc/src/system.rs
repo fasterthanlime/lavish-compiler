@@ -1,20 +1,20 @@
 use super::{Atom, Error, Message, PendingRequests};
 
-use serde::Serialize;
-use std::io::Cursor;
 use std::marker::{PhantomData, Unpin};
 
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use bytes::*;
 use futures::channel::{mpsc, oneshot};
 use futures::executor;
 use futures::prelude::*;
-use futures_codec::{Decoder, Encoder, Framed};
+use futures_codec::Framed;
 
 use futures::task::SpawnExt;
+
+mod codec;
+use codec::Codec;
 
 pub trait IO: AsyncRead + AsyncWrite + Send + Sized + Unpin + 'static {}
 impl<T> IO for T where T: AsyncRead + AsyncWrite + Send + Sized + Unpin + 'static {}
@@ -167,9 +167,7 @@ where
     {
         let queue = Arc::new(Mutex::new(Queue::new(protocol)));
 
-        let codec = Codec {
-            queue: queue.clone(),
-        };
+        let codec = Codec::new(queue.clone());
         let framed = Framed::new(io, codec);
         let (mut sink, mut stream) = framed.split();
         let (tx, mut rx) = mpsc::channel(128);
@@ -260,99 +258,6 @@ async fn handle_message<P, NP, R, H, FT>(
     };
 }
 
-pub struct Codec<P, NP, R>
-where
-    P: Atom,
-    NP: Atom,
-    R: Atom,
-{
-    queue: Arc<Mutex<Queue<P, NP, R>>>,
-}
-
-impl<P, NP, R> Encoder for Codec<P, NP, R>
-where
-    P: Atom,
-    NP: Atom,
-    R: Atom,
-{
-    type Item = Message<P, NP, R>;
-    type Error = std::io::Error;
-
-    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        // TODO: check/improve resize logic
-        let mut len = std::cmp::max(128, dst.capacity());
-        dst.resize(len, 0);
-
-        loop {
-            let (cursor, res) = {
-                let cursor = Cursor::new(&mut dst[..len]);
-                let mut ser = rmp_serde::Serializer::new_named(cursor);
-                let res = item.serialize(&mut ser);
-                (ser.into_inner(), res)
-            };
-            use rmp_serde::encode::Error as EncErr;
-
-            match res {
-                Ok(_) => {
-                    let pos = cursor.position();
-                    dst.resize(pos as usize, 0);
-                    return Ok(());
-                }
-                Err(EncErr::InvalidValueWrite(_)) => {
-                    len *= 2;
-                    dst.resize(len, 0);
-                    continue;
-                }
-                Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
-            }
-        }
-    }
-}
-
-impl<P, NP, R> Decoder for Codec<P, NP, R>
-where
-    P: Atom,
-    NP: Atom,
-    R: Atom,
-{
-    type Item = Message<P, NP, R>;
-    type Error = std::io::Error;
-
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        if src.is_empty() {
-            return Ok(None);
-        }
-
-        let (pos, res) = {
-            let cursor = Cursor::new(&src[..]);
-            let mut deser = rmp_serde::Deserializer::from_read(cursor);
-            let res = {
-                if let Some(pr) = self.queue.try_lock() {
-                    Self::Item::deserialize(&mut deser, &*pr)
-                } else {
-                    // FIXME: futures_codec doesn't fit the bill
-                    panic!("could not acquire lock in decode");
-                }
-            };
-            (deser.position(), res)
-        };
-
-        use rmp_serde::decode::Error as DecErr;
-        let need_more = || Ok(None);
-
-        match res {
-            Ok(m) => {
-                src.split_to(pos as usize);
-                Ok(Some(m))
-            }
-            Err(DecErr::InvalidDataRead(_)) => need_more(),
-            Err(DecErr::InvalidMarkerRead(_)) => need_more(),
-            Err(DecErr::Syntax(_)) => need_more(),
-            Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
-        }
-    }
-}
-
 struct InFlightRequest<P, NP, R>
 where
     P: Atom,
@@ -363,7 +268,7 @@ where
     tx: oneshot::Sender<Message<P, NP, R>>,
 }
 
-struct Queue<P, NP, R>
+pub struct Queue<P, NP, R>
 where
     P: Atom,
     NP: Atom,
