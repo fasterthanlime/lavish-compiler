@@ -5,7 +5,7 @@ authors = ["Amos Wenger <amoswenger@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-nom = "5.0.0-alpha2"
+nom = "5.0.0-beta1"
 colored = "1.8.0"
 clap = "2.33.0"
 indexmap = "1.0.2"

@@ -1,10 +1,10 @@
 use super::Source;
 use nom::{
-    Compare, CompareResult, FindSubstring, InputIter, InputLength, InputTake, Slice,
+    Compare, CompareResult, FindSubstring, InputIter, InputLength, InputTake, Offset, Slice,
     UnspecializedInput,
 };
 use std::fmt;
-use std::ops::RangeFrom;
+use std::ops::{RangeFrom, RangeTo};
 use std::rc::Rc;
 
 use super::Position;
@@ -241,6 +241,22 @@ impl Slice<RangeFrom<usize>> for Span {
             offset: self.offset + range.start,
             len: self.len - range.start,
         }
+    }
+}
+
+impl Slice<RangeTo<usize>> for Span {
+    fn slice(&self, range: RangeTo<usize>) -> Self {
+        Self {
+            source: self.source.clone(),
+            offset: self.offset,
+            len: range.end,
+        }
+    }
+}
+
+impl Offset for Span {
+    fn offset(&self, second: &Self) -> usize {
+        second.offset - self.offset
     }
 }
 

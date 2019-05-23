@@ -2,7 +2,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_until, take_while, take_while1},
     character::complete::char,
-    combinator::{all_consuming, map, opt},
+    combinator::{all_consuming, cut, map, opt},
     error::{context, ParseError},
     multi::{many0, many1, separated_list},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
@@ -23,10 +23,10 @@ pub fn module<E: ParseError<Span>>(i: Span) -> IResult<Span, Module, E> {
     let (i, loc) = loc(i)?;
 
     all_consuming(terminated(
-        map(many0(preceded(sp, nsdecl)), move |namespaces| {
+        map(many0(spaced(nsdecl)), move |namespaces| {
             Module::new(loc.clone(), namespaces)
         }),
-        sp,
+        spaced(many0(spaced(comment_line))),
     ))(i)
 }
 
@@ -143,7 +143,10 @@ fn field<E: ParseError<Span>>(i: Span) -> IResult<Span, Field, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, loc) = spaced(loc)(i)?;
     let (i, name) = spaced(id)(i)?;
-    let ctx = spaced(context("field", preceded(spaced(char(':')), spaced(typ))));
+    let ctx = spaced(context(
+        "field",
+        cut(preceded(spaced(char(':')), spaced(typ))),
+    ));
 
     map(ctx, move |typ| Field {
         comment: comment.clone(),
@@ -176,7 +179,7 @@ fn results<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
 
     context(
         "result list",
-        delimited(char('('), fields, preceded(sp, char(')'))),
+        cut(delimited(char('('), fields, preceded(sp, char(')')))),
     )(i)
 }
 
@@ -188,7 +191,7 @@ fn fndecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
 
     context(
         "function declaration",
-        map(
+        cut(map(
             tuple((
                 preceded(sp, id),
                 preceded(
@@ -208,7 +211,7 @@ fn fndecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
                 params,
                 results: results.unwrap_or_default(),
             },
-        ),
+        )),
     )(i)
 }
 
@@ -220,7 +223,7 @@ fn notifdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
 
     context(
         "notification declaration",
-        map(
+        cut(map(
             tuple((
                 preceded(sp, id),
                 preceded(
@@ -243,7 +246,7 @@ fn notifdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
                 params,
                 results: Vec::new(),
             },
-        ),
+        )),
     )(i)
 }
 
@@ -253,19 +256,19 @@ fn structdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, StructDecl, E> {
     let (i, loc) = spaced(loc)(i)?;
 
     context(
-        "struct",
-        map(
+        "struct declaration",
+        cut(map(
             tuple((
                 preceded(sp, id),
-                preceded(sp, delimited(char('{'), sp, char('}'))),
+                preceded(sp, delimited(char('{'), fields, preceded(sp, char('}')))),
             )),
-            move |(name, _)| StructDecl {
+            move |(name, fields)| StructDecl {
                 loc: loc.clone(),
                 comment: comment.clone(),
                 name: name.clone(),
-                fields: Vec::new(),
+                fields,
             },
-        ),
+        )),
     )(i)
 }
 
@@ -289,7 +292,7 @@ fn nsitem<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceItem, E> {
 }
 
 fn nsbody<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<NamespaceItem>, E> {
-    many0(preceded(sp, nsitem))(i)
+    terminated(many0(spaced(nsitem)), spaced(many0(comment_line)))(i)
 }
 
 fn nsdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceDecl, E> {
@@ -298,13 +301,13 @@ fn nsdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceDecl, E> {
     let (i, loc) = spaced(loc)(i)?;
 
     context(
-        "namespace",
-        map(
+        "namespace declaration",
+        cut(map(
             tuple((
                 spaced(id),
                 delimited(spaced(char('{')), nsbody, spaced(char('}'))),
             )),
             move |(name, items)| NamespaceDecl::new(name, loc.clone(), comment.clone(), items),
-        ),
+        )),
     )(i)
 }
