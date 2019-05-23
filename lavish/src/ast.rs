@@ -79,6 +79,7 @@ pub enum TypeKind {
     Base(BaseType),
     Array(ArrayType),
     Option(OptionType),
+    Map(MapType),
 }
 
 #[derive(Debug)]
@@ -103,6 +104,12 @@ pub struct ArrayType {
 #[derive(Debug)]
 pub struct OptionType {
     pub inner: Box<Type>,
+}
+
+#[derive(Debug)]
+pub struct MapType {
+    pub keys: Box<Type>,
+    pub values: Box<Type>,
 }
 
 #[derive(Debug)]

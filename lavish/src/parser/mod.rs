@@ -5,7 +5,7 @@ use nom::{
     combinator::{all_consuming, map, opt},
     error::{context, ParseError},
     multi::{many0, many1, separated_list},
-    sequence::{delimited, preceded, terminated, tuple},
+    sequence::{delimited, preceded, separated_pair, terminated, tuple},
     IResult, InputTake,
 };
 
@@ -54,7 +54,7 @@ fn id<E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
 
 fn basetyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     map(
-        alt((
+        spaced(alt((
             map(tag("bool"), |span| (span, BaseType::Bool)),
             map(tag("int32"), |span| (span, BaseType::Int32)),
             map(tag("int64"), |span| (span, BaseType::Int64)),
@@ -65,7 +65,7 @@ fn basetyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
             map(tag("string"), |span| (span, BaseType::String)),
             map(tag("bytes"), |span| (span, BaseType::Bytes)),
             map(tag("timestamp"), |span| (span, BaseType::Timestamp)),
-        )),
+        ))),
         |(span, basetyp)| Type {
             span,
             kind: TypeKind::Base(basetyp),
@@ -76,7 +76,10 @@ fn basetyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
 fn arraytyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     let span = i.clone();
     map(
-        preceded(tag("Array<"), terminated(basetyp, tag(">"))),
+        preceded(
+            terminated(spaced(tag("Array")), spaced(char('<'))),
+            terminated(typ, spaced(char('>'))),
+        ),
         move |t| Type {
             span: span.clone(),
             kind: TypeKind::Array(ArrayType { inner: Box::new(t) }),
@@ -87,10 +90,33 @@ fn arraytyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
 fn optiontyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     let span = i.clone();
     map(
-        preceded(tag("Option<"), terminated(basetyp, tag(">"))),
+        preceded(
+            terminated(spaced(tag("Option")), spaced(char('<'))),
+            terminated(typ, spaced(char('>'))),
+        ),
         move |t| Type {
             span: span.clone(),
             kind: TypeKind::Option(OptionType { inner: Box::new(t) }),
+        },
+    )(i)
+}
+
+fn maptyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
+    let span = i.clone();
+    map(
+        preceded(
+            terminated(spaced(tag("Map")), spaced(char('<'))),
+            terminated(
+                separated_pair(typ, spaced(char(',')), typ),
+                spaced(char('>')),
+            ),
+        ),
+        move |(k, v)| Type {
+            span: span.clone(),
+            kind: TypeKind::Map(MapType {
+                keys: Box::new(k),
+                values: Box::new(v),
+            }),
         },
     )(i)
 }
@@ -105,7 +131,7 @@ fn usertyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
 }
 
 fn typ<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
-    alt((arraytyp, optiontyp, basetyp, usertyp))(i)
+    alt((maptyp, arraytyp, optiontyp, basetyp, usertyp))(i)
 }
 
 fn loc<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {

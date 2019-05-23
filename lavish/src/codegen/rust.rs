@@ -578,6 +578,8 @@ impl<'a> fmt::Display for RustType<'a> {
                 };
                 write!(f, "{}", name)
             }
+            TypeKind::Option(opt) => write!(f, "Option<{}>", opt.inner.as_rust()),
+            TypeKind::Array(arr) => write!(f, "Vec<{}>", arr.inner.as_rust()),
             TypeKind::User => unimplemented!(),
             _ => unimplemented!(),
         }
