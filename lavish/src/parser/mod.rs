@@ -55,11 +55,16 @@ fn id<E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
 fn basetyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     map(
         alt((
+            map(tag("bool"), |span| (span, BaseType::Bool)),
             map(tag("int32"), |span| (span, BaseType::Int32)),
             map(tag("int64"), |span| (span, BaseType::Int64)),
             map(tag("uint32"), |span| (span, BaseType::UInt32)),
             map(tag("uint64"), |span| (span, BaseType::UInt64)),
+            map(tag("float32"), |span| (span, BaseType::Float32)),
+            map(tag("float64"), |span| (span, BaseType::Float64)),
             map(tag("string"), |span| (span, BaseType::String)),
+            map(tag("bytes"), |span| (span, BaseType::Bytes)),
+            map(tag("timestamp"), |span| (span, BaseType::Timestamp)),
         )),
         |(span, basetyp)| Type {
             span,

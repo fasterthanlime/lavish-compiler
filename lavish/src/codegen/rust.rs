@@ -557,11 +557,16 @@ impl<'a> fmt::Display for RustType<'a> {
         match &self.0.kind {
             TypeKind::Base(base) => {
                 let name = match base {
+                    BaseType::Bool => "bool",
                     BaseType::Int32 => "i32",
                     BaseType::Int64 => "i64",
                     BaseType::UInt32 => "u32",
                     BaseType::UInt64 => "u64",
+                    BaseType::Float32 => "f32",
+                    BaseType::Float64 => "f64",
                     BaseType::String => "String",
+                    BaseType::Bytes => "Vec<u8>",
+                    BaseType::Timestamp => "::chrono::DateTime",
                 };
                 write!(f, "{}", name)
             }

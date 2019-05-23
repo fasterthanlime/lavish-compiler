@@ -83,11 +83,16 @@ pub enum TypeKind {
 
 #[derive(Debug)]
 pub enum BaseType {
-    Int64,
+    Bool,
     Int32,
-    UInt64,
+    Int64,
     UInt32,
+    UInt64,
+    Float32,
+    Float64,
     String,
+    Bytes,
+    Timestamp,
 }
 
 #[derive(Debug)]
