@@ -107,7 +107,7 @@ fn maptyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
         preceded(
             terminated(spaced(tag("Map")), spaced(char('<'))),
             terminated(
-                separated_pair(typ, spaced(char(',')), typ),
+                separated_pair(spaced(typ), char(','), spaced(typ)),
                 spaced(char('>')),
             ),
         ),
