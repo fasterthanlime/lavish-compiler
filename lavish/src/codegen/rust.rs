@@ -574,14 +574,19 @@ impl<'a> fmt::Display for RustType<'a> {
                     BaseType::Float64 => "f64",
                     BaseType::String => "String",
                     BaseType::Bytes => "Vec<u8>",
-                    BaseType::Timestamp => "::chrono::DateTime",
+                    BaseType::Timestamp => "::lavish_rpc::DateTime",
                 };
                 write!(f, "{}", name)
             }
+            TypeKind::Map(map) => write!(
+                f,
+                "::std::collections::HashMap<{}, {}>",
+                map.keys.as_rust(),
+                map.values.as_rust()
+            ),
             TypeKind::Option(opt) => write!(f, "Option<{}>", opt.inner.as_rust()),
             TypeKind::Array(arr) => write!(f, "Vec<{}>", arr.inner.as_rust()),
             TypeKind::User => unimplemented!(),
-            _ => unimplemented!(),
         }
     }
 }
