@@ -257,6 +257,14 @@ impl<'a> Fun<'a> {
             .modifiers
             .contains(&ast::FunctionModifier::Notification)
     }
+
+    fn has_empty_params(&self) -> bool {
+        self.decl.params.is_empty()
+    }
+
+    fn has_empty_results(&self) -> bool {
+        self.decl.results.is_empty()
+    }
 }
 
 pub type Result = std::result::Result<(), Error>;
@@ -647,11 +655,23 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
                     s.line("}"); // impl Results
 
                     s.line("");
-                    s.line("pub async fn call(h: &__::Handle, p: Params) -> Result<Results, lavish_rpc::Error> {");
+                    let params_type = if fun.has_empty_params() {
+                        "()"
+                    } else {
+                        "Params"
+                    };
+                    s.line(&format!("pub async fn call(h: &__::Handle, p: {}) -> Result<Results, lavish_rpc::Error> {{", params_type));
                     s.in_scope(&|s| {
                         s.line("h.call(");
                         s.in_scope(&|s| {
-                            s.line(&format!("__::Params::{}(p),", fun.variant_name()));
+                            if fun.has_empty_params() {
+                                s.line(&format!(
+                                    "__::Params::{}(Params {{}}),",
+                                    fun.variant_name()
+                                ));
+                            } else {
+                                s.line(&format!("__::Params::{}(p),", fun.variant_name()));
+                            }
                             s.line("Results::downgrade,");
                         }); // h.call arguments
                         s.line(").await"); // h.call
@@ -661,11 +681,17 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
                     s.line("");
                     s.line("pub fn register<'a, T, F, FT>(h: &mut __::Handler<'a, T>, f: F)");
                     s.line("where");
+                    let results_type = if fun.has_empty_results() {
+                        "()"
+                    } else {
+                        "Results"
+                    };
                     s.in_scope(&|s| {
                         s.line("F: Fn(__::Call<T, Params>) -> FT + Sync + Send + 'a,");
-                        s.line(
-                            "FT: Future<Output = Result<Results, lavish_rpc::Error>> + Send + 'static,",
-                        );
+                        s.line(&format!(
+                            "FT: Future<Output = Result<{}, lavish_rpc::Error>> + Send + 'static,",
+                            results_type
+                        ));
                     });
                     s.line("{");
                     s.in_scope(&|s| {
@@ -681,7 +707,17 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
                                     s.line("state, handle,");
                                     s.line("params: Params::downgrade(params).unwrap(),");
                                 });
-                                s.line(&format!("}}).map_ok(__::Results::{})", fun.variant_name()));
+                                if fun.has_empty_results() {
+                                    s.line(&format!(
+                                        "}}).map_ok(|_| __::Results::{}(Results {{}}))",
+                                        fun.variant_name()
+                                    ));
+                                } else {
+                                    s.line(&format!(
+                                        "}}).map_ok(__::Results::{})",
+                                        fun.variant_name()
+                                    ));
+                                }
                             });
                             s.line(")");
                         });
