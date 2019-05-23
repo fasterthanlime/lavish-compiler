@@ -10,6 +10,8 @@ use std::sync::Arc;
 use bytes::*;
 use futures_codec::{Decoder, Encoder};
 
+use log::*;
+
 const MAX_MESSAGE_SIZE: usize = 128 * 1024;
 
 pub struct Codec<P, NP, R>
@@ -72,13 +74,13 @@ where
         };
 
         let total_len = length_slice.len() + payload_slice.len();
+        debug!(
+            "encode ✔️ ({}, {})",
+            length_slice.len(),
+            payload_slice.len()
+        );
         dst.resize(total_len, 0);
         {
-            println!(
-                "[len={} bytes, payload={} bytes]",
-                length_slice.len(),
-                payload_slice.len()
-            );
             let mut cursor = Cursor::new(&mut dst[..total_len]);
             cursor.write_all(length_slice)?;
             cursor.write_all(payload_slice)?;
@@ -119,6 +121,7 @@ where
         use std::io;
 
         if src.is_empty() {
+            debug!("decode ⏳ empty input");
             return Ok(None);
         }
 
@@ -136,14 +139,18 @@ where
             (len_len, payload_len)
         };
 
-        println!("len_len = {}", len_len);
-        println!("payload_len = {}", payload_len);
         let total_len = len_len + payload_len;
         if src.len() < total_len {
             // need more data
-            println!("has {}/{} needed", src.len(), total_len);
+            debug!(
+                "decode ⏳ ({}, {}), missing {}",
+                len_len,
+                payload_len,
+                total_len - src.len()
+            );
             return Ok(None);
         }
+        debug!("decode ✔️ ({}, {})", len_len, payload_len);
 
         {
             let cursor = Cursor::new(&src[len_len..total_len]);
