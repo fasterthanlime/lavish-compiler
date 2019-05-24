@@ -418,4 +418,13 @@ Given `host/user/project`, it tries:
 
 ### So does `lavish build` need internet connectivity?
 
-No, it does not.
+No, it does not. `lavish fetch` does.
+
+### So is `lavish fetch` a mini package manager, sorta?
+
+Sorta, yes. You caught me. The alternative seems to involve
+copying lots of files around or manually cloning repos which
+sucks for a variety of reasons.
+
+TL;DR: `lavish fetch` vendors, `lavish build` works offline.
+
