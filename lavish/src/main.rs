@@ -54,6 +54,7 @@ fn parse_workspace(workspace_path: &Path) -> Result<ast::Workspace, Box<dyn std:
     let source = parser::Source::new(&rules_path)?;
     let source = Rc::new(source);
     let rules = parser::parse_rules(source);
+    println!("rules = {:#?}", rules);
     unimplemented!()
 
     // let mut modules: Vec<ast::Module> = Vec::new();

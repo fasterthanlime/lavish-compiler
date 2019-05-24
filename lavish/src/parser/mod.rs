@@ -143,7 +143,7 @@ pub fn stringlit<E: ParseError<Span>>(i: Span) -> IResult<Span, StringLiteral, E
     // TODO: use escaped_transform instead
     let (i, loc) = loc(i)?;
 
-    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./";
 
     map(
         delimited(

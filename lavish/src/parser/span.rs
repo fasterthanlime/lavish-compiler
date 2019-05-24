@@ -24,7 +24,7 @@ impl fmt::Debug for Span {
             self.source.name(),
             self.offset,
             self.len,
-            &self.slice()[..12]
+            self.slice()
         )
     }
 }
