@@ -5,6 +5,7 @@ use nom::{
 };
 use std::fmt;
 use std::iter::repeat;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use super::super::ast;
@@ -48,7 +49,7 @@ impl fmt::Debug for UnknownError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "An unknown parsing error occured in {}",
+            "An unknown parsing error occured in {:?}",
             self.source.name()
         )
     }
@@ -62,12 +63,14 @@ impl From<std::io::Error> for Error {
 
 pub struct Source {
     pub input: String,
-    name: String,
+    name: PathBuf,
     pub lines: Vec<String>,
 }
 
 impl Source {
-    pub fn new(input_name: &str) -> Result<Self, std::io::Error> {
+    pub fn new<P: AsRef<Path>>(input_name: P) -> Result<Self, std::io::Error> {
+        let input_name = input_name.as_ref();
+
         use std::fs::File;
         use std::io::Read;
 
@@ -79,32 +82,43 @@ impl Source {
         let lines = input.lines().map(String::from).collect::<Vec<_>>();
 
         Ok(Self {
-            name: input_name.replace("./", ""),
+            name: PathBuf::from(input_name),
             input,
             lines,
         })
     }
 }
 
-pub fn parse(source: Rc<Source>) -> Result<ast::Module, Error> {
+pub fn parse<P, O>(source: Rc<Source>, p: P) -> Result<O, Error>
+where
+    P: Fn(Span) -> nom::IResult<Span, O, VerboseError<parser::Span>>,
+{
     let span = parser::Span {
         source: source.clone(),
         offset: 0,
         len: source.input.len(),
     };
-    let res = parser::module::<VerboseError<parser::Span>>(span);
+    let res = p(span);
     match res {
         Err(Err::Error(e)) | Err(Err::Failure(e)) => Err(Error::Source(SourceError { inner: e })),
         Err(_) => Err(Error::Unknown(UnknownError {
             source: source.clone(),
         })),
-        Ok((_, module)) => Ok(module),
+        Ok((_, output)) => Ok(output),
     }
 }
 
+pub fn parse_module(source: Rc<Source>) -> Result<ast::Module, Error> {
+    parse(source, parser::module::<VerboseError<parser::Span>>)
+}
+
+pub fn parse_rules(source: Rc<Source>) -> Result<ast::Rules, Error> {
+    parse(source, parser::rules::<VerboseError<parser::Span>>)
+}
+
 impl<'a> Source {
-    pub fn name(&'a self) -> &'a str {
-        &self.name
+    pub fn name(&'a self) -> &'a Path {
+        self.name.as_ref()
     }
 }
 
@@ -187,7 +201,7 @@ impl<'a> fmt::Display for Diagnostic<'a> {
         let message = &self.message;
 
         let loc = format!(
-            "{}:{}:{}:",
+            "{:?}:{}:{}:",
             pos.span.source.name(),
             pos.line + 1,
             pos.column + 1

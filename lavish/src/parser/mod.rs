@@ -46,6 +46,67 @@ pub fn module<E: ParseError<Span>>(i: Span) -> IResult<Span, Module, E> {
     ))(i)
 }
 
+pub fn rules<E: ParseError<Span>>(i: Span) -> IResult<Span, Rules, E> {
+    let (i, loc) = loc(i)?;
+
+    all_consuming(terminated(
+        map(tuple((target, spaced(builds))), move |(target, builds)| {
+            Rules::new(loc.clone(), target, builds)
+        }),
+        spaced(many0(spaced(comment_line))),
+    ))(i)
+}
+
+pub fn target<E: ParseError<Span>>(i: Span) -> IResult<Span, Target, E> {
+    let (i, _) = spaced(tag("target"))(i)?;
+
+    context(
+        "target directive",
+        cut(alt((
+            map(rust_target, Target::Rust),
+            map(go_target, Target::Go),
+        ))),
+    )(i)
+}
+
+pub fn rust_target<E: ParseError<Span>>(i: Span) -> IResult<Span, RustTarget, E> {
+    let (i, _) = spaced(tag("rust"))(i)?;
+
+    Ok((i, RustTarget {}))
+}
+
+pub fn go_target<E: ParseError<Span>>(i: Span) -> IResult<Span, GoTarget, E> {
+    let (i, _) = spaced(tag("go"))(i)?;
+
+    Ok((i, GoTarget {}))
+}
+
+pub fn builds<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Build>, E> {
+    many0(spaced(build))(i)
+}
+
+pub fn build<E: ParseError<Span>>(i: Span) -> IResult<Span, Build, E> {
+    let (i, _) = spaced(tag("build"))(i)?;
+
+    context(
+        "build directive",
+        cut(map(
+            tuple((spaced(id), spaced(opt(from)))),
+            |(name, from)| Build { name, from },
+        )),
+    )(i)
+}
+
+pub fn from<E: ParseError<Span>>(i: Span) -> IResult<Span, FromDirective, E> {
+    let (i, _) = loc(i)?;
+    let (i, _) = spaced(tag("from"))(i)?;
+
+    context(
+        "from directive",
+        cut(map(spaced(stringlit), |path| FromDirective { path })),
+    )(i)
+}
+
 pub fn imports<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Import>, E> {
     terminated(many0(spaced(import)), spaced(many0(comment_line)))(i)
 }
@@ -76,6 +137,28 @@ fn id<E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
         let text = span.clone().into();
         Identifier { span, text }
     })(i)
+}
+
+pub fn stringlit<E: ParseError<Span>>(i: Span) -> IResult<Span, StringLiteral, E> {
+    // TODO: use escaped_transform instead
+    let (i, loc) = loc(i)?;
+
+    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+
+    map(
+        delimited(
+            char('"'),
+            take_while1(move |c| chars.contains(c)),
+            char('"'),
+        ),
+        move |span: Span| {
+            let value = span.clone().into();
+            StringLiteral {
+                loc: loc.clone(),
+                value,
+            }
+        },
+    )(i)
 }
 
 fn basetyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {

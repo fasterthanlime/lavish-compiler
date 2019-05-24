@@ -155,7 +155,7 @@ build clock from "./clock.lavish"
 
 The lavish compiler accepts the path to the workspace:
 
-> lavish compile ./services
+> lavish build ./services
 
 After running the lavish compiler, our repo will look like:
 
@@ -224,7 +224,7 @@ build clock from "github.com/fasterthanlime/clock"
 
 Running the compiler with:
 
-> lavish compile ./src/services
+> lavish build ./src/services
 
 ...will complain that `clock` is missing.
 
@@ -348,3 +348,74 @@ main().catch((e) => {
     process.exit(1);
 });
 ```
+
+## That's all well and good, but... (FAQ)
+
+### Why workspaces? 
+
+Say you use two services, `A` and `B`, and they both use types from schema `C`.
+
+You want to be able to pass a result from a call to `A`, as a parameter into
+a call to `B`.
+
+If you `build` both `A` and `B` in the same workspace, you'll end up with three directories: `A`, `B`, and `C`. Both `A` and `B` will use the types
+from `C`.
+
+Also:
+
+  * Passing a million command-line options is no fun
+  * Neither are a millions environment variables
+  * A minimal config language (`lavish-rules`) is, uh, not that bad
+  * Not a big difference between writing one and two parsers anyway
+
+### What happens if A and B import a different C?
+
+Then you can't use `A` and `B` in the same workspace. You can make two
+workspaces though!
+
+### This seems like an arbitrary limitation. Does it simplify implementation somewhat?
+
+It does, very much so.
+
+### Why one target per workspace?
+
+Again, simpler implementation. If you want to generate bindings for
+multiple languages in a single repo, you can have:
+
+```
+- foobar/
+  - lavish-rules
+  - foobar-js/
+    - lavish-rules
+  - foobar-go/
+    - lavish-rules
+  - foobar-rs/
+    - lavish-rules
+```
+
+### What's the format for `import from` paths?
+
+My idea for the import syntax is, for local files:
+
+```
+import foo from "./foo.lavish"
+import bar from "../bar.lavish"
+```
+
+And for repos:
+
+```
+import foo from "github.com/user/foo"
+import foo from "gitlab.com/user/bar"
+```
+
+### How does it know what to git clone?
+
+Given `host/user/project`, it tries:
+
+  * `https://host/user/project.git`
+  * `git@host:user/project.git`
+
+### So does `lavish build` need internet connectivity?
+
+No, it does not.

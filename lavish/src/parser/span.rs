@@ -20,7 +20,7 @@ impl fmt::Debug for Span {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{}(at {}, len={}, {:#?}..)",
+            "{:?}(at {}, len={}, {:#?}..)",
             self.source.name(),
             self.offset,
             self.len,

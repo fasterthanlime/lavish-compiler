@@ -34,8 +34,10 @@ impl fmt::Display for Error {
     }
 }
 
-pub fn codegen(modules: &[ast::Module], target: Target, output: &str) -> Result {
-    match target {
-        Target::Rust => rust::codegen(modules, output),
-    }
+pub fn codegen(workspace: &ast::Workspace) -> Result {
+    unimplemented!()
+
+    // match target {
+    //     Target::Rust => rust::codegen(modules, output),
+    // }
 }

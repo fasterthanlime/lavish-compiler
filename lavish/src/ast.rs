@@ -2,6 +2,59 @@ use super::parser::Span;
 use std::collections::HashSet;
 
 #[derive(Debug)]
+pub struct Rules {
+    pub loc: Span,
+    pub target: Target,
+    pub builds: Vec<Build>,
+}
+
+impl Rules {
+    pub fn new(loc: Span, target: Target, builds: Vec<Build>) -> Self {
+        Self {
+            loc,
+            target,
+            builds,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Build {
+    pub name: Identifier,
+    pub from: Option<FromDirective>,
+}
+
+#[derive(Debug)]
+pub struct FromDirective {
+    pub path: StringLiteral,
+}
+
+#[derive(Debug)]
+pub struct StringLiteral {
+    pub loc: Span,
+    pub value: String,
+}
+
+#[derive(Debug)]
+pub enum Target {
+    Rust(RustTarget),
+    Go(GoTarget),
+    TypeScriptTarget(TypeScriptTarget),
+}
+
+#[derive(Debug)]
+pub struct RustTarget {}
+
+#[derive(Debug)]
+pub struct GoTarget {}
+
+#[derive(Debug)]
+pub struct TypeScriptTarget {}
+
+#[derive(Debug)]
+pub struct Workspace {}
+
+#[derive(Debug)]
 pub struct Module {
     pub loc: Span,
     pub imports: Vec<Import>,
