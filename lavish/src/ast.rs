@@ -4,13 +4,19 @@ use std::collections::HashSet;
 #[derive(Debug)]
 pub struct Module {
     pub loc: Span,
-    pub namespaces: Vec<NamespaceDecl>,
+    pub imports: Vec<Import>,
+    pub root: NamespaceDecl,
 }
 
 impl Module {
-    pub fn new(loc: Span, namespaces: Vec<NamespaceDecl>) -> Self {
-        Self { loc, namespaces }
+    pub fn new(loc: Span, imports: Vec<Import>, root: NamespaceDecl) -> Self {
+        Self { loc, imports, root }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Import {
+    pub name: Identifier,
 }
 
 #[derive(Debug, Clone)]
@@ -27,6 +33,42 @@ pub struct NamespaceDecl {
     pub functions: Vec<FunctionDecl>,
     pub structs: Vec<StructDecl>,
     pub namespaces: Vec<NamespaceDecl>,
+}
+
+impl NamespaceDecl {
+    pub fn new(
+        name: Identifier,
+        loc: Span,
+        comment: Option<Comment>,
+        items: Vec<NamespaceItem>,
+    ) -> Self {
+        let mut ns = NamespaceDecl {
+            name,
+            loc,
+            comment,
+            functions: Vec::new(),
+            structs: Vec::new(),
+            namespaces: Vec::new(),
+        };
+        for item in items {
+            ns.add_item(item)
+        }
+        ns
+    }
+
+    fn add_item(&mut self, item: NamespaceItem) {
+        match item {
+            NamespaceItem::Function(i) => {
+                self.functions.push(i);
+            }
+            NamespaceItem::Struct(i) => {
+                self.structs.push(i);
+            }
+            NamespaceItem::Namespace(i) => {
+                self.namespaces.push(i);
+            }
+        };
+    }
 }
 
 #[derive(Debug)]
@@ -128,41 +170,5 @@ pub struct Comment {
 impl std::default::Default for Comment {
     fn default() -> Self {
         Comment { lines: Vec::new() }
-    }
-}
-
-impl NamespaceDecl {
-    pub fn new(
-        name: Identifier,
-        loc: Span,
-        comment: Option<Comment>,
-        items: Vec<NamespaceItem>,
-    ) -> Self {
-        let mut ns = NamespaceDecl {
-            name,
-            loc,
-            comment,
-            functions: Vec::new(),
-            structs: Vec::new(),
-            namespaces: Vec::new(),
-        };
-        for item in items {
-            ns.add_item(item)
-        }
-        ns
-    }
-
-    fn add_item(&mut self, item: NamespaceItem) {
-        match item {
-            NamespaceItem::Function(i) => {
-                self.functions.push(i);
-            }
-            NamespaceItem::Struct(i) => {
-                self.structs.push(i);
-            }
-            NamespaceItem::Namespace(i) => {
-                self.namespaces.push(i);
-            }
-        };
     }
 }

@@ -21,13 +21,39 @@ use std::iter::FromIterator;
 
 pub fn module<E: ParseError<Span>>(i: Span) -> IResult<Span, Module, E> {
     let (i, loc) = loc(i)?;
+    let name = Identifier {
+        span: i.clone(),
+        text: "<root>".into(),
+    };
 
     all_consuming(terminated(
-        map(many0(spaced(nsdecl)), move |namespaces| {
-            Module::new(loc.clone(), namespaces)
-        }),
+        map(
+            tuple((imports, spaced(nsdecls))),
+            move |(imports, mut namespaces)| {
+                Module::new(
+                    loc.clone(),
+                    imports,
+                    NamespaceDecl::new(
+                        name.clone(),
+                        loc.clone(),
+                        None,
+                        namespaces.drain(..).map(NamespaceItem::Namespace).collect(),
+                    ),
+                )
+            },
+        ),
         spaced(many0(spaced(comment_line))),
     ))(i)
+}
+
+pub fn imports<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Import>, E> {
+    terminated(many0(spaced(import)), spaced(many0(comment_line)))(i)
+}
+
+pub fn import<E: ParseError<Span>>(i: Span) -> IResult<Span, Import, E> {
+    let (i, _) = spaced(tag("import"))(i)?;
+
+    context("import", cut(map(id, |name| Import { name })))(i)
 }
 
 fn spaced<O, E: ParseError<Span>, F>(f: F) -> impl Fn(Span) -> IResult<Span, O, E>
@@ -122,7 +148,7 @@ fn maptyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
 }
 
 fn usertyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
-    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_:";
 
     map(take_while1(move |c| chars.contains(c)), |span: Span| Type {
         span,
@@ -293,6 +319,10 @@ fn nsitem<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceItem, E> {
 
 fn nsbody<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<NamespaceItem>, E> {
     terminated(many0(spaced(nsitem)), spaced(many0(comment_line)))(i)
+}
+
+fn nsdecls<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<NamespaceDecl>, E> {
+    terminated(many0(spaced(nsdecl)), spaced(many0(comment_line)))(i)
 }
 
 fn nsdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceDecl, E> {

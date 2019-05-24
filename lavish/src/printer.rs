@@ -39,7 +39,7 @@ trait Visitable {
 
 impl Visitable for &ast::Module {
     fn visit(self, v: &mut Visitor) {
-        for ns in &self.namespaces {
+        for ns in &self.root.namespaces {
             v.visit(ns);
         }
     }

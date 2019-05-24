@@ -68,8 +68,8 @@ impl_named!(ast::Field);
 
 impl Visitable for &ast::Module {
     fn visit(self, v: &mut Visitor) {
-        v.check_dupes("namespace", &self.namespaces);
-        for ns in &self.namespaces {
+        v.check_dupes("namespace", &self.root.namespaces);
+        for ns in &self.root.namespaces {
             v.visit(ns);
         }
     }

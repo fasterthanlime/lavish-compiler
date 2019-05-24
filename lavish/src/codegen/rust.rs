@@ -63,12 +63,7 @@ impl<'a> Context<'a> {
 
         let mut ns = Namespace::new(decl);
         self.visit_ns("", &mut ns);
-
-        if let Some(original_ns) = self.namespaces.get_mut(k) {
-            original_ns.merge(ns)
-        } else {
-            self.namespaces.insert(k, ns);
-        }
+        self.namespaces.insert(k, ns);
     }
 
     fn visit_ns(&mut self, prefix: &str, ns: &mut Namespace<'a>) {
@@ -200,24 +195,6 @@ impl<'a> Namespace<'a> {
         )
     }
 
-    fn merge(&mut self, rhs: Self) {
-        for (k, v) in rhs.children {
-            if let Some(sv) = self.children.get_mut(k) {
-                sv.merge(v)
-            } else {
-                self.children.insert(k, v);
-            }
-        }
-
-        for (k, v) in rhs.funs {
-            self.funs.insert(k, v);
-        }
-
-        for (k, v) in rhs.strus {
-            self.strus.insert(k, v);
-        }
-    }
-
     fn name(&self) -> &'a str {
         &self.decl.name.text
     }
@@ -302,7 +279,7 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
     let mut root = Context::new(out);
 
     for module in modules {
-        for decl in &module.namespaces {
+        for decl in &module.root.namespaces {
             root.visit_toplevel_ns(decl);
         }
     }
