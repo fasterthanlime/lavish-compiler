@@ -122,7 +122,7 @@ fn maptyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
 }
 
 fn usertyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
-    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_<>";
+    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
     map(take_while1(move |c| chars.contains(c)), |span: Span| Type {
         span,

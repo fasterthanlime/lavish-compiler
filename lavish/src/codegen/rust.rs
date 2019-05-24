@@ -81,6 +81,12 @@ impl<'a> Context<'a> {
             ns.funs.insert(&decl.name.text, ff);
         }
 
+        for decl in &decl.structs {
+            let full_name = format!("{}{}", prefix, decl.name.text);
+            let st = Stru::new(decl, full_name);
+            ns.strus.insert(&decl.name.text, st);
+        }
+
         for decl in &decl.namespaces {
             let mut child = Namespace::new(decl);
             self.visit_ns(&prefix, &mut child);
@@ -171,6 +177,7 @@ struct Namespace<'a> {
     children: IndexMap<&'a str, Namespace<'a>>,
 
     funs: IndexMap<&'a str, Fun<'a>>,
+    strus: IndexMap<&'a str, Stru<'a>>,
 }
 
 impl<'a> Namespace<'a> {
@@ -179,6 +186,7 @@ impl<'a> Namespace<'a> {
             decl,
             children: IndexMap::new(),
             funs: IndexMap::new(),
+            strus: IndexMap::new(),
         }
     }
 
@@ -203,6 +211,10 @@ impl<'a> Namespace<'a> {
 
         for (k, v) in rhs.funs {
             self.funs.insert(k, v);
+        }
+
+        for (k, v) in rhs.strus {
+            self.strus.insert(k, v);
         }
     }
 
@@ -264,6 +276,17 @@ impl<'a> Fun<'a> {
 
     fn has_empty_results(&self) -> bool {
         self.decl.results.is_empty()
+    }
+}
+
+struct Stru<'a> {
+    decl: &'a ast::StructDecl,
+    full_name: String,
+}
+
+impl<'a> Stru<'a> {
+    fn new(decl: &'a ast::StructDecl, full_name: String) -> Self {
+        Self { decl, full_name }
     }
 }
 
@@ -586,7 +609,10 @@ impl<'a> fmt::Display for RustType<'a> {
             ),
             TypeKind::Option(opt) => write!(f, "Option<{}>", opt.inner.as_rust()),
             TypeKind::Array(arr) => write!(f, "Vec<{}>", arr.inner.as_rust()),
-            TypeKind::User => panic!("User types are not implemented yet"),
+            TypeKind::User => {
+                // TODO: actually resolve those
+                write!(f, "super::{}", self.0.text())
+            }
         }
     }
 }
@@ -597,6 +623,19 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
         let s = s.scope();
         for (_, ns) in &ns.children {
             visit_ns(&s, ns, depth + 1)?;
+        }
+
+        s.line("use lavish_rpc::serde_derive::*;");
+        s.line("");
+
+        for (_, st) in &ns.strus {
+            s.comment(&st.decl.comment);
+            s.def_struct(&st.decl.name.text, &|s| {
+                for f in &st.decl.fields {
+                    s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
+                }
+            });
+            s.line("");
         }
 
         for (_, fun) in &ns.funs {
