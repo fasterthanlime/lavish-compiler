@@ -156,7 +156,7 @@ where
 {
     pub fn new<T, H, FT>(
         protocol: Protocol<P, NP, R>,
-        handler: Option<H>,
+        handler: H,
         io: T,
         mut pool: executor::ThreadPool,
     ) -> Result<Self, Error>
@@ -211,7 +211,7 @@ where
 
 async fn handle_message<P, NP, R, H, FT>(
     inbound: Message<P, NP, R>,
-    handler: Arc<Option<H>>,
+    handler: Arc<H>,
     mut handle: Handle<P, NP, R>,
 ) where
     P: Atom,
@@ -222,23 +222,16 @@ async fn handle_message<P, NP, R, H, FT>(
 {
     match inbound {
         Message::Request { id, params } => {
-            let m = match handler.as_ref() {
-                Some(handler) => match handler.handle(handle.clone(), params).await {
-                    Ok(results) => Message::Response::<P, NP, R> {
-                        id,
-                        results: Some(results),
-                        error: None,
-                    },
-                    Err(error) => Message::Response::<P, NP, R> {
-                        id,
-                        results: None,
-                        error: Some(format!("internal error: {:#?}", error)),
-                    },
+            let m = match handler.handle(handle.clone(), params).await {
+                Ok(results) => Message::Response::<P, NP, R> {
+                    id,
+                    results: Some(results),
+                    error: None,
                 },
-                _ => Message::Response {
+                Err(error) => Message::Response::<P, NP, R> {
                     id,
                     results: None,
-                    error: Some("no method handler".into()),
+                    error: Some(format!("internal error: {:#?}", error)),
                 },
             };
             handle.sink.send(m).await.unwrap();
