@@ -113,7 +113,9 @@ where
 }
 
 pub fn parse_schema(source: Rc<Source>) -> Result<ast::Schema, Error> {
-    parse(source, parser::schema::<VerboseError<parser::Span>>)
+    let schema = parse(source, parser::schema::<VerboseError<parser::Span>>)?;
+    super::super::printer::print(&schema);
+    Ok(schema)
 }
 
 pub fn parse_rules(source: Rc<Source>) -> Result<ast::Rules, Error> {

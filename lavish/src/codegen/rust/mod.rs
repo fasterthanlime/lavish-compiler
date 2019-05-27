@@ -1,46 +1,15 @@
 use super::super::ast;
 use super::Error;
-use heck::{CamelCase, MixedCase, SnakeCase};
+use heck::SnakeCase;
 use indexmap::IndexMap;
-use std::cell::RefCell;
 use std::fs::File;
-use std::io::{self, Write};
 use std::time::Instant;
 
-const INDENT_WIDTH: usize = 4;
-
-struct Output {
-    writer: RefCell<io::BufWriter<File>>,
-}
-
-impl Output {
-    fn new(file: File) -> Self {
-        Self {
-            writer: RefCell::new(io::BufWriter::new(file)),
-        }
-    }
-}
-
-impl<'a> io::Write for &'a Output {
-    fn write(&mut self, b: &[u8]) -> io::Result<usize> {
-        let mut w = self.writer.borrow_mut();
-        w.write(b)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        let mut w = self.writer.borrow_mut();
-        w.flush()
-    }
-}
+mod output;
+use output::*;
 
 struct Context<'a> {
     root: Namespace<'a>,
-    output: Output,
-}
-
-struct Scope<'a> {
-    output: &'a Output,
-    indent: usize,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -50,10 +19,9 @@ enum FunKind {
 }
 
 impl<'a> Context<'a> {
-    fn new(file: File, root_body: &'a ast::NamespaceBody) -> Self {
+    fn new(root_body: &'a ast::NamespaceBody) -> Self {
         Self {
             root: Namespace::new("", "<root>", root_body),
-            output: Output::new(file),
         }
     }
 
@@ -68,70 +36,6 @@ impl<'a> Context<'a> {
             self.all_funs()
                 .filter(move |x| x.is_notification() == is_notification),
         )
-    }
-}
-
-trait ScopeLike<'a> {
-    fn output(&self) -> &Output;
-    fn indent(&self) -> usize;
-    fn scope(&self) -> Scope;
-
-    fn line(&self, line: &str) {
-        writeln!(self.output(), "{}{}", " ".repeat(self.indent()), line).unwrap();
-    }
-
-    fn comment(&self, comment: &Option<ast::Comment>) {
-        if let Some(comment) = comment.as_ref() {
-            for line in &comment.lines {
-                self.line(&format!("// {}", line))
-            }
-        }
-    }
-
-    fn def_struct(&self, name: &str, f: &Fn(&ScopeLike)) {
-        self.line("#[derive(Serialize, Deserialize, Debug)]");
-        self.line(&format!("pub struct {} {{", name));
-        self.in_scope(f);
-        self.line("}");
-    }
-
-    fn in_scope(&self, f: &Fn(&ScopeLike)) {
-        let s = self.scope();
-        f(&s);
-    }
-}
-
-impl<'a> ScopeLike<'a> for Context<'a> {
-    fn output(&self) -> &Output {
-        &self.output
-    }
-
-    fn indent(&self) -> usize {
-        0
-    }
-
-    fn scope(&self) -> Scope {
-        Scope {
-            output: &self.output,
-            indent: INDENT_WIDTH,
-        }
-    }
-}
-
-impl<'a> ScopeLike<'a> for Scope<'a> {
-    fn output(&self) -> &Output {
-        &self.output
-    }
-
-    fn indent(&self) -> usize {
-        self.indent
-    }
-
-    fn scope(&self) -> Scope {
-        Scope {
-            output: &self.output,
-            indent: self.indent + INDENT_WIDTH,
-        }
     }
 }
 
@@ -241,6 +145,7 @@ impl<'a> Fun<'a> {
 
 struct Stru<'a> {
     decl: &'a ast::StructDecl,
+    #[allow(unused)]
     full_name: String,
 }
 
@@ -301,167 +206,166 @@ impl<'a> fmt::Display for RustType<'a> {
     }
 }
 
-fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
+fn visit_ns<'a>(s: &'a Scope<'a>, ns: &Namespace, depth: usize) -> Result {
     s.line(&format!("pub mod {} {{", ns.name()));
     {
         let s = s.scope();
-        for (_, ns) in &ns.children {
-            visit_ns(&s, ns, depth + 1)?;
-        }
+        visit_ns_body(&s, ns, depth)?;
+    }
+    s.line("}"); // pub mod
+    s.line("");
+    Ok(())
+}
 
-        s.line("use lavish_rpc::serde_derive::*;");
+fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace, depth: usize) -> Result {
+    for (_, ns) in &ns.children {
+        visit_ns(&s, ns, depth + 1)?;
+    }
+
+    s.line("use lavish_rpc::serde_derive::*;");
+    s.line("");
+
+    for (_, st) in &ns.strus {
+        s.comment(&st.decl.comment);
+        s.def_struct(&st.decl.name.text, &|s| {
+            for f in &st.decl.fields {
+                s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
+            }
+        });
         s.line("");
+    }
 
-        for (_, st) in &ns.strus {
-            s.comment(&st.decl.comment);
-            s.def_struct(&st.decl.name.text, &|s| {
-                for f in &st.decl.fields {
+    for (_, fun) in &ns.funs {
+        s.comment(&fun.decl.comment);
+        s.line(&format!("pub mod {} {{", fun.mod_name()));
+
+        {
+            let s = s.scope();
+            s.line("use futures::prelude::*;");
+            s.line("use lavish_rpc::serde_derive::*;");
+            let super_ref = "super::".repeat(depth + 2);
+            s.line(&format!("use {}__;", super_ref));
+            s.line("");
+
+            let write_downgrade = |side: &str| {
+                s.in_scope(&|s| {
+                    s.line(&format!(
+                        "pub fn downgrade(p: __::{}) -> Option<Self> {{",
+                        side,
+                    ));
+                    s.in_scope(&|s| {
+                        s.line("match p {");
+                        s.in_scope(&|s| {
+                            s.line(&format!(
+                                "__::{}::{}(p) => Some(p),",
+                                side,
+                                fun.variant_name()
+                            ));
+                            s.line("_ => None,");
+                        });
+                        s.line("}"); // match p
+                    });
+                    s.line("}"); // fn downgrade
+                });
+            };
+
+            s.def_struct("Params", &|s| {
+                for f in &fun.decl.params {
                     s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
                 }
             });
+
             s.line("");
-        }
+            s.line("impl Params {");
+            write_downgrade(if fun.is_notification() {
+                "NotificationParams"
+            } else {
+                "Params"
+            });
+            s.line("}"); // impl Params
 
-        for (_, fun) in &ns.funs {
-            s.comment(&fun.decl.comment);
-            s.line(&format!("pub mod {} {{", fun.mod_name()));
-
-            {
-                let s = s.scope();
-                s.line("use futures::prelude::*;");
-                s.line("use lavish_rpc::serde_derive::*;");
-                let super_ref = "super::".repeat(depth + 2);
-                s.line(&format!("use {}__;", super_ref));
+            if !fun.is_notification() {
                 s.line("");
-
-                let write_downgrade = |side: &str| {
-                    s.in_scope(&|s| {
-                        s.line(&format!(
-                            "pub fn downgrade(p: __::{}) -> Option<Self> {{",
-                            side,
-                        ));
-                        s.in_scope(&|s| {
-                            s.line("match p {");
-                            s.in_scope(&|s| {
-                                s.line(&format!(
-                                    "__::{}::{}(p) => Some(p),",
-                                    side,
-                                    fun.variant_name()
-                                ));
-                                s.line("_ => None,");
-                            });
-                            s.line("}"); // match p
-                        });
-                        s.line("}"); // fn downgrade
-                    });
-                };
-
-                s.def_struct("Params", &|s| {
-                    for f in &fun.decl.params {
+                s.def_struct("Results", &|s| {
+                    for f in &fun.decl.results {
                         s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
                     }
                 });
 
                 s.line("");
-                s.line("impl Params {");
-                write_downgrade(if fun.is_notification() {
-                    "NotificationParams"
+                s.line("impl Results {");
+                write_downgrade("Results");
+                s.line("}"); // impl Results
+
+                s.line("");
+                let params_type = if fun.has_empty_params() {
+                    "()"
                 } else {
                     "Params"
-                });
-                s.line("}"); // impl Params
-
-                if !fun.is_notification() {
-                    s.line("");
-                    s.def_struct("Results", &|s| {
-                        for f in &fun.decl.results {
-                            s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
-                        }
-                    });
-
-                    s.line("");
-                    s.line("impl Results {");
-                    write_downgrade("Results");
-                    s.line("}"); // impl Results
-
-                    s.line("");
-                    let params_type = if fun.has_empty_params() {
-                        "()"
-                    } else {
-                        "Params"
-                    };
-                    s.line(&format!("pub async fn call(h: &__::Handle, p: {}) -> Result<Results, lavish_rpc::Error> {{", params_type));
+                };
+                s.line(&format!("pub async fn call(h: &__::Handle, p: {}) -> Result<Results, lavish_rpc::Error> {{", params_type));
+                s.in_scope(&|s| {
+                    s.line("h.call(");
                     s.in_scope(&|s| {
-                        s.line("h.call(");
+                        if fun.has_empty_params() {
+                            s.line(&format!("__::Params::{}(Params {{}}),", fun.variant_name()));
+                        } else {
+                            s.line(&format!("__::Params::{}(p),", fun.variant_name()));
+                        }
+                        s.line("Results::downgrade,");
+                    }); // h.call arguments
+                    s.line(").await"); // h.call
+                });
+                s.line("}"); // async fn call
+
+                s.line("");
+                s.line("pub fn register<'a, T, F, FT>(h: &mut __::Handler<'a, T>, f: F)");
+                s.line("where");
+                let results_type = if fun.has_empty_results() {
+                    "()"
+                } else {
+                    "Results"
+                };
+                s.in_scope(&|s| {
+                    s.line("F: Fn(__::Call<T, Params>) -> FT + Sync + Send + 'a,");
+                    s.line(&format!(
+                        "FT: Future<Output = Result<{}, lavish_rpc::Error>> + Send + 'static,",
+                        results_type
+                    ));
+                });
+                s.line("{");
+                s.in_scope(&|s| {
+                    s.line(&format!(
+                        "h.{} = Some(Box::new(move |state, handle, params| {{",
+                        fun.variant_name(),
+                    ));
+                    s.in_scope(&|s| {
+                        s.line("Box::pin(");
                         s.in_scope(&|s| {
-                            if fun.has_empty_params() {
+                            s.line("f(__::Call {");
+                            s.in_scope(&|s| {
+                                s.line("state, handle,");
+                                s.line("params: Params::downgrade(params).unwrap(),");
+                            });
+                            if fun.has_empty_results() {
                                 s.line(&format!(
-                                    "__::Params::{}(Params {{}}),",
+                                    "}}).map_ok(|_| __::Results::{}(Results {{}}))",
                                     fun.variant_name()
                                 ));
                             } else {
-                                s.line(&format!("__::Params::{}(p),", fun.variant_name()));
+                                s.line(&format!("}}).map_ok(__::Results::{})", fun.variant_name()));
                             }
-                            s.line("Results::downgrade,");
-                        }); // h.call arguments
-                        s.line(").await"); // h.call
-                    });
-                    s.line("}"); // async fn call
-
-                    s.line("");
-                    s.line("pub fn register<'a, T, F, FT>(h: &mut __::Handler<'a, T>, f: F)");
-                    s.line("where");
-                    let results_type = if fun.has_empty_results() {
-                        "()"
-                    } else {
-                        "Results"
-                    };
-                    s.in_scope(&|s| {
-                        s.line("F: Fn(__::Call<T, Params>) -> FT + Sync + Send + 'a,");
-                        s.line(&format!(
-                            "FT: Future<Output = Result<{}, lavish_rpc::Error>> + Send + 'static,",
-                            results_type
-                        ));
-                    });
-                    s.line("{");
-                    s.in_scope(&|s| {
-                        s.line(&format!(
-                            "h.{} = Some(Box::new(move |state, handle, params| {{",
-                            fun.variant_name(),
-                        ));
-                        s.in_scope(&|s| {
-                            s.line("Box::pin(");
-                            s.in_scope(&|s| {
-                                s.line("f(__::Call {");
-                                s.in_scope(&|s| {
-                                    s.line("state, handle,");
-                                    s.line("params: Params::downgrade(params).unwrap(),");
-                                });
-                                if fun.has_empty_results() {
-                                    s.line(&format!(
-                                        "}}).map_ok(|_| __::Results::{}(Results {{}}))",
-                                        fun.variant_name()
-                                    ));
-                                } else {
-                                    s.line(&format!(
-                                        "}}).map_ok(__::Results::{})",
-                                        fun.variant_name()
-                                    ));
-                                }
-                            });
-                            s.line(")");
                         });
-                        s.line("}));");
+                        s.line(")");
                     });
-                    s.line("}"); // fn register
-                }
+                    s.line("}));");
+                });
+                s.line("}"); // fn register
             }
-            s.line("}");
-            s.line("");
         }
+        s.line("}");
+        s.line("");
     }
-    s.line("}");
-    s.line("");
     Ok(())
 }
 
@@ -477,30 +381,52 @@ impl Generator {
 }
 
 impl super::Generator for Generator {
+    fn emit_workspace(&self, workspace: &ast::Workspace) -> Result {
+        for member in workspace.members.values() {
+            self.emit(workspace, member)?;
+        }
+
+        {
+            let mod_path = workspace.dir.join("mod.rs");
+            let output = Output::new(File::create(&mod_path).unwrap());
+            let s = Scope::new(&output);
+            self.write_prelude(&s);
+
+            for member in workspace.members.values() {
+                s.line(&format!("pub mod {};", member.name));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Generator {
+    fn write_prelude<'a>(&self, s: &'a Scope<'a>) {
+        s.line("// This file is generated by lavish: DO NOT EDIT");
+        s.line("// https://github.com/fasterthanlime/lavish");
+        s.line("");
+        s.line("#![cfg_attr(rustfmt, rustfmt_skip)]");
+        s.line("#![allow(clippy::all)]");
+        s.line("#![allow(unknown_lints)]");
+        s.line("#![allow(unused)]");
+        s.line("");
+    }
+
     fn emit(&self, workspace: &ast::Workspace, member: &ast::WorkspaceMember) -> Result {
         let start_instant = Instant::now();
 
         let output_path = workspace.dir.join(&member.name).join("mod.rs");
         std::fs::create_dir_all(output_path.parent().unwrap())?;
-        let out = File::create(&output_path).unwrap();
+        let output = Output::new(File::create(&output_path).unwrap());
 
         let schema = member.schema.as_ref().unwrap();
-        let ctx = Context::new(out, &schema.body);
+        let ctx = Context::new(&schema.body);
 
-        let s = &ctx;
-        s.line("// This file is generated by lavish: DO NOT EDIT");
-        s.line("// https://github.com/fasterthanlime/lavish");
-        s.line("");
-        s.line("// Kindly ask rustfmt not to reformat this file.");
-        s.line("#![cfg_attr(rustfmt, rustfmt_skip)]");
-        s.line("");
-        s.line("// Disable some lints, since this file is generated.");
-        s.line("#![allow(clippy::all)]");
-        s.line("#![allow(unknown_lints)]");
-        s.line("#![allow(unused)]");
-        s.line("");
+        let s = Scope::new(&output);
+        self.write_prelude(&s);
 
-        fn write_enum<'a, I>(s: &ScopeLike, kind: &str, funs: I)
+        fn write_enum<'a, I>(s: &Scope, kind: &str, funs: I)
         where
             I: Iterator<Item = &'a Fun<'a>>,
         {
@@ -732,7 +658,7 @@ impl super::Generator for Generator {
             s.line("}"); // impl rpc::Handler for Handler
 
             s.line("");
-            visit_ns(&s, &ctx.root, 1)?;
+            visit_ns_body(&s, &ctx.root, 0)?;
         }
         s.line("}"); // mod __root
 

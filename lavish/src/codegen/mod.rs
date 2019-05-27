@@ -11,7 +11,7 @@ pub struct Error {
 pub type Result = std::result::Result<(), Error>;
 
 pub trait Generator {
-    fn emit(&self, workspace: &ast::Workspace, member: &ast::WorkspaceMember) -> Result;
+    fn emit_workspace(&self, workspace: &ast::Workspace) -> Result;
 }
 
 impl From<std::io::Error> for Error {
@@ -40,9 +40,7 @@ pub fn codegen(workspace: &ast::Workspace) -> Result {
         _ => panic!("Unimplemented target: {:#?}", workspace.rules.target),
     };
 
-    for member in workspace.members.values() {
-        generator.emit(&workspace, member)?;
-    }
+    generator.emit_workspace(&workspace)?;
 
     println!("Codegen done!");
     Ok(())

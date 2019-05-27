@@ -77,6 +77,7 @@ pub fn builds<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Build>, E> {
 }
 
 pub fn build<E: ParseError<Span>>(i: Span) -> IResult<Span, Build, E> {
+    let (i, _) = many0(spaced(comment_line))(i)?;
     let (i, _) = spaced(tag("build"))(i)?;
 
     context(
