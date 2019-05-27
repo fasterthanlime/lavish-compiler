@@ -2,7 +2,7 @@
 ## What lavish does
 
 `lavish` lets you declare services, and implement/consume them
-easily from a variety of language.
+easily from a variety of languages.
 
 It is opinionated:
 
@@ -275,7 +275,7 @@ async fn example(pool: executor::ThreadPool) -> Result<(), Error> {
     let client = clock::Client::new(conn, None, pool.clone())?;
 
     {
-        let time = clock::current_time::call(&handle, ()).await?.time;
+        let time = clock::current_time::call(&client, ()).await?.time;
         println!("Server time: {:#?}", time);
     }
 
@@ -428,3 +428,39 @@ sucks for a variety of reasons.
 
 TL;DR: `lavish fetch` vendors, `lavish build` works offline.
 
+### How does it compare with other projects?
+
+I like [JSON-RPC](https://www.jsonrpc.org/) a lot, because of its simplicity.
+That's what I used before. Msgpack-RPC is very similar, except with faster
+serialization, a proper timestamp type, and the ability to pass raw bytes
+around.
+
+[Cap'n Proto RPC](https://capnproto.org/rpc.html) is awe-inspiring. Not only
+is it fast, it also brings unique features - capabilities, and promise
+pipelining. I got really really excited about it.
+
+However, after spending some time implementing capnp-rpc on top of an
+existing TypeScript serialization library, I finally conceded that:
+
+  * _Implementation complexity is too high for me_. It would take a lot of
+  effort to write another implementation from scratch (for a new language), I
+  do not understand the Rust implementation, if something broke I would have
+  a very hard time tracking it down.
+  * _Capabilities make it hard to use from the browser_. It's no accident
+  that, for the JavaScript world, the recommended implementation is
+  node-only (a binding to the C++ library). Although I managed to get RPC
+  working in pure TypeScript, I had to use electron and node-specific facilities
+  to hook into the GC (to know when to drop capabilities). Browser usage
+  could easily leak capabilities, and browser do *not* want to expose GC
+  hooks for security reasons.
+  * _It's purpose-built_. There is no great desire to push for its adoption.
+  It is being used internally, but there is no interest from the developer
+  to make it everything to everyone - which is fine! That's also what I'm doing
+  with lavish.
+
+[tarpc](https://docs.rs/tarpc/) looks great, but Rust-only.
+
+[grpc](https://grpc.io/) is definitely trying to be everything to everyone.
+I would like to consume services from a variety of applications written with
+a variety of languages - a MsgPack serialization lib + TCP sockets is
+a reasonable ask for that. ProtoBufs + HTTP/2 is not.
