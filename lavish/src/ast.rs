@@ -1,7 +1,13 @@
 use super::parser::Span;
-use std::collections::HashSet;
+use log::*;
+use simple_error::SimpleError;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
-#[derive(Debug)]
+pub const LAVISH_EXT: &str = ".lavish";
+pub const VENDOR_DIR: &str = "lavish-vendor";
+
+#[derive(Debug, Clone)]
 pub struct Rules {
     pub loc: Span,
     pub target: Target,
@@ -18,58 +24,94 @@ impl Rules {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Build {
     pub name: Identifier,
     pub from: Option<FromDirective>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FromDirective {
     pub path: StringLiteral,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StringLiteral {
     pub loc: Span,
     pub value: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Target {
     Rust(RustTarget),
     Go(GoTarget),
-    TypeScriptTarget(TypeScriptTarget),
+    TypeScript(TypeScriptTarget),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RustTarget {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GoTarget {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TypeScriptTarget {}
 
-#[derive(Debug)]
-pub struct Workspace {}
+#[derive(Debug, Clone)]
+pub struct Workspace {
+    pub dir: PathBuf,
+    pub rules: Rules,
+    pub members: HashMap<String, WorkspaceMember>,
+}
 
-#[derive(Debug)]
-pub struct Module {
+impl Workspace {
+    pub fn resolve(&self, name: &str) -> Result<PathBuf, SimpleError> {
+        let source_name = format!("{}{}", name, LAVISH_EXT);
+
+        let self_path = self.dir.join(&source_name);
+        debug!("Trying self path {:?}", self_path);
+        if self_path.exists() {
+            return Ok(self_path);
+        }
+
+        let vendor_path = self.dir.join(VENDOR_DIR).join(&source_name);
+        debug!("Trying vendor path {:?}", vendor_path);
+        if vendor_path.exists() {
+            return Ok(vendor_path);
+        }
+
+        Err(SimpleError::new(format!(
+            "{} not found. Try running `lavish fetch`",
+            name
+        )))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WorkspaceMember {
+    pub name: String,
+    pub build: Option<Build>,
+    pub imports: Vec<Import>,
+    pub schema: Option<Schema>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Schema {
     pub loc: Span,
     pub imports: Vec<Import>,
     pub root: NamespaceDecl,
 }
 
-impl Module {
+impl Schema {
     pub fn new(loc: Span, imports: Vec<Import>, root: NamespaceDecl) -> Self {
-        Self { loc, imports, root }
+        Schema { loc, imports, root }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Import {
     pub name: Identifier,
+    pub from: Option<FromDirective>,
 }
 
 #[derive(Debug, Clone)]
@@ -78,7 +120,7 @@ pub struct Identifier {
     pub text: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NamespaceDecl {
     pub loc: Span,
     pub comment: Option<Comment>,
@@ -124,14 +166,14 @@ impl NamespaceDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NamespaceItem {
     Function(FunctionDecl),
     Struct(StructDecl),
     Namespace(NamespaceDecl),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionDecl {
     pub loc: Span,
     pub comment: Option<Comment>,
@@ -148,7 +190,7 @@ pub enum FunctionModifier {
     Notification,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Field {
     pub loc: Span,
     pub comment: Option<Comment>,
@@ -156,7 +198,7 @@ pub struct Field {
     pub typ: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Type {
     pub span: Span,
     pub kind: TypeKind,
@@ -168,7 +210,7 @@ impl Type {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TypeKind {
     User,
     Base(BaseType),
@@ -177,7 +219,7 @@ pub enum TypeKind {
     Map(MapType),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BaseType {
     Bool,
     Int32,
@@ -191,23 +233,23 @@ pub enum BaseType {
     Timestamp,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ArrayType {
     pub inner: Box<Type>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OptionType {
     pub inner: Box<Type>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MapType {
     pub keys: Box<Type>,
     pub values: Box<Type>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StructDecl {
     pub loc: Span,
     pub comment: Option<Comment>,

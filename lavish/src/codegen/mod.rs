@@ -3,16 +3,16 @@ use super::ast;
 
 use std::fmt;
 
-pub enum Target {
-    Rust,
-}
-
 #[derive(Debug)]
 pub struct Error {
     message: String,
 }
 
 pub type Result = std::result::Result<(), Error>;
+
+pub trait Generator {
+    fn emit(&self, workspace: &ast::Workspace, member: &ast::WorkspaceMember) -> Result;
+}
 
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
@@ -35,9 +35,15 @@ impl fmt::Display for Error {
 }
 
 pub fn codegen(workspace: &ast::Workspace) -> Result {
-    unimplemented!()
+    let generator = match &workspace.rules.target {
+        ast::Target::Rust(target) => rust::Generator::new(target.clone()),
+        _ => panic!("Unimplemented target: {:#?}", workspace.rules.target),
+    };
 
-    // match target {
-    //     Target::Rust => rust::codegen(modules, output),
-    // }
+    for member in workspace.members.values() {
+        generator.emit(&workspace, member)?;
+    }
+
+    println!("Codegen done!");
+    Ok(())
 }

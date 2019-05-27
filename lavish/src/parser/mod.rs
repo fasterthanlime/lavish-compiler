@@ -19,7 +19,7 @@ pub use span::*;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 
-pub fn module<E: ParseError<Span>>(i: Span) -> IResult<Span, Module, E> {
+pub fn schema<E: ParseError<Span>>(i: Span) -> IResult<Span, Schema, E> {
     let (i, loc) = loc(i)?;
     let name = Identifier {
         span: i.clone(),
@@ -27,21 +27,13 @@ pub fn module<E: ParseError<Span>>(i: Span) -> IResult<Span, Module, E> {
     };
 
     all_consuming(terminated(
-        map(
-            tuple((imports, spaced(nsdecls))),
-            move |(imports, mut namespaces)| {
-                Module::new(
-                    loc.clone(),
-                    imports,
-                    NamespaceDecl::new(
-                        name.clone(),
-                        loc.clone(),
-                        None,
-                        namespaces.drain(..).map(NamespaceItem::Namespace).collect(),
-                    ),
-                )
-            },
-        ),
+        map(tuple((imports, spaced(nsbody))), move |(imports, items)| {
+            Schema::new(
+                loc.clone(),
+                imports,
+                NamespaceDecl::new(name.clone(), loc.clone(), None, items),
+            )
+        }),
         spaced(many0(spaced(comment_line))),
     ))(i)
 }
@@ -65,6 +57,7 @@ pub fn target<E: ParseError<Span>>(i: Span) -> IResult<Span, Target, E> {
         cut(alt((
             map(rust_target, Target::Rust),
             map(go_target, Target::Go),
+            map(ts_target, Target::TypeScript),
         ))),
     )(i)
 }
@@ -79,6 +72,12 @@ pub fn go_target<E: ParseError<Span>>(i: Span) -> IResult<Span, GoTarget, E> {
     let (i, _) = spaced(tag("go"))(i)?;
 
     Ok((i, GoTarget {}))
+}
+
+pub fn ts_target<E: ParseError<Span>>(i: Span) -> IResult<Span, TypeScriptTarget, E> {
+    let (i, _) = spaced(tag("typescript"))(i)?;
+
+    Ok((i, TypeScriptTarget {}))
 }
 
 pub fn builds<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Build>, E> {
@@ -114,7 +113,13 @@ pub fn imports<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Import>, E> {
 pub fn import<E: ParseError<Span>>(i: Span) -> IResult<Span, Import, E> {
     let (i, _) = spaced(tag("import"))(i)?;
 
-    context("import", cut(map(id, |name| Import { name })))(i)
+    context(
+        "import",
+        cut(map(
+            tuple((spaced(id), spaced(opt(from)))),
+            |(name, from)| Import { name, from },
+        )),
+    )(i)
 }
 
 fn spaced<O, E: ParseError<Span>, F>(f: F) -> impl Fn(Span) -> IResult<Span, O, E>
@@ -143,7 +148,7 @@ pub fn stringlit<E: ParseError<Span>>(i: Span) -> IResult<Span, StringLiteral, E
     // TODO: use escaped_transform instead
     let (i, loc) = loc(i)?;
 
-    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./";
+    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-./";
 
     map(
         delimited(
@@ -231,7 +236,7 @@ fn maptyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
 }
 
 fn usertyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
-    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_:";
+    let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.";
 
     map(take_while1(move |c| chars.contains(c)), |span: Span| Type {
         span,

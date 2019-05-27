@@ -68,7 +68,7 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn new<P: AsRef<Path>>(input_name: P) -> Result<Self, std::io::Error> {
+    pub fn new<P: AsRef<Path>>(input_name: P) -> Result<Rc<Self>, std::io::Error> {
         let input_name = input_name.as_ref();
 
         use std::fs::File;
@@ -81,11 +81,11 @@ impl Source {
         }
         let lines = input.lines().map(String::from).collect::<Vec<_>>();
 
-        Ok(Self {
+        Ok(Rc::new(Self {
             name: PathBuf::from(input_name),
             input,
             lines,
-        })
+        }))
     }
 }
 
@@ -108,8 +108,8 @@ where
     }
 }
 
-pub fn parse_module(source: Rc<Source>) -> Result<ast::Module, Error> {
-    parse(source, parser::module::<VerboseError<parser::Span>>)
+pub fn parse_schema(source: Rc<Source>) -> Result<ast::Schema, Error> {
+    parse(source, parser::schema::<VerboseError<parser::Span>>)
 }
 
 pub fn parse_rules(source: Rc<Source>) -> Result<ast::Rules, Error> {

@@ -37,7 +37,7 @@ trait Visitable {
     fn visit(self, v: &mut Visitor);
 }
 
-impl Visitable for &ast::Module {
+impl Visitable for &ast::Schema {
     fn visit(self, v: &mut Visitor) {
         for ns in &self.root.namespaces {
             v.visit(ns);
@@ -128,7 +128,7 @@ fn format_comment(comment: &Option<ast::Comment>) -> ColoredString {
     result
 }
 
-pub fn print(module: &ast::Module) {
+pub fn print(schema: &ast::Schema) {
     let mut v = Visitor::new();
-    v.visit(module);
+    v.visit(schema);
 }

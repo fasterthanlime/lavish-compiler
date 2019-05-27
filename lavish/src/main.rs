@@ -1,8 +1,8 @@
 #![warn(clippy::all)]
 
 use clap::{App, Arg, SubCommand};
+use std::collections::HashMap;
 use std::path::Path;
-use std::rc::Rc;
 
 mod ast;
 mod checker;
@@ -13,6 +13,8 @@ mod printer;
 const VERSION: &str = "0.2.0";
 
 fn main() {
+    env_logger::init();
+
     let matches = App::new("Lavish")
         .version(VERSION)
         .author("Amos Wenger <amoswenger@gmail.com>")
@@ -51,16 +53,42 @@ fn parse_workspace(workspace_path: &Path) -> Result<ast::Workspace, Box<dyn std:
         ))));
     }
 
-    let source = parser::Source::new(&rules_path)?;
-    let source = Rc::new(source);
-    let rules = parser::parse_rules(source)?;
+    let rules = {
+        let source = parser::Source::new(&rules_path)?;
+        parser::parse_rules(source)?
+    };
     println!("rules = {:#?}", rules);
-    unimplemented!()
 
-    // let mut modules: Vec<ast::Module> = Vec::new();
-    // let module = parser::parse(source.clone())?;
+    let mut workspace = ast::Workspace {
+        dir: workspace_path.into(),
+        rules,
+        members: HashMap::new(),
+    };
 
-    // checker::check(&module)?;
-    // modules.push(module);
-    // Ok(modules)
+    println!("{} builds", workspace.rules.builds.len());
+    for build in &workspace.rules.builds {
+        let name = build.name.text.to_string();
+        let source_path = workspace.resolve(&name)?;
+        println!("Parsing {} from {:?}", name, source_path);
+        let source = parser::Source::new(&source_path)?;
+        let schema = parser::parse_schema(source)?;
+
+        checker::check(&schema)?;
+
+        workspace.members.insert(
+            name.clone(),
+            ast::WorkspaceMember {
+                name,
+                build: Some(build.clone()),
+                imports: Vec::new(),
+                schema: Some(schema),
+            },
+        );
+    }
+
+    for member in workspace.members.values() {
+        println!("Found member {:#?}", member);
+    }
+
+    Ok(workspace)
 }

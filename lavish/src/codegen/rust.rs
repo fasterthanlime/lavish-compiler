@@ -269,7 +269,7 @@ impl<'a> Stru<'a> {
 
 pub type Result = std::result::Result<(), Error>;
 
-pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
+pub fn codegen<'a>(schemas: &'a [ast::Schema], output: &str) -> Result {
     let start_instant = Instant::now();
 
     let output_path = Path::new(output);
@@ -278,8 +278,8 @@ pub fn codegen<'a>(modules: &'a [ast::Module], output: &str) -> Result {
 
     let mut root = Context::new(out);
 
-    for module in modules {
-        for decl in &module.root.namespaces {
+    for schema in schemas {
+        for decl in &schema.root.namespaces {
             root.visit_toplevel_ns(decl);
         }
     }
@@ -756,4 +756,20 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
     s.line("}");
     s.line("");
     Ok(())
+}
+
+pub struct Generator {
+    target: ast::RustTarget,
+}
+
+impl Generator {
+    pub fn new(target: ast::RustTarget) -> impl super::Generator {
+        Self { target }
+    }
+}
+
+impl super::Generator for Generator {
+    fn emit(&self, workspace: &ast::Workspace, member: &ast::WorkspaceMember) -> Result {
+        unimplemented!()
+    }
 }

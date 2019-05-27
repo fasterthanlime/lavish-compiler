@@ -66,7 +66,7 @@ impl_named!(ast::StructDecl);
 impl_named!(ast::FunctionDecl);
 impl_named!(ast::Field);
 
-impl Visitable for &ast::Module {
+impl Visitable for &ast::Schema {
     fn visit(self, v: &mut Visitor) {
         v.check_dupes("namespace", &self.root.namespaces);
         for ns in &self.root.namespaces {
@@ -118,9 +118,9 @@ impl Visitable for &ast::Field {
     fn visit(self, _v: &mut Visitor) {}
 }
 
-pub fn check(module: &ast::Module) -> Result<(), Error> {
+pub fn check(schema: &ast::Schema) -> Result<(), Error> {
     let mut v = Visitor { num_errors: 0 };
-    v.visit(module);
+    v.visit(schema);
     if v.num_errors > 0 {
         Err(Error {
             num_errors: v.num_errors,

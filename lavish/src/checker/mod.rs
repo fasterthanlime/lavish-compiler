@@ -16,7 +16,7 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-pub fn check(module: &ast::Module) -> Result<(), Error> {
-    noredef::check(module)?;
+pub fn check(schema: &ast::Schema) -> Result<(), Error> {
+    noredef::check(schema)?;
     Ok(())
 }
