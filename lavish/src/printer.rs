@@ -39,9 +39,8 @@ trait Visitable {
 
 impl Visitable for &ast::Schema {
     fn visit(self, v: &mut Visitor) {
-        for ns in &self.root.namespaces {
-            v.visit(ns);
-        }
+        v.print(&self.loc, "schema".into());
+        self.body.visit(v)
     }
 }
 
@@ -55,6 +54,12 @@ impl Visitable for &ast::NamespaceDecl {
                 format_comment(&self.comment),
             ),
         );
+        self.body.visit(v)
+    }
+}
+
+impl Visitable for &ast::NamespaceBody {
+    fn visit(self, v: &mut Visitor) {
         for ns in &self.namespaces {
             v.visit(ns);
         }

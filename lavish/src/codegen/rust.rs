@@ -5,7 +5,6 @@ use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::{self, Write};
-use std::path::Path;
 use std::time::Instant;
 
 const INDENT_WIDTH: usize = 4;
@@ -35,7 +34,7 @@ impl<'a> io::Write for &'a Output {
 }
 
 struct Context<'a> {
-    namespaces: IndexMap<&'a str, Namespace<'a>>,
+    root: Namespace<'a>,
     output: Output,
 }
 
@@ -51,46 +50,15 @@ enum FunKind {
 }
 
 impl<'a> Context<'a> {
-    fn new(file: File) -> Self {
+    fn new(file: File, root_body: &'a ast::NamespaceBody) -> Self {
         Self {
-            namespaces: IndexMap::new(),
+            root: Namespace::new("", "<root>", root_body),
             output: Output::new(file),
         }
     }
 
-    fn visit_toplevel_ns(&mut self, decl: &'a ast::NamespaceDecl) {
-        let k = decl.name.text.as_ref();
-
-        let mut ns = Namespace::new(decl);
-        self.visit_ns("", &mut ns);
-        self.namespaces.insert(k, ns);
-    }
-
-    fn visit_ns(&mut self, prefix: &str, ns: &mut Namespace<'a>) {
-        let decl = &ns.decl;
-        let prefix = format!("{}{}.", prefix, ns.name());
-
-        for decl in &decl.functions {
-            let full_name = format!("{}{}", prefix, decl.name.text);
-            let ff = Fun::new(decl, full_name);
-            ns.funs.insert(&decl.name.text, ff);
-        }
-
-        for decl in &decl.structs {
-            let full_name = format!("{}{}", prefix, decl.name.text);
-            let st = Stru::new(decl, full_name);
-            ns.strus.insert(&decl.name.text, st);
-        }
-
-        for decl in &decl.namespaces {
-            let mut child = Namespace::new(decl);
-            self.visit_ns(&prefix, &mut child);
-            ns.children.insert(decl.name.text.as_ref(), child);
-        }
-    }
-
     fn all_funs(&self) -> Box<Iterator<Item = &'a Fun> + 'a> {
-        Box::new(self.namespaces.values().map(Namespace::funs).flatten())
+        Box::new(self.root.funs())
     }
 
     fn funs(&self, kind: FunKind) -> Box<Iterator<Item = &'a Fun> + 'a> {
@@ -168,20 +136,47 @@ impl<'a> ScopeLike<'a> for Scope<'a> {
 }
 
 struct Namespace<'a> {
-    decl: &'a ast::NamespaceDecl,
-    children: IndexMap<&'a str, Namespace<'a>>,
+    name: &'a str,
 
+    children: IndexMap<&'a str, Namespace<'a>>,
     funs: IndexMap<&'a str, Fun<'a>>,
     strus: IndexMap<&'a str, Stru<'a>>,
 }
 
 impl<'a> Namespace<'a> {
-    fn new(decl: &'a ast::NamespaceDecl) -> Self {
+    fn new(prefix: &str, name: &'a str, decl: &'a ast::NamespaceBody) -> Self {
+        let prefix = if name == "<root>" {
+            "".into()
+        } else {
+            format!("{}{}.", prefix, name)
+        };
+
+        let mut children: IndexMap<&'a str, Namespace<'a>> = IndexMap::new();
+        let mut funs: IndexMap<&'a str, Fun<'a>> = IndexMap::new();
+        let mut strus: IndexMap<&'a str, Stru<'a>> = IndexMap::new();
+
+        for decl in &decl.functions {
+            let full_name = format!("{}{}", prefix, decl.name.text);
+            let ff = Fun::new(decl, full_name);
+            funs.insert(&decl.name.text, ff);
+        }
+
+        for decl in &decl.structs {
+            let full_name = format!("{}{}", prefix, decl.name.text);
+            let st = Stru::new(decl, full_name);
+            strus.insert(&decl.name.text, st);
+        }
+
+        for decl in &decl.namespaces {
+            let name = decl.name.text.as_ref();
+            children.insert(name, Namespace::new(&prefix, name, &decl.body));
+        }
+
         Namespace {
-            decl,
-            children: IndexMap::new(),
-            funs: IndexMap::new(),
-            strus: IndexMap::new(),
+            name,
+            children,
+            funs,
+            strus,
         }
     }
 
@@ -196,7 +191,7 @@ impl<'a> Namespace<'a> {
     }
 
     fn name(&self) -> &'a str {
-        &self.decl.name.text
+        self.name
     }
 }
 
@@ -214,19 +209,7 @@ impl<'a> Fun<'a> {
     }
 
     fn rpc_name(&self) -> String {
-        let last = self.tokens.len() - 1;
-        self.tokens
-            .iter()
-            .enumerate()
-            .map(|(i, x)| {
-                if i == last {
-                    x.to_camel_case()
-                } else {
-                    x.to_mixed_case()
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(".")
+        self.tokens.join(".")
     }
 
     fn variant_name(&self) -> String {
@@ -268,282 +251,6 @@ impl<'a> Stru<'a> {
 }
 
 pub type Result = std::result::Result<(), Error>;
-
-pub fn codegen<'a>(schemas: &'a [ast::Schema], output: &str) -> Result {
-    let start_instant = Instant::now();
-
-    let output_path = Path::new(output);
-    std::fs::create_dir_all(output_path.parent().unwrap())?;
-    let out = File::create(output_path).unwrap();
-
-    let mut root = Context::new(out);
-
-    for schema in schemas {
-        for decl in &schema.root.namespaces {
-            root.visit_toplevel_ns(decl);
-        }
-    }
-
-    let s = &root;
-    s.line("// This file is generated by lavish: DO NOT EDIT");
-    s.line("// https://github.com/fasterthanlime/lavish");
-    s.line("");
-    s.line("// Kindly ask rustfmt not to reformat this file.");
-    s.line("#![cfg_attr(rustfmt, rustfmt_skip)]");
-    s.line("");
-    s.line("// Disable some lints, since this file is generated.");
-    s.line("#![allow(clippy::all)]");
-    s.line("#![allow(unknown_lints)]");
-    s.line("#![allow(unused)]");
-    s.line("");
-
-    fn write_enum<'a, I>(s: &ScopeLike, kind: &str, funs: I)
-    where
-        I: Iterator<Item = &'a Fun<'a>>,
-    {
-        let s = s.scope();
-        for fun in funs {
-            s.line(&format!(
-                "{}({}::{}),",
-                fun.variant_name(),
-                fun.qualified_name(),
-                kind,
-            ));
-        }
-    };
-
-    {
-        s.line("pub use __::*;");
-        s.line("");
-        s.line("mod __ {");
-        let s = s.scope();
-
-        s.line("// Notes: as of 2019-05-21, futures-preview is required");
-        s.line("use futures::prelude::*;");
-        s.line("use std::pin::Pin;");
-        s.line("use std::sync::Arc;");
-        s.line("");
-        s.line("use lavish_rpc as rpc;");
-        s.line("use rpc::{Atom, erased_serde, serde_derive::*};");
-
-        s.line("");
-        s.line("#[derive(Serialize, Debug)]");
-        s.line("#[serde(untagged)]");
-        s.line("#[allow(non_camel_case_types, unused)]");
-        s.line("pub enum Params {");
-        write_enum(&s, "Params", root.funs(FunKind::Request));
-        s.line("}"); // enum Params
-
-        s.line("");
-        s.line("#[derive(Serialize, Debug)]");
-        s.line("#[serde(untagged)]");
-        s.line("#[allow(non_camel_case_types, unused)]");
-        s.line("pub enum Results {");
-        write_enum(&s, "Results", root.funs(FunKind::Request));
-        s.line("}"); // enum Results
-
-        s.line("");
-        s.line("#[derive(Serialize, Debug)]");
-        s.line("#[serde(untagged)]");
-        s.line("#[allow(non_camel_case_types, unused)]");
-        s.line("pub enum NotificationParams {");
-        write_enum(&s, "Params", root.funs(FunKind::Notification));
-        s.line("}"); // enum NotificationParams
-
-        s.line("");
-        s.line("pub type Message = rpc::Message<Params, NotificationParams, Results>;");
-        s.line("pub type Handle = rpc::Handle<Params, NotificationParams, Results>;");
-        s.line("pub type System = rpc::System<Params, NotificationParams, Results>;");
-        s.line("pub type Protocol = rpc::Protocol<Params, NotificationParams, Results>;");
-        s.line("");
-        s.line("pub fn protocol() -> Protocol {");
-        s.in_scope(&|s| {
-            s.line("Protocol::new()");
-        });
-        s.line("}"); // fn protocol
-
-        for (strukt, side, kind) in &[
-            ("Params", "Params", FunKind::Request),
-            ("Results", "Results", FunKind::Request),
-            ("Params", "NotificationParams", FunKind::Notification),
-        ] {
-            s.line("");
-            s.line(&format!("impl rpc::Atom for {} {{", side));
-            s.in_scope(&|s| {
-                s.line("fn method(&self) -> &'static str {");
-                s.in_scope(&|s| {
-                    s.line("match self {");
-                    s.in_scope(&|s| {
-                        let mut count = 0;
-                        for fun in root.funs(*kind) {
-                            count += 1;
-                            s.line(&format!(
-                                "{}::{}(_) => {:?},",
-                                side,
-                                fun.variant_name(),
-                                fun.rpc_name()
-                            ));
-                        }
-                        if count == 0 {
-                            s.line("_ => unimplemented!()")
-                        }
-                    });
-                    s.line("}");
-                });
-                s.line("}"); // fn method
-
-                s.line("");
-                s.line("fn deserialize(");
-                s.in_scope(&|s| {
-                    s.line("method: &str,");
-                    s.line("de: &mut erased_serde::Deserializer,");
-                });
-                s.line(") -> erased_serde::Result<Self> {");
-                s.in_scope(&|s| {
-                    s.line("use erased_serde::deserialize as deser;");
-                    s.line("use serde::de::Error;");
-                    s.line("");
-                    s.line("match method {");
-                    s.in_scope(&|s| {
-                        for fun in root.funs(*kind) {
-                            s.line(&format!("{:?} =>", fun.rpc_name(),));
-                            {
-                                let s = s.scope();
-                                s.line(&format!(
-                                    "Ok({}::{}(deser::<{}::{}>(de)?)),",
-                                    side,
-                                    fun.variant_name(),
-                                    fun.qualified_name(),
-                                    strukt,
-                                ));
-                            }
-                        }
-                        s.line("_ => Err(erased_serde::Error::custom(format!(");
-                        s.in_scope(&|s| {
-                            s.line(&format!("{:?},", "unknown method: {}"));
-                            s.line("method,");
-                        });
-                        s.line("))),");
-                    });
-                    s.line("}");
-                });
-                s.line("}"); // fn deserialize
-            });
-            s.line("}"); // impl Atom for side
-        } // impl rpc::Atom for P, NP, R
-
-        s.line("");
-        s.line("pub struct Call<T, PP> {");
-        s.in_scope(&|s| {
-            s.line("pub state: Arc<T>,");
-            s.line("pub handle: Handle,");
-            s.line("pub params: PP,");
-        });
-        s.line("}"); // struct Call
-
-        s.line("");
-        s.line("pub type SlotFuture = ");
-        s.in_scope(&|s| {
-            s.line("Future<Output = Result<Results, rpc::Error>> + Send + 'static;");
-        });
-
-        s.line("");
-        s.line("pub type SlotReturn = Pin<Box<SlotFuture>>;");
-
-        s.line("");
-        s.line("pub type SlotFn<'a, T> = ");
-        s.in_scope(&|s| {
-            s.line("Fn(Arc<T>, Handle, Params) -> SlotReturn + 'a + Send + Sync;");
-        });
-
-        s.line("");
-        s.line("pub type Slot<'a, T> = Option<Box<SlotFn<'a, T>>>;");
-
-        s.line("");
-        s.line("pub struct Handler<'a, T> {");
-        s.in_scope(&|s| {
-            s.line("state: Arc<T>,");
-            for fun in root.funs(FunKind::Request) {
-                s.line(&format!("{}: Slot<'a, T>,", fun.variant_name()));
-            }
-        });
-        s.line("}"); // struct Handler
-
-        s.line("");
-        s.line("impl<'a, T> Handler<'a, T> {");
-        s.in_scope(&|s| {
-            s.line("pub fn new(state: T) -> Self {");
-            s.in_scope(&|s| {
-                s.line("Self {");
-                s.in_scope(&|s| {
-                    s.line("state: Arc::new(state),");
-                    for fun in root.funs(FunKind::Request) {
-                        s.line(&format!("{}: None,", fun.variant_name()));
-                    }
-                });
-                s.line("}");
-            });
-            s.line("}");
-        });
-        s.line("}"); // impl Handler
-
-        s.line("");
-        s.line("type HandlerRet = Pin<Box<dyn Future<Output = Result<Results, rpc::Error>> + Send + 'static>>;");
-        s.line("");
-        s.line("impl<'a, T> rpc::Handler<Params, NotificationParams, Results, HandlerRet> for Handler<'a, T>");
-        s.line("where");
-        s.in_scope(&|s| {
-            s.line("T: Send + Sync,");
-        });
-        s.line("{");
-        s.in_scope(&|s| {
-            s.line("fn handle(&self, handle: Handle, params: Params) -> HandlerRet {");
-            s.in_scope(&|s| {
-                s.line("let method = params.method();");
-                s.line("let slot = match params {");
-                s.in_scope(&|s| {
-                    for fun in root.funs(FunKind::Request) {
-                        s.line(&format!(
-                            "Params::{}(_) => self.{}.as_ref(),",
-                            fun.variant_name(),
-                            fun.variant_name()
-                        ));
-                    }
-                    s.line("_ => None,");
-                });
-                s.line("};");
-                s.line("match slot {");
-                s.in_scope(&|s| {
-                    s.line("Some(slot_fn) => {");
-                    s.in_scope(&|s| {
-                        s.line("let res = slot_fn(self.state.clone(), handle, params);");
-                        s.line("Box::pin(async move { Ok(res.await?) })");
-                    });
-                    s.line("}"); // Some(slot_fn)
-                    s.line("None => Box::pin(async move { Err(rpc::Error::MethodUnimplemented(method)) }),");
-                });
-                s.line("}"); // match slot
-            });
-            s.line("}");
-        });
-        s.line("}"); // impl rpc::Handler for Handler
-
-        for (_, ns) in &root.namespaces {
-            s.line("");
-            visit_ns(&s, ns, 1)?;
-        }
-    }
-    s.line("}"); // mod __root
-
-    let end_instant = Instant::now();
-    println!(
-        "Generated {:?} in {:?}",
-        output_path,
-        end_instant.duration_since(start_instant)
-    );
-
-    Ok(())
-}
 
 trait AsRust {
     fn as_rust<'a>(&'a self) -> Box<fmt::Display + 'a>;
@@ -759,17 +466,283 @@ fn visit_ns<'a>(s: &'a ScopeLike<'a>, ns: &Namespace, depth: usize) -> Result {
 }
 
 pub struct Generator {
+    #[allow(unused)]
     target: ast::RustTarget,
 }
 
 impl Generator {
-    pub fn new(target: ast::RustTarget) -> impl super::Generator {
+    pub fn new(target: ast::RustTarget) -> Self {
         Self { target }
     }
 }
 
 impl super::Generator for Generator {
     fn emit(&self, workspace: &ast::Workspace, member: &ast::WorkspaceMember) -> Result {
-        unimplemented!()
+        let start_instant = Instant::now();
+
+        let output_path = workspace.dir.join(&member.name).join("mod.rs");
+        std::fs::create_dir_all(output_path.parent().unwrap())?;
+        let out = File::create(&output_path).unwrap();
+
+        let schema = member.schema.as_ref().unwrap();
+        let ctx = Context::new(out, &schema.body);
+
+        let s = &ctx;
+        s.line("// This file is generated by lavish: DO NOT EDIT");
+        s.line("// https://github.com/fasterthanlime/lavish");
+        s.line("");
+        s.line("// Kindly ask rustfmt not to reformat this file.");
+        s.line("#![cfg_attr(rustfmt, rustfmt_skip)]");
+        s.line("");
+        s.line("// Disable some lints, since this file is generated.");
+        s.line("#![allow(clippy::all)]");
+        s.line("#![allow(unknown_lints)]");
+        s.line("#![allow(unused)]");
+        s.line("");
+
+        fn write_enum<'a, I>(s: &ScopeLike, kind: &str, funs: I)
+        where
+            I: Iterator<Item = &'a Fun<'a>>,
+        {
+            let s = s.scope();
+            for fun in funs {
+                s.line(&format!(
+                    "{}({}::{}),",
+                    fun.variant_name(),
+                    fun.qualified_name(),
+                    kind,
+                ));
+            }
+        };
+
+        {
+            s.line("pub use __::*;");
+            s.line("");
+            s.line("mod __ {");
+            let s = s.scope();
+
+            s.line("// Notes: as of 2019-05-21, futures-preview is required");
+            s.line("use futures::prelude::*;");
+            s.line("use std::pin::Pin;");
+            s.line("use std::sync::Arc;");
+            s.line("");
+            s.line("use lavish_rpc as rpc;");
+            s.line("use rpc::{Atom, erased_serde, serde_derive::*};");
+
+            s.line("");
+            s.line("#[derive(Serialize, Debug)]");
+            s.line("#[serde(untagged)]");
+            s.line("#[allow(non_camel_case_types, unused)]");
+            s.line("pub enum Params {");
+            write_enum(&s, "Params", ctx.funs(FunKind::Request));
+            s.line("}"); // enum Params
+
+            s.line("");
+            s.line("#[derive(Serialize, Debug)]");
+            s.line("#[serde(untagged)]");
+            s.line("#[allow(non_camel_case_types, unused)]");
+            s.line("pub enum Results {");
+            write_enum(&s, "Results", ctx.funs(FunKind::Request));
+            s.line("}"); // enum Results
+
+            s.line("");
+            s.line("#[derive(Serialize, Debug)]");
+            s.line("#[serde(untagged)]");
+            s.line("#[allow(non_camel_case_types, unused)]");
+            s.line("pub enum NotificationParams {");
+            write_enum(&s, "Params", ctx.funs(FunKind::Notification));
+            s.line("}"); // enum NotificationParams
+
+            s.line("");
+            s.line("pub type Message = rpc::Message<Params, NotificationParams, Results>;");
+            s.line("pub type Handle = rpc::Handle<Params, NotificationParams, Results>;");
+            s.line("pub type System = rpc::System<Params, NotificationParams, Results>;");
+            s.line("pub type Protocol = rpc::Protocol<Params, NotificationParams, Results>;");
+            s.line("");
+            s.line("pub fn protocol() -> Protocol {");
+            s.in_scope(&|s| {
+                s.line("Protocol::new()");
+            });
+            s.line("}"); // fn protocol
+
+            for (strukt, side, kind) in &[
+                ("Params", "Params", FunKind::Request),
+                ("Results", "Results", FunKind::Request),
+                ("Params", "NotificationParams", FunKind::Notification),
+            ] {
+                s.line("");
+                s.line(&format!("impl rpc::Atom for {} {{", side));
+                s.in_scope(&|s| {
+                    s.line("fn method(&self) -> &'static str {");
+                    s.in_scope(&|s| {
+                        s.line("match self {");
+                        s.in_scope(&|s| {
+                            let mut count = 0;
+                            for fun in ctx.funs(*kind) {
+                                count += 1;
+                                s.line(&format!(
+                                    "{}::{}(_) => {:?},",
+                                    side,
+                                    fun.variant_name(),
+                                    fun.rpc_name()
+                                ));
+                            }
+                            if count == 0 {
+                                s.line("_ => unimplemented!()")
+                            }
+                        });
+                        s.line("}");
+                    });
+                    s.line("}"); // fn method
+
+                    s.line("");
+                    s.line("fn deserialize(");
+                    s.in_scope(&|s| {
+                        s.line("method: &str,");
+                        s.line("de: &mut erased_serde::Deserializer,");
+                    });
+                    s.line(") -> erased_serde::Result<Self> {");
+                    s.in_scope(&|s| {
+                        s.line("use erased_serde::deserialize as deser;");
+                        s.line("use serde::de::Error;");
+                        s.line("");
+                        s.line("match method {");
+                        s.in_scope(&|s| {
+                            for fun in ctx.funs(*kind) {
+                                s.line(&format!("{:?} =>", fun.rpc_name(),));
+                                {
+                                    let s = s.scope();
+                                    s.line(&format!(
+                                        "Ok({}::{}(deser::<{}::{}>(de)?)),",
+                                        side,
+                                        fun.variant_name(),
+                                        fun.qualified_name(),
+                                        strukt,
+                                    ));
+                                }
+                            }
+                            s.line("_ => Err(erased_serde::Error::custom(format!(");
+                            s.in_scope(&|s| {
+                                s.line(&format!("{:?},", "unknown method: {}"));
+                                s.line("method,");
+                            });
+                            s.line("))),");
+                        });
+                        s.line("}");
+                    });
+                    s.line("}"); // fn deserialize
+                });
+                s.line("}"); // impl Atom for side
+            } // impl rpc::Atom for P, NP, R
+
+            s.line("");
+            s.line("pub struct Call<T, PP> {");
+            s.in_scope(&|s| {
+                s.line("pub state: Arc<T>,");
+                s.line("pub handle: Handle,");
+                s.line("pub params: PP,");
+            });
+            s.line("}"); // struct Call
+
+            s.line("");
+            s.line("pub type SlotFuture = ");
+            s.in_scope(&|s| {
+                s.line("Future<Output = Result<Results, rpc::Error>> + Send + 'static;");
+            });
+
+            s.line("");
+            s.line("pub type SlotReturn = Pin<Box<SlotFuture>>;");
+
+            s.line("");
+            s.line("pub type SlotFn<'a, T> = ");
+            s.in_scope(&|s| {
+                s.line("Fn(Arc<T>, Handle, Params) -> SlotReturn + 'a + Send + Sync;");
+            });
+
+            s.line("");
+            s.line("pub type Slot<'a, T> = Option<Box<SlotFn<'a, T>>>;");
+
+            s.line("");
+            s.line("pub struct Handler<'a, T> {");
+            s.in_scope(&|s| {
+                s.line("state: Arc<T>,");
+                for fun in ctx.funs(FunKind::Request) {
+                    s.line(&format!("{}: Slot<'a, T>,", fun.variant_name()));
+                }
+            });
+            s.line("}"); // struct Handler
+
+            s.line("");
+            s.line("impl<'a, T> Handler<'a, T> {");
+            s.in_scope(&|s| {
+                s.line("pub fn new(state: T) -> Self {");
+                s.in_scope(&|s| {
+                    s.line("Self {");
+                    s.in_scope(&|s| {
+                        s.line("state: Arc::new(state),");
+                        for fun in ctx.funs(FunKind::Request) {
+                            s.line(&format!("{}: None,", fun.variant_name()));
+                        }
+                    });
+                    s.line("}");
+                });
+                s.line("}");
+            });
+            s.line("}"); // impl Handler
+
+            s.line("");
+            s.line("type HandlerRet = Pin<Box<dyn Future<Output = Result<Results, rpc::Error>> + Send + 'static>>;");
+            s.line("");
+            s.line("impl<'a, T> rpc::Handler<Params, NotificationParams, Results, HandlerRet> for Handler<'a, T>");
+            s.line("where");
+            s.in_scope(&|s| {
+                s.line("T: Send + Sync,");
+            });
+            s.line("{");
+            s.in_scope(&|s| {
+            s.line("fn handle(&self, handle: Handle, params: Params) -> HandlerRet {");
+            s.in_scope(&|s| {
+                s.line("let method = params.method();");
+                s.line("let slot = match params {");
+                s.in_scope(&|s| {
+                    for fun in ctx.funs(FunKind::Request) {
+                        s.line(&format!(
+                            "Params::{}(_) => self.{}.as_ref(),",
+                            fun.variant_name(),
+                            fun.variant_name()
+                        ));
+                    }
+                    s.line("_ => None,");
+                });
+                s.line("};");
+                s.line("match slot {");
+                s.in_scope(&|s| {
+                    s.line("Some(slot_fn) => {");
+                    s.in_scope(&|s| {
+                        s.line("let res = slot_fn(self.state.clone(), handle, params);");
+                        s.line("Box::pin(async move { Ok(res.await?) })");
+                    });
+                    s.line("}"); // Some(slot_fn)
+                    s.line("None => Box::pin(async move { Err(rpc::Error::MethodUnimplemented(method)) }),");
+                });
+                s.line("}"); // match slot
+            });
+            s.line("}");
+        });
+            s.line("}"); // impl rpc::Handler for Handler
+
+            s.line("");
+            visit_ns(&s, &ctx.root, 1)?;
+        }
+        s.line("}"); // mod __root
+
+        let end_instant = Instant::now();
+        println!(
+            "Generated {:?} in {:?}",
+            output_path,
+            end_instant.duration_since(start_instant)
+        );
+
+        Ok(())
     }
 }

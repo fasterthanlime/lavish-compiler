@@ -49,7 +49,7 @@ impl fmt::Debug for UnknownError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "An unknown parsing error occured in {:?}",
+            "An unknown parsing error occured in {}",
             self.source.name()
         )
     }
@@ -87,6 +87,10 @@ impl Source {
             lines,
         }))
     }
+
+    pub fn name(&self) -> &str {
+        self.name.to_str().unwrap()
+    }
 }
 
 pub fn parse<P, O>(source: Rc<Source>, p: P) -> Result<O, Error>
@@ -114,12 +118,6 @@ pub fn parse_schema(source: Rc<Source>) -> Result<ast::Schema, Error> {
 
 pub fn parse_rules(source: Rc<Source>) -> Result<ast::Rules, Error> {
     parse(source, parser::rules::<VerboseError<parser::Span>>)
-}
-
-impl<'a> Source {
-    pub fn name(&'a self) -> &'a Path {
-        self.name.as_ref()
-    }
 }
 
 pub struct Diagnostic<'a> {
@@ -201,7 +199,7 @@ impl<'a> fmt::Display for Diagnostic<'a> {
         let message = &self.message;
 
         let loc = format!(
-            "{:?}:{}:{}:",
+            "{}:{}:{}:",
             pos.span.source.name(),
             pos.line + 1,
             pos.column + 1

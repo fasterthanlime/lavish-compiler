@@ -99,12 +99,12 @@ pub struct WorkspaceMember {
 pub struct Schema {
     pub loc: Span,
     pub imports: Vec<Import>,
-    pub root: NamespaceDecl,
+    pub body: NamespaceBody,
 }
 
 impl Schema {
-    pub fn new(loc: Span, imports: Vec<Import>, root: NamespaceDecl) -> Self {
-        Schema { loc, imports, root }
+    pub fn new(loc: Span, imports: Vec<Import>, body: NamespaceBody) -> Self {
+        Schema { loc, imports, body }
     }
 }
 
@@ -125,30 +125,38 @@ pub struct NamespaceDecl {
     pub loc: Span,
     pub comment: Option<Comment>,
     pub name: Identifier,
+    pub body: NamespaceBody,
+}
+
+#[derive(Debug, Clone)]
+pub struct NamespaceBody {
     pub functions: Vec<FunctionDecl>,
     pub structs: Vec<StructDecl>,
     pub namespaces: Vec<NamespaceDecl>,
 }
 
 impl NamespaceDecl {
-    pub fn new(
-        name: Identifier,
-        loc: Span,
-        comment: Option<Comment>,
-        items: Vec<NamespaceItem>,
-    ) -> Self {
-        let mut ns = NamespaceDecl {
+    pub fn new(name: Identifier, loc: Span, comment: Option<Comment>, body: NamespaceBody) -> Self {
+        Self {
             name,
             loc,
             comment,
+            body,
+        }
+    }
+}
+
+impl NamespaceBody {
+    pub fn new(items: Vec<NamespaceItem>) -> Self {
+        let mut bod = Self {
             functions: Vec::new(),
             structs: Vec::new(),
             namespaces: Vec::new(),
         };
         for item in items {
-            ns.add_item(item)
+            bod.add_item(item);
         }
-        ns
+        bod
     }
 
     fn add_item(&mut self, item: NamespaceItem) {
@@ -181,6 +189,7 @@ pub struct FunctionDecl {
     pub name: Identifier,
     pub params: Vec<Field>,
     pub results: Vec<Field>,
+    pub body: Option<NamespaceBody>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

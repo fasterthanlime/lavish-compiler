@@ -68,14 +68,20 @@ impl_named!(ast::Field);
 
 impl Visitable for &ast::Schema {
     fn visit(self, v: &mut Visitor) {
-        v.check_dupes("namespace", &self.root.namespaces);
-        for ns in &self.root.namespaces {
+        v.check_dupes("namespace", &self.body.namespaces);
+        for ns in &self.body.namespaces {
             v.visit(ns);
         }
     }
 }
 
 impl Visitable for &ast::NamespaceDecl {
+    fn visit(self, v: &mut Visitor) {
+        self.body.visit(v)
+    }
+}
+
+impl Visitable for &ast::NamespaceBody {
     fn visit(self, v: &mut Visitor) {
         v.check_dupes("namespace", &self.namespaces);
         for ns in &self.namespaces {
