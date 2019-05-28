@@ -302,7 +302,7 @@ pub fn print_errors(f: &mut fmt::Formatter, e: &VerboseError<Span>) -> fmt::Resu
             VerboseErrorKind::Nom(ek) => {
                 pos.diag_err(format!(
                     "parsing error: {}",
-                    &format!("{:#?}", ek).red().bold()
+                    format!("{:#?}", ek).red().bold()
                 ))
                 .write(f)?;
             }

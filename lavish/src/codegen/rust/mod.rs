@@ -220,7 +220,7 @@ impl<'a> fmt::Display for RustType<'a> {
 }
 
 fn visit_ns<'a>(s: &'a Scope<'a>, ns: &Namespace, depth: usize) -> Result {
-    s.line(&format!("pub mod {} {{", ns.name()));
+    s.line(format!("pub mod {} {{", ns.name()));
     {
         let s = s.scope();
         visit_ns_body(&s, ns, depth)?;
@@ -243,7 +243,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
         s.def_struct(&st.decl.name.text, |s| {
             for f in &st.decl.fields {
                 s.comment(&f.comment);
-                s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
+                s.line(format!("pub {}: {},", f.name.text, f.typ.as_rust()));
             }
         });
         s.line("");
@@ -251,26 +251,26 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
 
     let write_fun = |fun: &Fun<'a>| -> Result {
         s.comment(&fun.decl.comment);
-        s.line(&format!("pub mod {} {{", fun.mod_name()));
+        s.line(format!("pub mod {} {{", fun.mod_name()));
 
         {
             let s = s.scope();
             s.line("use futures::prelude::*;");
             s.line("use lavish_rpc::serde_derive::*;");
             let super_ref = "super::".repeat(depth + 2);
-            s.line(&format!("use {}__;", super_ref));
+            s.line(format!("use {}__;", super_ref));
             s.line("");
 
             let write_downgrade = |side: &str| {
                 s.in_scope(|s| {
-                    s.line(&format!(
+                    s.line(format!(
                         "pub fn downgrade(p: __::{}) -> Option<Self> {{",
                         side,
                     ));
                     s.in_scope(|s| {
                         s.line("match p {");
                         s.in_scope(|s| {
-                            s.line(&format!(
+                            s.line(format!(
                                 "__::{}::{}(p) => Some(p),",
                                 side,
                                 fun.variant_name()
@@ -285,7 +285,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
 
             s.def_struct("Params", |s| {
                 for f in &fun.decl.params {
-                    s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
+                    s.line(format!("pub {}: {},", f.name.text, f.typ.as_rust()));
                 }
             });
 
@@ -302,7 +302,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                 s.line("");
                 s.def_struct("Results", |s| {
                     for f in &fun.decl.results {
-                        s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
+                        s.line(format!("pub {}: {},", f.name.text, f.typ.as_rust()));
                     }
                 });
 
@@ -317,14 +317,14 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                 } else {
                     "Params"
                 };
-                s.line(&format!("pub async fn call(h: &__::Handle, p: {}) -> Result<Results, lavish_rpc::Error> {{", params_type));
+                s.line(format!("pub async fn call(h: &__::Handle, p: {}) -> Result<Results, lavish_rpc::Error> {{", params_type));
                 s.in_scope(|s| {
                     s.line("h.call(");
                     s.in_scope(|s| {
                         if fun.has_empty_params() {
-                            s.line(&format!("__::Params::{}(Params {{}}),", fun.variant_name()));
+                            s.line(format!("__::Params::{}(Params {{}}),", fun.variant_name()));
                         } else {
-                            s.line(&format!("__::Params::{}(p),", fun.variant_name()));
+                            s.line(format!("__::Params::{}(p),", fun.variant_name()));
                         }
                         s.line("Results::downgrade,");
                     }); // h.call arguments
@@ -342,14 +342,14 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                 };
                 s.in_scope(|s| {
                     s.line("F: Fn(__::Call<T, Params>) -> FT + Sync + Send + 'static,");
-                    s.line(&format!(
+                    s.line(format!(
                         "FT: Future<Output = Result<{}, lavish_rpc::Error>> + Send + 'static,",
                         results_type
                     ));
                 });
                 s.line("{");
                 s.in_scope(|s| {
-                    s.line(&format!(
+                    s.line(format!(
                         "h.{} = Some(Box::new(move |state, handle, params| {{",
                         fun.variant_name(),
                     ));
@@ -362,12 +362,12 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                                 s.line("params: Params::downgrade(params).unwrap(),");
                             });
                             if fun.has_empty_results() {
-                                s.line(&format!(
+                                s.line(format!(
                                     "}}).map_ok(|_| __::Results::{}(Results {{}}))",
                                     fun.variant_name()
                                 ));
                             } else {
-                                s.line(&format!("}}).map_ok(__::Results::{})", fun.variant_name()));
+                                s.line(format!("}}).map_ok(__::Results::{})", fun.variant_name()));
                             }
                         });
                         s.line(")");
@@ -417,7 +417,7 @@ impl super::Generator for Generator {
             self.write_prelude(&s);
 
             for member in workspace.members.values() {
-                s.line(&format!("pub mod {};", member.name));
+                s.line(format!("pub mod {};", member.name));
             }
         }
 
@@ -456,7 +456,7 @@ impl Generator {
         {
             let s = s.scope();
             for fun in funs {
-                s.line(&format!(
+                s.line(format!(
                     "{}({}::{}),",
                     fun.variant_name(),
                     fun.qualified_name(),
@@ -520,7 +520,7 @@ impl Generator {
                 ("Params", "NotificationParams", FunKind::Notification),
             ] {
                 s.line("");
-                s.line(&format!("impl rpc::Atom for {} {{", side));
+                s.line(format!("impl rpc::Atom for {} {{", side));
                 s.in_scope(|s| {
                     s.line("fn method(&self) -> &'static str {");
                     s.in_scope(|s| {
@@ -529,7 +529,7 @@ impl Generator {
                             let mut count = 0;
                             for fun in ctx.funs(*kind) {
                                 count += 1;
-                                s.line(&format!(
+                                s.line(format!(
                                     "{}::{}(_) => {:?},",
                                     side,
                                     fun.variant_name(),
@@ -558,10 +558,10 @@ impl Generator {
                         s.line("match method {");
                         s.in_scope(|s| {
                             for fun in ctx.funs(*kind) {
-                                s.line(&format!("{:?} =>", fun.rpc_name(),));
+                                s.line(format!("{:?} =>", fun.rpc_name(),));
                                 {
                                     let s = s.scope();
-                                    s.line(&format!(
+                                    s.line(format!(
                                         "Ok({}::{}(deser::<{}::{}>(de)?)),",
                                         side,
                                         fun.variant_name(),
@@ -572,7 +572,7 @@ impl Generator {
                             }
                             s.line("_ => Err(erased_serde::Error::custom(format!(");
                             s.in_scope(|s| {
-                                s.line(&format!("{:?},", "unknown method: {}"));
+                                s.line(format!("{:?},", "unknown method: {}"));
                                 s.line("method,");
                             });
                             s.line("))),");
@@ -616,7 +616,7 @@ impl Generator {
             s.in_scope(|s| {
                 s.line("state: Arc<T>,");
                 for fun in ctx.funs(FunKind::Request) {
-                    s.line(&format!("{}: Slot<T>,", fun.variant_name()));
+                    s.line(format!("{}: Slot<T>,", fun.variant_name()));
                 }
             });
             s.line("}"); // struct Handler
@@ -630,7 +630,7 @@ impl Generator {
                     s.in_scope(|s| {
                         s.line("state,");
                         for fun in ctx.funs(FunKind::Request) {
-                            s.line(&format!("{}: None,", fun.variant_name()));
+                            s.line(format!("{}: None,", fun.variant_name()));
                         }
                     });
                     s.line("}");
@@ -639,11 +639,11 @@ impl Generator {
 
                 for fun in ctx.funs(FunKind::Request) {
                     s.line("");
-                    s.line(&format!("pub fn on_{}<F, FT> (f: F)", fun.variant_name()));
+                    s.line(format!("pub fn on_{}<F, FT> (f: F)", fun.variant_name()));
                     s.line("where");
                     s.in_scope(|s| {
                         s.line("F: Fn(Call<T, Params>) -> FT + Sync + Send + 'static,");
-                        s.line(&format!("FT: Future<Output = Result<{}::Results, lavish_rpc::Error>> + Send + 'static,", fun.qualified_name()));
+                        s.line(format!("FT: Future<Output = Result<{}::Results, lavish_rpc::Error>> + Send + 'static,", fun.qualified_name()));
                     });
                     s.line("{");
                     s.in_scope(|s| {
@@ -672,7 +672,7 @@ impl Generator {
                 s.line("let slot = match params {");
                 s.in_scope(|s| {
                     for fun in ctx.funs(FunKind::Request) {
-                        s.line(&format!(
+                        s.line(format!(
                             "Params::{}(_) => self.{}.as_ref(),",
                             fun.variant_name(),
                             fun.variant_name()
