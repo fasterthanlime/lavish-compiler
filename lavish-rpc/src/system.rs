@@ -16,8 +16,8 @@ use futures::task::SpawnExt;
 mod codec;
 use codec::Codec;
 
-pub trait IO: AsyncRead + AsyncWrite + Send + Sized + Unpin + 'static {}
-impl<T> IO for T where T: AsyncRead + AsyncWrite + Send + Sized + Unpin + 'static {}
+pub trait Conn: AsyncRead + AsyncWrite + Send + Sized + Unpin + 'static {}
+impl<T> Conn for T where T: AsyncRead + AsyncWrite + Send + Sized + Unpin + 'static {}
 
 #[derive(Clone, Copy)]
 pub struct Protocol<P, NP, R>
@@ -154,14 +154,14 @@ where
     NP: Atom,
     R: Atom,
 {
-    pub fn new<T, H, FT>(
+    pub fn new<C, H, FT>(
         protocol: Protocol<P, NP, R>,
         handler: H,
-        io: T,
+        io: C,
         mut pool: executor::ThreadPool,
     ) -> Result<Self, Error>
     where
-        T: IO,
+        C: Conn,
         H: Handler<P, NP, R, FT> + 'static,
         FT: Future<Output = Result<R, Error>> + Send + 'static,
     {
@@ -299,5 +299,71 @@ where
 {
     fn get_pending(&self, id: u32) -> Option<&'static str> {
         self.in_flight_requests.get(&id).map(|req| req.method)
+    }
+}
+
+pub struct PeerBuilder<C, F, DF, H, P, NP, R, T, FT>
+where
+    C: Conn,
+    F: Fn(T) -> H,
+    DF: Fn() -> T,
+    H: Handler<P, NP, R, FT> + 'static,
+    P: Atom,
+    NP: Atom,
+    R: Atom,
+    FT: Future<Output = Result<R, Error>> + Send + 'static,
+{
+    ugh_rustc_get_it_together: PhantomData<(P, NP, R, FT)>,
+    conn: C,
+    pool: executor::ThreadPool,
+    factory: F,
+    default: DF,
+}
+
+impl<C, F, DF, H, P, NP, R, T, FT> PeerBuilder<C, F, DF, H, P, NP, R, T, FT>
+where
+    C: Conn,
+    F: Fn(T) -> H,
+    DF: Fn() -> T,
+    H: Handler<P, NP, R, FT> + 'static,
+    P: Atom,
+    NP: Atom,
+    R: Atom,
+    FT: Future<Output = Result<R, Error>> + Send + 'static,
+{
+    pub fn new(conn: C, pool: executor::ThreadPool, factory: F, default: DF) -> Self {
+        Self {
+            ugh_rustc_get_it_together: PhantomData,
+            conn,
+            pool,
+            factory,
+            default,
+        }
+    }
+
+    pub fn with_noop(self) -> Result<Handle<P, NP, R>, Error> {
+        let handler = (self.factory)((self.default)());
+        let protocol = Protocol::<P, NP, R>::new();
+        System::new(protocol, handler, self.conn, self.pool).map(|s| s.handle())
+    }
+
+    pub fn with_handler<S>(self, setup: S) -> Result<Handle<P, NP, R>, Error>
+    where
+        S: Fn(&mut H),
+    {
+        let mut handler = (self.factory)((self.default)());
+        setup(&mut handler);
+        let protocol = Protocol::<P, NP, R>::new();
+        System::new(protocol, handler, self.conn, self.pool).map(|s| s.handle())
+    }
+
+    pub fn with_stateful_handler<S>(self, state: T, setup: S) -> Result<Handle<P, NP, R>, Error>
+    where
+        S: Fn(&mut H),
+    {
+        let mut handler = (self.factory)(state);
+        setup(&mut handler);
+        let protocol = Protocol::<P, NP, R>::new();
+        System::new(protocol, handler, self.conn, self.pool).map(|s| s.handle())
     }
 }
