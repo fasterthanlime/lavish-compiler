@@ -19,6 +19,7 @@ pub use span::*;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 
+/// Parses an entire lavish schema
 pub fn schema<E: ParseError<Span>>(i: Span) -> IResult<Span, Schema, E> {
     let (i, loc) = loc(i)?;
 
@@ -30,6 +31,7 @@ pub fn schema<E: ParseError<Span>>(i: Span) -> IResult<Span, Schema, E> {
     ))(i)
 }
 
+/// Parses a `lavish-rules` files.
 pub fn rules<E: ParseError<Span>>(i: Span) -> IResult<Span, Rules, E> {
     let (i, loc) = loc(i)?;
 
@@ -41,6 +43,7 @@ pub fn rules<E: ParseError<Span>>(i: Span) -> IResult<Span, Rules, E> {
     ))(i)
 }
 
+/// In rules file: `target {rust,go,typescript}`, with an optional body
 pub fn target<E: ParseError<Span>>(i: Span) -> IResult<Span, Target, E> {
     let (i, _) = spaced(tag("target"))(i)?;
 
@@ -54,28 +57,33 @@ pub fn target<E: ParseError<Span>>(i: Span) -> IResult<Span, Target, E> {
     )(i)
 }
 
+/// In rules: `target rust`
 pub fn rust_target<E: ParseError<Span>>(i: Span) -> IResult<Span, RustTarget, E> {
     let (i, _) = spaced(tag("rust"))(i)?;
 
     Ok((i, RustTarget {}))
 }
 
+/// In rules: `target go`
 pub fn go_target<E: ParseError<Span>>(i: Span) -> IResult<Span, GoTarget, E> {
     let (i, _) = spaced(tag("go"))(i)?;
 
     Ok((i, GoTarget {}))
 }
 
+/// In rules: `target typescript`
 pub fn ts_target<E: ParseError<Span>>(i: Span) -> IResult<Span, TypeScriptTarget, E> {
     let (i, _) = spaced(tag("typescript"))(i)?;
 
     Ok((i, TypeScriptTarget {}))
 }
 
+/// In rules: list of build directives
 pub fn builds<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Build>, E> {
     many0(spaced(build))(i)
 }
 
+/// In rules: `build X [from Y]`
 pub fn build<E: ParseError<Span>>(i: Span) -> IResult<Span, Build, E> {
     let (i, _) = many0(spaced(comment_line))(i)?;
     let (i, _) = spaced(tag("build"))(i)?;
@@ -89,6 +97,7 @@ pub fn build<E: ParseError<Span>>(i: Span) -> IResult<Span, Build, E> {
     )(i)
 }
 
+/// From directive, used for `build` (rules) and `import` (schemas)
 pub fn from<E: ParseError<Span>>(i: Span) -> IResult<Span, FromDirective, E> {
     let (i, _) = loc(i)?;
     let (i, _) = spaced(tag("from"))(i)?;
@@ -99,10 +108,12 @@ pub fn from<E: ParseError<Span>>(i: Span) -> IResult<Span, FromDirective, E> {
     )(i)
 }
 
+/// In schema: 0+ import directives
 pub fn imports<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Import>, E> {
     many0(spaced(import))(i)
 }
 
+/// In schema: single import directive
 pub fn import<E: ParseError<Span>>(i: Span) -> IResult<Span, Import, E> {
     let (i, _) = spaced(tag("import"))(i)?;
 
@@ -115,6 +126,7 @@ pub fn import<E: ParseError<Span>>(i: Span) -> IResult<Span, Import, E> {
     )(i)
 }
 
+/// f, but skip whitespace before and after (including newlines)
 fn spaced<O, E: ParseError<Span>, F>(f: F) -> impl Fn(Span) -> IResult<Span, O, E>
 where
     F: Fn(Span) -> IResult<Span, O, E>,
@@ -122,12 +134,21 @@ where
     terminated(preceded(sp, f), sp)
 }
 
+/// All whitespace (including newlines)
 fn sp<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     let chars = " \t\r\n";
 
     take_while(move |c| chars.contains(c))(i)
 }
 
+/// Whitespace excluding newlines
+fn linesp<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
+    let chars = " \t";
+
+    take_while(move |c| chars.contains(c))(i)
+}
+
+/// Identifier
 fn id<E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
     let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
@@ -137,6 +158,7 @@ fn id<E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
     })(i)
 }
 
+/// String literal, without escapes for now
 pub fn stringlit<E: ParseError<Span>>(i: Span) -> IResult<Span, StringLiteral, E> {
     // TODO: use escaped_transform instead
     let (i, loc) = loc(i)?;
@@ -159,6 +181,7 @@ pub fn stringlit<E: ParseError<Span>>(i: Span) -> IResult<Span, StringLiteral, E
     )(i)
 }
 
+/// Builtin lavish types
 fn basetyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     map(
         spaced(alt((
@@ -180,6 +203,7 @@ fn basetyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     )(i)
 }
 
+/// Array type: Array<T>
 fn arraytyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     let span = i.clone();
     map(
@@ -194,6 +218,7 @@ fn arraytyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     )(i)
 }
 
+/// Option type: Option<T>
 fn optiontyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     let span = i.clone();
     map(
@@ -208,6 +233,7 @@ fn optiontyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     )(i)
 }
 
+/// Map type: Map<K, V>
 fn maptyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     let span = i.clone();
     map(
@@ -228,6 +254,7 @@ fn maptyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     )(i)
 }
 
+/// User type: foo.bar.Baz
 fn usertyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.";
 
@@ -237,15 +264,18 @@ fn usertyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     })(i)
 }
 
+// Any valid lavish type
 fn typ<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     alt((maptyp, arraytyp, optiontyp, basetyp, usertyp))(i)
 }
 
+// Consumes nothing, returns a span for location information
 fn loc<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     let o = i.take(0);
     Ok((i, o))
 }
 
+// Field declaration: `name: type`, prefixed by optional comment
 fn field<E: ParseError<Span>>(i: Span) -> IResult<Span, Field, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, loc) = spaced(loc)(i)?;
@@ -263,6 +293,7 @@ fn field<E: ParseError<Span>>(i: Span) -> IResult<Span, Field, E> {
     })(i)
 }
 
+// Field list: field declarations separated by commas
 fn fields<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
     terminated(
         separated_list(spaced(char(',')), field),
@@ -270,6 +301,7 @@ fn fields<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
     )(i)
 }
 
+// Function modifiers (server, client)
 fn fnmod<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionModifier, E> {
     alt((
         map(tag("server"), |_| FunctionModifier::Server),
@@ -277,10 +309,12 @@ fn fnmod<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionModifier, E> {
     ))(i)
 }
 
+// Any number of function modifiers
 fn fnmods<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<FunctionModifier>, E> {
     preceded(sp, separated_list(sp, fnmod))(i)
 }
 
+// Results, in the context of a function declaration: `-> (fields)`
 fn results<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
     let (i, _) = spaced(tag("->"))(i)?;
 
@@ -290,6 +324,7 @@ fn results<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
     )(i)
 }
 
+// Function declaration
 fn fndecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, modifiers) = fnmods(i)?;
@@ -324,15 +359,14 @@ fn fndecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     )(i)
 }
 
+// Function body (nested functions)
 fn fnbody<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceBody, E> {
     let (i, _) = spaced(char('{'))(i)?;
 
-    context(
-        "conversation body",
-        cut(terminated(nsbody, spaced(char('}')))),
-    )(i)
+    context("function body", cut(terminated(nsbody, spaced(char('}')))))(i)
 }
 
+// Notification declaration: like function, but no results and no body
 fn notifdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, modifiers) = fnmods(i)?;
@@ -369,6 +403,7 @@ fn notifdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     )(i)
 }
 
+// Struct declaration
 fn structdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, StructDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, _) = preceded(sp, tag("struct"))(i)?;
@@ -391,16 +426,20 @@ fn structdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, StructDecl, E> {
     )(i)
 }
 
+// A single comment-line
 fn comment_line<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
-    preceded(sp, preceded(tag("//"), preceded(sp, take_until("\n"))))(i)
+    preceded(sp, preceded(tag("//"), preceded(linesp, take_until("\n"))))(i)
 }
 
+// A comment block, made of 1+ comment lines. Use with opt
 fn comment<E: ParseError<Span>>(i: Span) -> IResult<Span, Comment, E> {
     map(many1(comment_line), |lines| Comment {
         lines: lines.iter().map(|x| x.clone().into()).collect(),
     })(i)
 }
 
+// Any namespace item, will be Some() if we found something other
+// then a comment line
 fn nsitem<E: ParseError<Span>>(i: Span) -> IResult<Span, Option<NamespaceItem>, E> {
     alt((
         map(
@@ -410,12 +449,13 @@ fn nsitem<E: ParseError<Span>>(i: Span) -> IResult<Span, Option<NamespaceItem>, 
                 map(structdecl, NamespaceItem::Struct),
                 map(nsdecl, NamespaceItem::Namespace),
             )),
-            |x| Some(x),
+            Some,
         ),
         map(comment_line, |_| None),
     ))(i)
 }
 
+// A namespace body, but also a function body.
 fn nsbody<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceBody, E> {
     terminated(
         map(many0(spaced(nsitem)), |mut x| {
@@ -425,6 +465,7 @@ fn nsbody<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceBody, E> {
     )(i)
 }
 
+// A namespace declaration: `namespace X { nsbody }`
 fn nsdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceDecl, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, _) = terminated(preceded(sp, tag("namespace")), sp)(i)?;
