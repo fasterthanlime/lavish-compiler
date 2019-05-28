@@ -5,7 +5,7 @@ use nom::{
 };
 use std::fmt;
 use std::iter::repeat;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 
 use super::super::ast;
@@ -17,6 +17,7 @@ pub enum Error {
     IO(std::io::Error),
     Source(SourceError),
     Unknown(UnknownError),
+    UnexpectedSourceError(UnexpectedSourceError),
 }
 
 impl<'a> fmt::Display for Error {
@@ -24,6 +25,7 @@ impl<'a> fmt::Display for Error {
         match self {
             Error::IO(e) => write!(f, "{}", e),
             Error::Source(e) => write!(f, "{:#?}", e),
+            Error::UnexpectedSourceError(e) => write!(f, "{:#?}", e),
             Error::Unknown(_) => write!(f, "unknown error"),
         }
     }
@@ -38,6 +40,21 @@ pub struct SourceError {
 impl<'a> fmt::Debug for SourceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         print_errors(f, &self.inner)
+    }
+}
+
+pub struct UnexpectedSourceError {
+    pub expected: String,
+    pub actual: Option<Box<Error>>,
+}
+
+impl<'a> fmt::Debug for UnexpectedSourceError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(actual) = self.actual.as_ref() {
+            write!(f, "expected {}, got {}", self.expected, actual)
+        } else {
+            write!(f, "expected {}, got no error", self.expected)
+        }
     }
 }
 
@@ -63,33 +80,40 @@ impl From<std::io::Error> for Error {
 
 pub struct Source {
     pub input: String,
-    name: PathBuf,
+    name: String,
     pub lines: Vec<String>,
 }
 
 impl Source {
-    pub fn new<P: AsRef<Path>>(input_name: P) -> Result<Rc<Self>, std::io::Error> {
-        let input_name = input_name.as_ref();
-
-        use std::fs::File;
-        use std::io::Read;
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Rc<Self>, std::io::Error> {
+        let path = path.as_ref();
 
         let mut input = String::new();
         {
-            let mut f = File::open(input_name)?;
+            use std::fs::File;
+            use std::io::Read;
+            let mut f = File::open(path)?;
             f.read_to_string(&mut input)?;
         }
-        let lines = input.lines().map(String::from).collect::<Vec<_>>();
 
-        Ok(Rc::new(Self {
-            name: PathBuf::from(input_name),
-            input,
-            lines,
-        }))
+        let name = path.to_str().unwrap();
+        Ok(Self::new(name.into(), input))
+    }
+
+    pub fn from_string<S>(input: S) -> Rc<Self>
+    where
+        S: Into<String>,
+    {
+        Self::new("<memory>".into(), input.into())
+    }
+
+    pub fn new(name: String, input: String) -> Rc<Self> {
+        let lines = input.lines().map(String::from).collect::<Vec<_>>();
+        Rc::new(Self { name, input, lines })
     }
 
     pub fn name(&self) -> &str {
-        self.name.to_str().unwrap()
+        self.name.as_ref()
     }
 }
 
@@ -266,7 +290,7 @@ pub fn print_errors(f: &mut fmt::Formatter, e: &VerboseError<Span>) -> fmt::Resu
                 pos.diag_err(format!(
                     "expected '{}', found {}",
                     c,
-                    span.chars().next().unwrap()
+                    span.chars().next().unwrap_or_else(|| '\0')
                 ))
                 .write(f)?;
             }

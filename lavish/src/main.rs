@@ -54,7 +54,7 @@ fn parse_workspace(workspace_path: &Path) -> Result<ast::Workspace, Box<dyn std:
     }
 
     let rules = {
-        let source = parser::Source::new(&rules_path)?;
+        let source = parser::Source::from_path(&rules_path)?;
         parser::parse_rules(source)?
     };
     println!("rules = {:#?}", rules);
@@ -70,7 +70,7 @@ fn parse_workspace(workspace_path: &Path) -> Result<ast::Workspace, Box<dyn std:
         let name = build.name.text.to_string();
         let source_path = workspace.resolve(&name)?;
         println!("Parsing {} from {:?}", name, source_path);
-        let source = parser::Source::new(&source_path)?;
+        let source = parser::Source::from_path(&source_path)?;
         let schema = parser::parse_schema(source)?;
 
         checker::check(&schema)?;

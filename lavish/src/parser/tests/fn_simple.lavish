@@ -1,0 +1,4 @@
+
+// Returns some cookies
+fn get_cookies() -> (cookies: Map<string, string>)
+

@@ -1,0 +1,5 @@
+
+target rust
+
+build clock from "github.com/fasterthanlime/clock"
+

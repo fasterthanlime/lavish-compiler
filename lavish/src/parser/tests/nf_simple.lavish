@@ -1,0 +1,11 @@
+
+struct LogMessage {
+    msg: string,
+    level: int32,
+}
+
+server nf log(
+    // The message we want to log
+    message: LogMessage,
+)
+

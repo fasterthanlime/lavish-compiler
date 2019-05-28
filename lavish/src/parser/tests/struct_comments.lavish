@@ -1,0 +1,9 @@
+
+// A user
+struct User {
+    // Their username
+    username: string,
+    // A hash of their password
+    password_hash: bytes,
+}
+

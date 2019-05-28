@@ -1,0 +1,5 @@
+
+server fn launch(target: string) -> (success: bool) {
+    client fn accept_eula() -> (consent: bool)
+}
+

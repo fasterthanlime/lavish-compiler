@@ -482,3 +482,94 @@ fn nsdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceDecl, E> {
         )),
     )(i)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::errors::*;
+    use strip_ansi_escapes;
+
+    macro_rules! parse_passing {
+        ($parse: ident, $name: ident) => {
+            #[test]
+            fn $name() -> Result<(), Error> {
+                $parse(Source::from_string(include_str!(concat!(
+                    "tests/",
+                    stringify!($name),
+                    ".lavish"
+                ))))?;
+                Ok(())
+            }
+        };
+    }
+
+    macro_rules! parse_failing {
+        ($parse: ident, $name: ident, $needle: expr) => {
+            #[test]
+            fn $name() -> Result<(), Error> {
+                let res = $parse(Source::from_string(include_str!(concat!(
+                    "tests/",
+                    stringify!($name),
+                    ".lavish"
+                ))));
+                match res {
+                    Err(e) => {
+                        let stripped = strip_ansi_escapes::strip(format!("{}", e))?;
+                        let msg = String::from_utf8_lossy(&stripped);
+                        if msg.contains($needle) {
+                            Ok(())
+                        } else {
+                            Err(Error::UnexpectedSourceError(UnexpectedSourceError {
+                                expected: $needle.into(),
+                                actual: Some(Box::new(e)),
+                            }))
+                        }
+                    }
+                    Ok(_) => Err(Error::UnexpectedSourceError(UnexpectedSourceError {
+                        expected: $needle.into(),
+                        actual: None,
+                    })),
+                }
+            }
+        };
+    }
+
+    macro_rules! rules_passing {
+        ($name: ident) => {
+            parse_passing!(parse_rules, $name);
+        };
+    }
+
+    macro_rules! rules_failing {
+        ($name: ident, $needle: expr) => {
+            parse_failing!(parse_rules, $name, $needle);
+        };
+    }
+
+    macro_rules! schema_passing {
+        ($name: ident) => {
+            parse_passing!(parse_schema, $name);
+        };
+    }
+
+    macro_rules! schema_failing {
+        ($name: ident, $needle: expr) => {
+            parse_failing!(parse_schema, $name, $needle);
+        };
+    }
+
+    rules_passing!(target_rust);
+    rules_passing!(target_go);
+    rules_failing!(target_unknown, "parsing error: Tag");
+
+    rules_passing!(build_local);
+    rules_passing!(build_remote);
+
+    schema_passing!(struct_cookie);
+    schema_passing!(struct_comments);
+    schema_failing!(struct_incomplete, "expected '}'");
+
+    schema_passing!(fn_simple);
+    schema_passing!(fn_namespaced);
+    schema_passing!(fn_nested);
+    schema_passing!(nf_simple);
+}

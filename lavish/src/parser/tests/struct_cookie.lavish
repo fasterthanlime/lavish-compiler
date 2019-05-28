@@ -1,0 +1,6 @@
+
+struct Cookie {
+    key: string,
+    value: string,
+}
+
