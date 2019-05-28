@@ -86,9 +86,5 @@ fn parse_workspace(workspace_path: &Path) -> Result<ast::Workspace, Box<dyn std:
         );
     }
 
-    for member in workspace.members.values() {
-        println!("Found member {:#?}", member);
-    }
-
     Ok(workspace)
 }

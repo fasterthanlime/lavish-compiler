@@ -60,8 +60,7 @@ impl<'a> Namespace<'a> {
         let mut strus: IndexMap<&'a str, Stru<'a>> = IndexMap::new();
 
         for decl in &decl.functions {
-            let full_name = format!("{}{}", prefix, decl.name.text);
-            let ff = Fun::new(decl, full_name);
+            let ff = Fun::new(&prefix, decl);
             funs.insert(&decl.name.text, ff);
         }
 
@@ -90,7 +89,7 @@ impl<'a> Namespace<'a> {
                 .values()
                 .map(Namespace::funs)
                 .flatten()
-                .chain(self.funs.values()),
+                .chain(self.funs.values().map(|f| f.funs()).flatten()),
         )
     }
 
@@ -102,13 +101,18 @@ impl<'a> Namespace<'a> {
 struct Fun<'a> {
     decl: &'a ast::FunctionDecl,
     tokens: Vec<String>,
+
+    body: Option<Namespace<'a>>,
 }
 
 impl<'a> Fun<'a> {
-    fn new(decl: &'a ast::FunctionDecl, full_name: String) -> Self {
+    fn new(prefix: &str, decl: &'a ast::FunctionDecl) -> Self {
+        let name: &str = &decl.name.text;
+        let full_name = format!("{}{}", prefix, name);
         Self {
             decl,
             tokens: full_name.split('.').map(|x| x.into()).collect(),
+            body: decl.body.as_ref().map(|b| Namespace::new(prefix, name, b)),
         }
     }
 
@@ -140,6 +144,15 @@ impl<'a> Fun<'a> {
 
     fn has_empty_results(&self) -> bool {
         self.decl.results.is_empty()
+    }
+
+    fn funs(&self) -> Box<Iterator<Item = &'a Fun> + 'a> {
+        let iter = std::iter::once(self);
+        if let Some(body) = self.body.as_ref() {
+            Box::new(iter.chain(body.funs()))
+        } else {
+            Box::new(iter)
+        }
     }
 }
 
@@ -217,7 +230,7 @@ fn visit_ns<'a>(s: &'a Scope<'a>, ns: &Namespace, depth: usize) -> Result {
     Ok(())
 }
 
-fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace, depth: usize) -> Result {
+fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Result {
     for (_, ns) in &ns.children {
         visit_ns(&s, ns, depth + 1)?;
     }
@@ -235,7 +248,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace, depth: usize) -> Result {
         s.line("");
     }
 
-    for (_, fun) in &ns.funs {
+    let write_fun = |fun: &Fun<'a>| -> Result {
         s.comment(&fun.decl.comment);
         s.line(&format!("pub mod {} {{", fun.mod_name()));
 
@@ -362,9 +375,19 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace, depth: usize) -> Result {
                 });
                 s.line("}"); // fn register
             }
+
+            if let Some(body) = fun.body.as_ref() {
+                visit_ns_body(&s, body, depth + 1)?;
+            }
+
+            s.line("}");
+            s.line("");
         }
-        s.line("}");
-        s.line("");
+        Ok(())
+    };
+
+    for (_, fun) in &ns.funs {
+        write_fun(fun)?;
     }
     Ok(())
 }

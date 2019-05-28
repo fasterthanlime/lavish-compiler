@@ -104,6 +104,10 @@ impl Visitable for &ast::FunctionDecl {
         for f in &self.results {
             v.visit(f);
         }
+
+        if let Some(body) = self.body.as_ref() {
+            v.visit(body);
+        }
     }
 }
 
