@@ -17,6 +17,7 @@ pub enum Error {
     IO(std::io::Error),
     Source(SourceError),
     Unknown(UnknownError),
+    #[allow(unused)]
     UnexpectedSourceError(UnexpectedSourceError),
 }
 

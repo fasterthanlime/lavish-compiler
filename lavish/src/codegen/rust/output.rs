@@ -39,12 +39,15 @@ impl<'a> Scope<'a> {
         Self { output, indent: 0 }
     }
 
-    pub fn line(&self, line: &str) {
+    pub fn line<S>(&self, line: S)
+    where
+        S: AsRef<str>,
+    {
         writeln!(
             self.output.writer.borrow_mut(),
             "{}{}",
             " ".repeat(self.indent),
-            line
+            line.as_ref()
         )
         .unwrap();
     }
@@ -52,14 +55,14 @@ impl<'a> Scope<'a> {
     pub fn comment(&self, comment: &Option<ast::Comment>) {
         if let Some(comment) = comment.as_ref() {
             for line in &comment.lines {
-                self.line(&format!("/// {}", line))
+                self.line(format!("/// {}", line))
             }
         }
     }
 
     pub fn def_struct(&self, name: &str, f: &Fn(&Scope)) {
         self.line("#[derive(Serialize, Deserialize, Debug)]");
-        self.line(&format!("pub struct {} {{", name));
+        self.line(format!("pub struct {} {{", name));
         self.in_scope(f);
         self.line("}");
     }
