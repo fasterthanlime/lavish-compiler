@@ -242,6 +242,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
         s.comment(&st.decl.comment);
         s.def_struct(&st.decl.name.text, &|s| {
             for f in &st.decl.fields {
+                s.comment(&f.comment);
                 s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
             }
         });

@@ -100,7 +100,7 @@ pub fn from<E: ParseError<Span>>(i: Span) -> IResult<Span, FromDirective, E> {
 }
 
 pub fn imports<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Import>, E> {
-    terminated(many0(spaced(import)), spaced(many0(comment_line)))(i)
+    many0(spaced(import))(i)
 }
 
 pub fn import<E: ParseError<Span>>(i: Span) -> IResult<Span, Import, E> {
@@ -401,18 +401,26 @@ fn comment<E: ParseError<Span>>(i: Span) -> IResult<Span, Comment, E> {
     })(i)
 }
 
-fn nsitem<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceItem, E> {
+fn nsitem<E: ParseError<Span>>(i: Span) -> IResult<Span, Option<NamespaceItem>, E> {
     alt((
-        map(fndecl, NamespaceItem::Function),
-        map(notifdecl, NamespaceItem::Function),
-        map(structdecl, NamespaceItem::Struct),
-        map(nsdecl, NamespaceItem::Namespace),
+        map(
+            alt((
+                map(fndecl, NamespaceItem::Function),
+                map(notifdecl, NamespaceItem::Function),
+                map(structdecl, NamespaceItem::Struct),
+                map(nsdecl, NamespaceItem::Namespace),
+            )),
+            |x| Some(x),
+        ),
+        map(comment_line, |_| None),
     ))(i)
 }
 
 fn nsbody<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceBody, E> {
     terminated(
-        map(many0(spaced(nsitem)), NamespaceBody::new),
+        map(many0(spaced(nsitem)), |mut x| {
+            NamespaceBody::new(x.drain(..).filter_map(|x| x).collect())
+        }),
         spaced(many0(comment_line)),
     )(i)
 }

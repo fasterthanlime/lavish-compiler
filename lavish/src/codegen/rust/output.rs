@@ -52,7 +52,7 @@ impl<'a> Scope<'a> {
     pub fn comment(&self, comment: &Option<ast::Comment>) {
         if let Some(comment) = comment.as_ref() {
             for line in &comment.lines {
-                self.line(&format!("// {}", line))
+                self.line(&format!("/// {}", line))
             }
         }
     }
