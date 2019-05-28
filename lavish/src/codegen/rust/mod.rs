@@ -332,7 +332,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                 s.line("}"); // async fn call
 
                 s.line("");
-                s.line("pub fn register<'a, T, F, FT>(h: &mut __::Handler<'a, T>, f: F)");
+                s.line("pub fn register<T, F, FT>(h: &mut __::Handler<T>, f: F)");
                 s.line("where");
                 let results_type = if fun.has_empty_results() {
                     "()"
@@ -340,7 +340,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                     "Results"
                 };
                 s.in_scope(&|s| {
-                    s.line("F: Fn(__::Call<T, Params>) -> FT + Sync + Send + 'a,");
+                    s.line("F: Fn(__::Call<T, Params>) -> FT + Sync + Send + 'static,");
                     s.line(&format!(
                         "FT: Future<Output = Result<{}, lavish_rpc::Error>> + Send + 'static,",
                         results_type
@@ -602,26 +602,26 @@ impl Generator {
             s.line("pub type SlotReturn = Pin<Box<SlotFuture>>;");
 
             s.line("");
-            s.line("pub type SlotFn<'a, T> = ");
+            s.line("pub type SlotFn<T> = ");
             s.in_scope(&|s| {
-                s.line("Fn(Arc<T>, Handle, Params) -> SlotReturn + 'a + Send + Sync;");
+                s.line("Fn(Arc<T>, Handle, Params) -> SlotReturn + 'static + Send + Sync;");
             });
 
             s.line("");
-            s.line("pub type Slot<'a, T> = Option<Box<SlotFn<'a, T>>>;");
+            s.line("pub type Slot<T> = Option<Box<SlotFn<T>>>;");
 
             s.line("");
-            s.line("pub struct Handler<'a, T> {");
+            s.line("pub struct Handler<T> {");
             s.in_scope(&|s| {
                 s.line("state: Arc<T>,");
                 for fun in ctx.funs(FunKind::Request) {
-                    s.line(&format!("{}: Slot<'a, T>,", fun.variant_name()));
+                    s.line(&format!("{}: Slot<T>,", fun.variant_name()));
                 }
             });
             s.line("}"); // struct Handler
 
             s.line("");
-            s.line("impl<'a, T> Handler<'a, T> {");
+            s.line("impl<T> Handler<T> {");
             s.in_scope(&|s| {
                 s.line("pub fn new(state: Arc<T>) -> Self {");
                 s.in_scope(&|s| {
@@ -641,7 +641,7 @@ impl Generator {
             s.line("");
             s.line("type HandlerRet = Pin<Box<dyn Future<Output = Result<Results, rpc::Error>> + Send + 'static>>;");
             s.line("");
-            s.line("impl<'a, T> rpc::Handler<Params, NotificationParams, Results, HandlerRet> for Handler<'a, T>");
+            s.line("impl<T> rpc::Handler<Params, NotificationParams, Results, HandlerRet> for Handler<T>");
             s.line("where");
             s.in_scope(&|s| {
                 s.line("T: Send + Sync,");
