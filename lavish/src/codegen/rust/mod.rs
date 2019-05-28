@@ -331,50 +331,6 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                     s.line(").await"); // h.call
                 });
                 s.line("}"); // async fn call
-
-                s.line("");
-                s.line("pub fn register<T, F, FT>(h: &mut __::Handler<T>, f: F)");
-                s.line("where");
-                let results_type = if fun.has_empty_results() {
-                    "()"
-                } else {
-                    "Results"
-                };
-                s.in_scope(|s| {
-                    s.line("F: Fn(__::Call<T, Params>) -> FT + Sync + Send + 'static,");
-                    s.line(format!(
-                        "FT: Future<Output = Result<{}, lavish_rpc::Error>> + Send + 'static,",
-                        results_type
-                    ));
-                });
-                s.line("{");
-                s.in_scope(|s| {
-                    s.line(format!(
-                        "h.{} = Some(Box::new(move |state, handle, params| {{",
-                        fun.variant_name(),
-                    ));
-                    s.in_scope(|s| {
-                        s.line("Box::pin(");
-                        s.in_scope(|s| {
-                            s.line("f(__::Call {");
-                            s.in_scope(|s| {
-                                s.line("state, handle,");
-                                s.line("params: Params::downgrade(params).unwrap(),");
-                            });
-                            if fun.has_empty_results() {
-                                s.line(format!(
-                                    "}}).map_ok(|_| __::Results::{}(Results {{}}))",
-                                    fun.variant_name()
-                                ));
-                            } else {
-                                s.line(format!("}}).map_ok(__::Results::{})", fun.variant_name()));
-                            }
-                        });
-                        s.line(")");
-                    });
-                    s.line("}));");
-                });
-                s.line("}"); // fn register
             }
 
             if let Some(body) = fun.body.as_ref() {
