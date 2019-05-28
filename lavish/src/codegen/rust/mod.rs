@@ -639,17 +639,40 @@ impl Generator {
 
                 for fun in ctx.funs(FunKind::Request) {
                     s.line("");
-                    s.line(format!("pub fn on_{}<F, FT> (f: F)", fun.variant_name()));
+                    s.line(format!("pub fn on_{}<F, FT> (&mut self, f: F)", fun.variant_name()));
                     s.line("where");
                     s.in_scope(|s| {
-                        s.line("F: Fn(Call<T, Params>) -> FT + Sync + Send + 'static,");
+                        s.line(format!("F: Fn(Call<T, {}::Params>) -> FT + Sync + Send + 'static,", fun.qualified_name()));
                         s.line(format!("FT: Future<Output = Result<{}::Results, lavish_rpc::Error>> + Send + 'static,", fun.qualified_name()));
                     });
                     s.line("{");
                     s.in_scope(|s| {
-                        s.line("unimplemented!()");
+                        s.line(format!(
+                            "self.{} = Some(Box::new(move |state, handle, params| {{",
+                            fun.variant_name(),
+                        ));
+                        s.in_scope(|s| {
+                            s.line("Box::pin(");
+                            s.in_scope(|s| {
+                                s.line("f(Call {");
+                                s.in_scope(|s| {
+                                    s.line("state, handle,");
+                                    s.line(format!("params: {}::Params::downgrade(params).unwrap(),", fun.qualified_name()));
+                                });
+                                if fun.has_empty_results() {
+                                    s.line(format!(
+                                        "}}).map_ok(|_| Results::{}({}::Results {{}}))",
+                                        fun.variant_name(),
+                                        fun.qualified_name(),
+                                    ));
+                                } else {
+                                    s.line(format!("}}).map_ok(Results::{})", fun.variant_name()));
+                                }
+                            });
+                            s.line(")");
+                        });
+                        s.line("}));");
                     });
-                    s.line("");
                     s.line("}");
                 }
                 s.line("");
