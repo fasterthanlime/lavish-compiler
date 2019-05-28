@@ -100,6 +100,7 @@ impl Source {
         Ok(Self::new(name.into(), input))
     }
 
+    #[allow(unused)]
     pub fn from_string<S>(input: S) -> Rc<Self>
     where
         S: Into<String>,

@@ -636,6 +636,23 @@ impl Generator {
                     s.line("}");
                 });
                 s.line("}");
+
+                for fun in ctx.funs(FunKind::Request) {
+                    s.line("");
+                    s.line(&format!("pub fn on_{}<F, FT> (f: F)", fun.variant_name()));
+                    s.line("where");
+                    s.in_scope(&|s| {
+                        s.line("F: Fn(Call<T, Params>) -> FT + Sync + Send + 'static,");
+                        s.line(&format!("FT: Future<Output = Result<{}::Results, lavish_rpc::Error>> + Send + 'static,", fun.qualified_name()));
+                    });
+                    s.line("{");
+                    s.in_scope(&|s| {
+                        s.line("unimplemented!()");
+                    });
+                    s.line("");
+                    s.line("}");
+                }
+                s.line("");
             });
             s.line("}"); // impl Handler
 
