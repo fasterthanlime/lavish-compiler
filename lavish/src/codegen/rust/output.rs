@@ -60,14 +60,20 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn def_struct(&self, name: &str, f: &Fn(&Scope)) {
+    pub fn def_struct<F>(&self, name: &str, f: F)
+    where
+        F: Fn(&Scope),
+    {
         self.line("#[derive(Serialize, Deserialize, Debug)]");
         self.line(format!("pub struct {} {{", name));
         self.in_scope(f);
         self.line("}");
     }
 
-    pub fn in_scope(&self, f: &Fn(&Scope)) {
+    pub fn in_scope<F>(&self, f: F)
+    where
+        F: Fn(&Scope),
+    {
         let s = self.scope();
         f(&s);
     }

@@ -240,7 +240,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
 
     for (_, st) in &ns.strus {
         s.comment(&st.decl.comment);
-        s.def_struct(&st.decl.name.text, &|s| {
+        s.def_struct(&st.decl.name.text, |s| {
             for f in &st.decl.fields {
                 s.comment(&f.comment);
                 s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
@@ -262,14 +262,14 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
             s.line("");
 
             let write_downgrade = |side: &str| {
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line(&format!(
                         "pub fn downgrade(p: __::{}) -> Option<Self> {{",
                         side,
                     ));
-                    s.in_scope(&|s| {
+                    s.in_scope(|s| {
                         s.line("match p {");
-                        s.in_scope(&|s| {
+                        s.in_scope(|s| {
                             s.line(&format!(
                                 "__::{}::{}(p) => Some(p),",
                                 side,
@@ -283,7 +283,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                 });
             };
 
-            s.def_struct("Params", &|s| {
+            s.def_struct("Params", |s| {
                 for f in &fun.decl.params {
                     s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
                 }
@@ -300,7 +300,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
 
             if !fun.is_notification() {
                 s.line("");
-                s.def_struct("Results", &|s| {
+                s.def_struct("Results", |s| {
                     for f in &fun.decl.results {
                         s.line(&format!("pub {}: {},", f.name.text, f.typ.as_rust()));
                     }
@@ -318,9 +318,9 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                     "Params"
                 };
                 s.line(&format!("pub async fn call(h: &__::Handle, p: {}) -> Result<Results, lavish_rpc::Error> {{", params_type));
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line("h.call(");
-                    s.in_scope(&|s| {
+                    s.in_scope(|s| {
                         if fun.has_empty_params() {
                             s.line(&format!("__::Params::{}(Params {{}}),", fun.variant_name()));
                         } else {
@@ -340,7 +340,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                 } else {
                     "Results"
                 };
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line("F: Fn(__::Call<T, Params>) -> FT + Sync + Send + 'static,");
                     s.line(&format!(
                         "FT: Future<Output = Result<{}, lavish_rpc::Error>> + Send + 'static,",
@@ -348,16 +348,16 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                     ));
                 });
                 s.line("{");
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line(&format!(
                         "h.{} = Some(Box::new(move |state, handle, params| {{",
                         fun.variant_name(),
                     ));
-                    s.in_scope(&|s| {
+                    s.in_scope(|s| {
                         s.line("Box::pin(");
-                        s.in_scope(&|s| {
+                        s.in_scope(|s| {
                             s.line("f(__::Call {");
-                            s.in_scope(&|s| {
+                            s.in_scope(|s| {
                                 s.line("state, handle,");
                                 s.line("params: Params::downgrade(params).unwrap(),");
                             });
@@ -509,7 +509,7 @@ impl Generator {
             s.line("pub type Protocol = rpc::Protocol<Params, NotificationParams, Results>;");
             s.line("");
             s.line("pub fn protocol() -> Protocol {");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("Protocol::new()");
             });
             s.line("}"); // fn protocol
@@ -521,11 +521,11 @@ impl Generator {
             ] {
                 s.line("");
                 s.line(&format!("impl rpc::Atom for {} {{", side));
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line("fn method(&self) -> &'static str {");
-                    s.in_scope(&|s| {
+                    s.in_scope(|s| {
                         s.line("match self {");
-                        s.in_scope(&|s| {
+                        s.in_scope(|s| {
                             let mut count = 0;
                             for fun in ctx.funs(*kind) {
                                 count += 1;
@@ -546,17 +546,17 @@ impl Generator {
 
                     s.line("");
                     s.line("fn deserialize(");
-                    s.in_scope(&|s| {
+                    s.in_scope(|s| {
                         s.line("method: &str,");
                         s.line("de: &mut erased_serde::Deserializer,");
                     });
                     s.line(") -> erased_serde::Result<Self> {");
-                    s.in_scope(&|s| {
+                    s.in_scope(|s| {
                         s.line("use erased_serde::deserialize as deser;");
                         s.line("use serde::de::Error;");
                         s.line("");
                         s.line("match method {");
-                        s.in_scope(&|s| {
+                        s.in_scope(|s| {
                             for fun in ctx.funs(*kind) {
                                 s.line(&format!("{:?} =>", fun.rpc_name(),));
                                 {
@@ -571,7 +571,7 @@ impl Generator {
                                 }
                             }
                             s.line("_ => Err(erased_serde::Error::custom(format!(");
-                            s.in_scope(&|s| {
+                            s.in_scope(|s| {
                                 s.line(&format!("{:?},", "unknown method: {}"));
                                 s.line("method,");
                             });
@@ -586,7 +586,7 @@ impl Generator {
 
             s.line("");
             s.line("pub struct Call<T, PP> {");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("pub state: Arc<T>,");
                 s.line("pub handle: Handle,");
                 s.line("pub params: PP,");
@@ -595,7 +595,7 @@ impl Generator {
 
             s.line("");
             s.line("pub type SlotFuture = ");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("Future<Output = Result<Results, rpc::Error>> + Send + 'static;");
             });
 
@@ -604,7 +604,7 @@ impl Generator {
 
             s.line("");
             s.line("pub type SlotFn<T> = ");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("Fn(Arc<T>, Handle, Params) -> SlotReturn + 'static + Send + Sync;");
             });
 
@@ -613,7 +613,7 @@ impl Generator {
 
             s.line("");
             s.line("pub struct Handler<T> {");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("state: Arc<T>,");
                 for fun in ctx.funs(FunKind::Request) {
                     s.line(&format!("{}: Slot<T>,", fun.variant_name()));
@@ -623,11 +623,11 @@ impl Generator {
 
             s.line("");
             s.line("impl<T> Handler<T> {");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("pub fn new(state: Arc<T>) -> Self {");
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line("Self {");
-                    s.in_scope(&|s| {
+                    s.in_scope(|s| {
                         s.line("state,");
                         for fun in ctx.funs(FunKind::Request) {
                             s.line(&format!("{}: None,", fun.variant_name()));
@@ -641,12 +641,12 @@ impl Generator {
                     s.line("");
                     s.line(&format!("pub fn on_{}<F, FT> (f: F)", fun.variant_name()));
                     s.line("where");
-                    s.in_scope(&|s| {
+                    s.in_scope(|s| {
                         s.line("F: Fn(Call<T, Params>) -> FT + Sync + Send + 'static,");
                         s.line(&format!("FT: Future<Output = Result<{}::Results, lavish_rpc::Error>> + Send + 'static,", fun.qualified_name()));
                     });
                     s.line("{");
-                    s.in_scope(&|s| {
+                    s.in_scope(|s| {
                         s.line("unimplemented!()");
                     });
                     s.line("");
@@ -661,16 +661,16 @@ impl Generator {
             s.line("");
             s.line("impl<T> rpc::Handler<Params, NotificationParams, Results, HandlerRet> for Handler<T>");
             s.line("where");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("T: Send + Sync,");
             });
             s.line("{");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
             s.line("fn handle(&self, handle: Handle, params: Params) -> HandlerRet {");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("let method = params.method();");
                 s.line("let slot = match params {");
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     for fun in ctx.funs(FunKind::Request) {
                         s.line(&format!(
                             "Params::{}(_) => self.{}.as_ref(),",
@@ -682,9 +682,9 @@ impl Generator {
                 });
                 s.line("};");
                 s.line("match slot {");
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line("Some(slot_fn) => {");
-                    s.in_scope(&|s| {
+                    s.in_scope(|s| {
                         s.line("let res = slot_fn(self.state.clone(), handle, params);");
                         s.line("Box::pin(async move { Ok(res.await?) })");
                     });
@@ -703,11 +703,11 @@ impl Generator {
             s.line("");
             s.line("pub struct PeerBuilder<C>");
             s.line("where");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("C: lavish_rpc::Conn,");
             });
             s.line("{");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("conn: C,");
                 s.line("pool: futures::executor::ThreadPool,");
             });
@@ -716,20 +716,20 @@ impl Generator {
             s.line("");
             s.line("impl<C> PeerBuilder<C>");
             s.line("where");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("C: lavish_rpc::Conn,");
             });
             s.line("{");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("pub fn new(conn: C, pool: futures::executor::ThreadPool) -> Self {");
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line("Self { conn, pool }");
                 });
                 s.line("}");
 
                 s.line("");
                 s.line("pub fn with_noop_handler(self) -> Result<Handle, lavish_rpc::Error> {");
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line("self.with_handler(|_| {})");
                 });
                 s.line("}");
@@ -737,11 +737,11 @@ impl Generator {
                 s.line("");
                 s.line("pub fn with_handler<S>(self, setup: S) -> Result<Handle, lavish_rpc::Error>");
                 s.line("where");
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line("S: Fn(&mut Handler<()>),");
                 });
                 s.line("{");
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line("self.with_stateful_handler(std::sync::Arc::new(()), setup)");
                 });
                 s.line("}");
@@ -751,12 +751,12 @@ impl Generator {
                     "pub fn with_stateful_handler<T, S>(self, state: Arc<T>, setup: S) -> Result<Handle, lavish_rpc::Error>",
                 );
                 s.line("where");
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line("S: Fn(&mut Handler<T>),");
                     s.line("T: Sync + Send + 'static,");
                 });
                 s.line("{");
-                s.in_scope(&|s| {
+                s.in_scope(|s| {
                     s.line("let mut handler = Handler::new(state);");
                     s.line("setup(&mut handler);");
                     s.line("lavish_rpc::connect(protocol(), handler, self.conn, self.pool)");
@@ -770,11 +770,11 @@ impl Generator {
                 "pub fn peer<C>(conn: C, pool: futures::executor::ThreadPool) -> PeerBuilder<C>",
             );
             s.line("where");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("C: lavish_rpc::Conn,");
             });
             s.line("{");
-            s.in_scope(&|s| {
+            s.in_scope(|s| {
                 s.line("PeerBuilder::new(conn, pool)");
             });
             s.line("}"); // fn peer
