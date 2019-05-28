@@ -482,7 +482,6 @@ impl Generator {
             s.line("");
             s.line("pub type Message = rpc::Message<Params, NotificationParams, Results>;");
             s.line("pub type Handle = rpc::Handle<Params, NotificationParams, Results>;");
-            s.line("pub type System = rpc::System<Params, NotificationParams, Results>;");
             s.line("pub type Protocol = rpc::Protocol<Params, NotificationParams, Results>;");
             s.line("");
             s.line("pub fn protocol() -> Protocol {");
@@ -660,49 +659,82 @@ impl Generator {
             s.line("");
             visit_ns_body(&s, &ctx.root, 0)?;
 
-            // s.line("pub struct PeerConstructor<C>");
-            // s.line("where");
-            // s.in_scope(&|s| {
-            //     s.line("C: lavish_rpc::Conn,");
-            // });
-            // s.line("{}");
-            // s.line("");
-
-            // s.line("impl PeerConstructor {");
-            // s.in_scope(&|s| {
-            //     s.line("fn start_with_handler() {");
-            //     s.line("}"); // start
-            //     s.line("");
-            //     s.line("fn start()");
-            //     s.line("}"); // start
-            // });
-            // s.line("}");
-            // s.line("");
-
-            // peer constructor
-            s.line("pub fn peer_with_handler<C, T, F>(conn: C, pool: futures::executor::ThreadPool, state: Arc<T>, setup: F) -> Result<Handle, lavish_rpc::Error>");
-            s.line("where");
-            s.in_scope(&|s| {
-                s.line("C: lavish_rpc::Conn,");
-                s.line("T: Send + Sync + 'static,");
-                s.line("F: Fn(&mut Handler<'static, T>),");
-            });
-            s.line("{");
-            s.in_scope(&|s| {
-                s.line("let mut handler = Handler::new(state);");
-                s.line("setup(&mut handler);");
-                s.line("Ok(lavish_rpc::System::new(protocol(), handler, conn, pool)?.handle())");
-            });
-            s.line("}"); // fn peer_with_handler
-
-            s.line("pub fn peer<C>(conn: C, pool: futures::executor::ThreadPool) -> Result<Handle, lavish_rpc::Error>");
+            s.line("");
+            s.line("pub struct PeerBuilder<C>");
             s.line("where");
             s.in_scope(&|s| {
                 s.line("C: lavish_rpc::Conn,");
             });
             s.line("{");
             s.in_scope(&|s| {
-                s.line("peer_with_handler(conn, pool, std::sync::Arc::new(()), |_| {})");
+                s.line("conn: C,");
+                s.line("pool: futures::executor::ThreadPool,");
+            });
+            s.line("}");
+
+            s.line("");
+            s.line("impl<C> PeerBuilder<C>");
+            s.line("where");
+            s.in_scope(&|s| {
+                s.line("C: lavish_rpc::Conn,");
+            });
+            s.line("{");
+            s.in_scope(&|s| {
+                s.line("pub fn new(conn: C, pool: futures::executor::ThreadPool) -> Self {");
+                s.in_scope(&|s| {
+                    s.line("Self { conn, pool }");
+                });
+                s.line("}");
+
+                s.line("");
+                s.line("pub fn with_noop_handler(self) -> Result<Handle, lavish_rpc::Error> {");
+                s.in_scope(&|s| {
+                    s.line("self.with_handler(|_| {})");
+                });
+                s.line("}");
+
+                s.line("");
+                s.line("pub fn with_handler<S>(self, setup: S) -> Result<Handle, lavish_rpc::Error>");
+                s.line("where");
+                s.in_scope(&|s| {
+                    s.line("S: Fn(&mut Handler<()>),");
+                });
+                s.line("{");
+                s.in_scope(&|s| {
+                    s.line("self.with_stateful_handler(std::sync::Arc::new(()), setup)");
+                });
+                s.line("}");
+
+                s.line("");
+                s.line(
+                    "pub fn with_stateful_handler<T, S>(self, state: Arc<T>, setup: S) -> Result<Handle, lavish_rpc::Error>",
+                );
+                s.line("where");
+                s.in_scope(&|s| {
+                    s.line("S: Fn(&mut Handler<T>),");
+                    s.line("T: Sync + Send + 'static,");
+                });
+                s.line("{");
+                s.in_scope(&|s| {
+                    s.line("let mut handler = Handler::new(state);");
+                    s.line("setup(&mut handler);");
+                    s.line("lavish_rpc::connect(protocol(), handler, self.conn, self.pool)");
+                });
+                s.line("}");
+            });
+            s.line("}"); // impl PeerBuilder
+
+            s.line("");
+            s.line(
+                "pub fn peer<C>(conn: C, pool: futures::executor::ThreadPool) -> PeerBuilder<C>",
+            );
+            s.line("where");
+            s.in_scope(&|s| {
+                s.line("C: lavish_rpc::Conn,");
+            });
+            s.line("{");
+            s.in_scope(&|s| {
+                s.line("PeerBuilder::new(conn, pool)");
             });
             s.line("}"); // fn peer
         }

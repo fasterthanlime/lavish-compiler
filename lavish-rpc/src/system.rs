@@ -139,74 +139,54 @@ where
     }
 }
 
-pub struct System<P, NP, R>
+pub fn connect<C, H, FT, P, NP, R>(
+    protocol: Protocol<P, NP, R>,
+    handler: H,
+    io: C,
+    mut pool: executor::ThreadPool,
+) -> Result<Handle<P, NP, R>, Error>
 where
+    C: Conn,
+    H: Handler<P, NP, R, FT> + 'static,
+    FT: Future<Output = Result<R, Error>> + Send + 'static,
     P: Atom,
     NP: Atom,
     R: Atom,
 {
-    handle: Handle<P, NP, R>,
-}
+    let queue = Arc::new(Mutex::new(Queue::new(protocol)));
 
-impl<P, NP, R> System<P, NP, R>
-where
-    P: Atom,
-    NP: Atom,
-    R: Atom,
-{
-    pub fn new<C, H, FT>(
-        protocol: Protocol<P, NP, R>,
-        handler: H,
-        io: C,
-        mut pool: executor::ThreadPool,
-    ) -> Result<Self, Error>
-    where
-        C: Conn,
-        H: Handler<P, NP, R, FT> + 'static,
-        FT: Future<Output = Result<R, Error>> + Send + 'static,
-    {
-        let queue = Arc::new(Mutex::new(Queue::new(protocol)));
+    let codec = Codec::new(queue.clone());
+    let framed = Framed::new(io, codec);
+    let (mut sink, mut stream) = framed.split();
+    let (tx, mut rx) = mpsc::channel(128);
 
-        let codec = Codec::new(queue.clone());
-        let framed = Framed::new(io, codec);
-        let (mut sink, mut stream) = framed.split();
-        let (tx, mut rx) = mpsc::channel(128);
+    let handle = Handle::<P, NP, R> {
+        queue: queue.clone(),
+        sink: tx,
+    };
 
-        let handle = Handle::<P, NP, R> {
-            queue: queue.clone(),
-            sink: tx,
-        };
+    let ret = handle.clone();
 
-        let system = System {
-            handle: handle.clone(),
-        };
+    pool.clone().spawn(async move {
+        while let Some(m) = rx.next().await {
+            sink.send(m).await.unwrap();
+        }
+    })?;
 
-        pool.clone().spawn(async move {
-            while let Some(m) = rx.next().await {
-                sink.send(m).await.unwrap();
-            }
-        })?;
+    pool.clone()
+        .spawn(async move {
+            let handler = Arc::new(handler);
 
-        pool.clone()
-            .spawn(async move {
-                let handler = Arc::new(handler);
-
-                while let Some(m) = stream.next().await {
-                    let res =
-                        m.map(|m| pool.spawn(handle_message(m, handler.clone(), handle.clone())));
-                    if let Err(e) = res {
-                        eprintln!("message stream error: {:#?}", e);
-                    }
+            while let Some(m) = stream.next().await {
+                let res = m.map(|m| pool.spawn(handle_message(m, handler.clone(), handle.clone())));
+                if let Err(e) = res {
+                    eprintln!("message stream error: {:#?}", e);
                 }
-            })
-            .map_err(Error::SpawnError)?;
+            }
+        })
+        .map_err(Error::SpawnError)?;
 
-        Ok(system)
-    }
-
-    pub fn handle(&self) -> Handle<P, NP, R> {
-        self.handle.clone()
-    }
+    Ok(ret)
 }
 
 async fn handle_message<P, NP, R, H, FT>(
@@ -299,71 +279,5 @@ where
 {
     fn get_pending(&self, id: u32) -> Option<&'static str> {
         self.in_flight_requests.get(&id).map(|req| req.method)
-    }
-}
-
-pub struct PeerBuilder<C, F, DF, H, P, NP, R, T, FT>
-where
-    C: Conn,
-    F: Fn(T) -> H,
-    DF: Fn() -> T,
-    H: Handler<P, NP, R, FT> + 'static,
-    P: Atom,
-    NP: Atom,
-    R: Atom,
-    FT: Future<Output = Result<R, Error>> + Send + 'static,
-{
-    ugh_rustc_get_it_together: PhantomData<(P, NP, R, FT)>,
-    conn: C,
-    pool: executor::ThreadPool,
-    factory: F,
-    default: DF,
-}
-
-impl<C, F, DF, H, P, NP, R, T, FT> PeerBuilder<C, F, DF, H, P, NP, R, T, FT>
-where
-    C: Conn,
-    F: Fn(T) -> H,
-    DF: Fn() -> T,
-    H: Handler<P, NP, R, FT> + 'static,
-    P: Atom,
-    NP: Atom,
-    R: Atom,
-    FT: Future<Output = Result<R, Error>> + Send + 'static,
-{
-    pub fn new(conn: C, pool: executor::ThreadPool, factory: F, default: DF) -> Self {
-        Self {
-            ugh_rustc_get_it_together: PhantomData,
-            conn,
-            pool,
-            factory,
-            default,
-        }
-    }
-
-    pub fn with_noop(self) -> Result<Handle<P, NP, R>, Error> {
-        let handler = (self.factory)((self.default)());
-        let protocol = Protocol::<P, NP, R>::new();
-        System::new(protocol, handler, self.conn, self.pool).map(|s| s.handle())
-    }
-
-    pub fn with_handler<S>(self, setup: S) -> Result<Handle<P, NP, R>, Error>
-    where
-        S: Fn(&mut H),
-    {
-        let mut handler = (self.factory)((self.default)());
-        setup(&mut handler);
-        let protocol = Protocol::<P, NP, R>::new();
-        System::new(protocol, handler, self.conn, self.pool).map(|s| s.handle())
-    }
-
-    pub fn with_stateful_handler<S>(self, state: T, setup: S) -> Result<Handle<P, NP, R>, Error>
-    where
-        S: Fn(&mut H),
-    {
-        let mut handler = (self.factory)(state);
-        setup(&mut handler);
-        let protocol = Protocol::<P, NP, R>::new();
-        System::new(protocol, handler, self.conn, self.pool).map(|s| s.handle())
     }
 }
