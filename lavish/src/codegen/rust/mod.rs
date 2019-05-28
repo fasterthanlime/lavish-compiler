@@ -319,7 +319,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                 };
                 s.line(format!("pub async fn call(h: &__::Handle, p: {}) -> Result<Results, lavish_rpc::Error> {{", params_type));
                 s.in_scope(|s| {
-                    s.line("h.call(");
+                    s.line("h.root.call(");
                     s.in_scope(|s| {
                         if fun.has_empty_params() {
                             s.line(format!("__::Params::{}(Params {{}}),", fun.variant_name()));
@@ -461,7 +461,7 @@ impl Generator {
 
             s.line("");
             s.line("pub type Message = rpc::Message<Params, NotificationParams, Results>;");
-            s.line("pub type Handle = rpc::Handle<Params, NotificationParams, Results>;");
+            s.line("pub type RootHandle = rpc::Handle<Params, NotificationParams, Results>;");
             s.line("pub type Protocol = rpc::Protocol<Params, NotificationParams, Results>;");
             s.line("");
             s.line("pub fn protocol() -> Protocol {");
@@ -469,6 +469,12 @@ impl Generator {
                 s.line("Protocol::new()");
             });
             s.line("}"); // fn protocol
+
+            s.line("pub struct Handle {");
+            s.in_scope(|s| {
+                s.line("root: RootHandle,");
+            });
+            s.line("}");
 
             for (strukt, side, kind) in &[
                 ("Params", "Params", FunKind::Request),
@@ -645,7 +651,7 @@ impl Generator {
             });
             s.line("{");
             s.in_scope(|s| {
-            s.line("fn handle(&self, handle: Handle, params: Params) -> HandlerRet {");
+            s.line("fn handle(&self, handle: RootHandle, params: Params) -> HandlerRet {");
             s.in_scope(|s| {
                 s.line("let method = params.method();");
                 s.line("let slot = match params {");
@@ -664,7 +670,7 @@ impl Generator {
                 s.in_scope(|s| {
                     s.line("Some(slot_fn) => {");
                     s.in_scope(|s| {
-                        s.line("let res = slot_fn(self.state.clone(), handle, params);");
+                        s.line("let res = slot_fn(self.state.clone(), Handle { root: handle }, params);");
                         s.line("Box::pin(async move { Ok(res.await?) })");
                     });
                     s.line("}"); // Some(slot_fn)
@@ -738,7 +744,8 @@ impl Generator {
                 s.in_scope(|s| {
                     s.line("let mut handler = Handler::new(state);");
                     s.line("setup(&mut handler);");
-                    s.line("lavish_rpc::connect(protocol(), handler, self.conn, self.pool)");
+                    s.line("let root = lavish_rpc::connect(protocol(), handler, self.conn, self.pool)?;");
+                    s.line("Ok(Handle { root })");
                 });
                 s.line("}");
             });
