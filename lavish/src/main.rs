@@ -57,7 +57,6 @@ fn parse_workspace(workspace_path: &Path) -> Result<ast::Workspace, Box<dyn std:
         let source = parser::Source::from_path(&rules_path)?;
         parser::parse_rules(source)?
     };
-    println!("rules = {:#?}", rules);
 
     let mut workspace = ast::Workspace {
         dir: workspace_path.into(),

@@ -1,58 +1,37 @@
 use super::super::ast;
-use std::cell::RefCell;
-use std::fs::File;
-use std::io::{self, Write};
+use std::fmt;
+use std::io;
 
 const INDENT_WIDTH: usize = 4;
 
-pub struct Output {
-    writer: RefCell<io::BufWriter<File>>,
-}
-
-impl Output {
-    pub fn new(file: File) -> Self {
-        Self {
-            writer: RefCell::new(io::BufWriter::new(file)),
-        }
-    }
-}
-
-impl<'a> io::Write for &'a Output {
-    fn write(&mut self, b: &[u8]) -> io::Result<usize> {
-        let mut w = self.writer.borrow_mut();
-        w.write(b)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        let mut w = self.writer.borrow_mut();
-        w.flush()
-    }
-}
-
 pub struct Scope<'a> {
-    output: &'a Output,
+    writer: &'a mut io::Write,
     indent: usize,
+    state: ScopeState,
+}
+
+enum ScopeState {
+    NeedIndent,
+    Indented,
 }
 
 impl<'a> Scope<'a> {
-    pub fn new(output: &'a Output) -> Self {
-        Self { output, indent: 0 }
+    pub fn new(writer: &'a mut io::Write) -> Self {
+        Self {
+            writer,
+            indent: 0,
+            state: ScopeState::NeedIndent,
+        }
     }
 
-    pub fn line<S>(&self, line: S)
+    pub fn line<S>(&mut self, line: S)
     where
         S: AsRef<str>,
     {
-        writeln!(
-            self.output.writer.borrow_mut(),
-            "{}{}",
-            " ".repeat(self.indent),
-            line.as_ref()
-        )
-        .unwrap();
+        writeln!(self.writer, "{}{}", " ".repeat(self.indent), line.as_ref()).unwrap();
     }
 
-    pub fn comment(&self, comment: &Option<ast::Comment>) {
+    pub fn comment(&mut self, comment: &Option<ast::Comment>) {
         if let Some(comment) = comment.as_ref() {
             for line in &comment.lines {
                 self.line(format!("/// {}", line))
@@ -60,9 +39,9 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn def_struct<F>(&self, name: &str, f: F)
+    pub fn def_struct<F>(&mut self, name: &str, f: F)
     where
-        F: Fn(&Scope),
+        F: Fn(&mut Scope),
     {
         self.line("#[derive(Serialize, Deserialize, Debug)]");
         self.line(format!("pub struct {} {{", name));
@@ -70,18 +49,94 @@ impl<'a> Scope<'a> {
         self.line("}");
     }
 
-    pub fn in_scope<F>(&self, f: F)
+    pub fn in_scope<F>(&mut self, f: F)
     where
-        F: Fn(&Scope),
+        F: Fn(&mut Scope),
     {
-        let s = self.scope();
-        f(&s);
+        let mut s = self.scope();
+        f(&mut s);
     }
 
-    pub fn scope(&self) -> Scope {
+    pub fn scope(&mut self) -> Scope {
         Scope {
-            output: &self.output,
+            writer: self.writer,
             indent: self.indent + INDENT_WIDTH,
+            state: ScopeState::NeedIndent,
         }
+    }
+}
+
+impl<'a> fmt::Write for Scope<'a> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        for (i, token) in s.split('\n').enumerate() {
+            // each token is a string slice without newlines
+            if i > 0 {
+                // each token after the first one is preceded by a newline,
+                // so let's write it out
+                writeln!(self.writer).map_err(|_| fmt::Error {})?;
+                self.state = ScopeState::NeedIndent;
+            }
+
+            if token.is_empty() {
+                continue;
+            }
+
+            match self.state {
+                ScopeState::NeedIndent => {
+                    write!(self.writer, "{}", " ".repeat(self.indent))
+                        .map_err(|_| fmt::Error {})?;
+                    self.state = ScopeState::Indented
+                }
+                ScopeState::Indented => {}
+            }
+            write!(self.writer, "{}", token).map_err(|_| fmt::Error {})?;
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Scope;
+    use netbuf::Buf;
+    use std::fmt::Write;
+
+    #[test]
+    fn test_scope() -> Result<(), Box<dyn std::error::Error + 'static>> {
+        let mut buf = Buf::new();
+        {
+            let mut s = Scope::new(&mut buf);
+            writeln!(s, "fn sample() {{")?;
+            {
+                let mut s = s.scope();
+                writeln!(s, "let a = {{")?;
+                {
+                    let mut s = s.scope();
+                    let val = 7;
+                    writeln!(s, "let tmp = {val};", val = val)?;
+                    writeln!(s, "// a blank line follows")?;
+                    writeln!(s)?;
+                    writeln!(s, "tmp + 3")?;
+                }
+                writeln!(s, "}};")?;
+            }
+            writeln!(s, "}}")?;
+        }
+
+        let s = std::str::from_utf8(buf.as_ref()).unwrap();
+        assert_eq!(
+            s,
+            r#"fn sample() {
+    let a = {
+        let tmp = 7;
+        // a blank line follows
+
+        tmp + 3
+    };
+}
+"#,
+        );
+        Ok(())
     }
 }
