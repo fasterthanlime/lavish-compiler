@@ -312,7 +312,7 @@ impl Generator {
 
             s.line("");
             s.line("pub type Message = rpc::Message<Params, NotificationParams, Results>;");
-            s.line("pub type RootHandle = rpc::Handle<Params, NotificationParams, Results>;");
+            s.line("pub type RootClient = rpc::Client<Params, NotificationParams, Results>;");
             s.line("pub type Protocol = rpc::Protocol<Params, NotificationParams, Results>;");
             s.line("");
             s.line("pub fn protocol() -> Protocol {");
@@ -322,14 +322,14 @@ impl Generator {
             s.line("}"); // fn protocol
 
             s.line("");
-            s.line("pub struct Handle {");
+            s.line("pub struct Client {");
             s.in_scope(|s| {
-                s.line("root: RootHandle,");
+                s.line("root: RootClient,");
             });
-            s.line("}"); // struct Handle
+            s.line("}"); // struct Client
 
             s.line("");
-            s.line("impl Handle {");
+            s.line("impl Client {");
             s.in_scope(|s| {
                 for fun in ctx.funs(FunKind::Request) {
                     let params = fun.params();
@@ -367,7 +367,7 @@ impl Generator {
                     s.line("");
                 }
             });
-            s.line("}"); // impl handle
+            s.line("}"); // impl Client
 
             for (strukt, side, kind) in &[
                 ("Params", "Params", FunKind::Request),
@@ -443,7 +443,7 @@ impl Generator {
             s.line("pub struct Call<T, PP> {");
             s.in_scope(|s| {
                 s.line("pub state: Arc<T>,");
-                s.line("pub handle: Handle,");
+                s.line("pub client: Client,");
                 s.line("pub params: PP,");
             });
             s.line("}"); // struct Call
@@ -460,7 +460,7 @@ impl Generator {
             s.line("");
             s.line("pub type SlotFn<T> = ");
             s.in_scope(|s| {
-                s.line("Fn(Arc<T>, Handle, Params) -> SlotReturn + 'static + Send + Sync;");
+                s.line("Fn(Arc<T>, Client, Params) -> SlotReturn + 'static + Send + Sync;");
             });
 
             s.line("");
@@ -515,7 +515,7 @@ impl Generator {
                     s.line("{");
                     s.in_scope(|s| {
                         s.line(format!(
-                            "self.{} = Some(Box::new(move |state, handle, params| {{",
+                            "self.{} = Some(Box::new(move |state, client, params| {{",
                             fun.variant_name(),
                         ));
                         s.in_scope(|s| {
@@ -523,7 +523,7 @@ impl Generator {
                             s.in_scope(|s| {
                                 s.line("f(Call {");
                                 s.in_scope(|s| {
-                                    s.line("state, handle,");
+                                    s.line("state, client,");
                                     s.line(format!(
                                         "params: {}::downgrade(params).unwrap(),",
                                         params.qualified_type()
@@ -559,7 +559,7 @@ impl Generator {
             });
             s.line("{");
             s.in_scope(|s| {
-            s.line("fn handle(&self, handle: RootHandle, params: Params) -> HandlerRet {");
+            s.line("fn handle(&self, client: RootClient, params: Params) -> HandlerRet {");
             s.in_scope(|s| {
                 s.line("let method = params.method();");
                 s.line("let slot = match params {");
@@ -578,7 +578,7 @@ impl Generator {
                 s.in_scope(|s| {
                     s.line("Some(slot_fn) => {");
                     s.in_scope(|s| {
-                        s.line("let res = slot_fn(self.state.clone(), Handle { root: handle }, params);");
+                        s.line("let res = slot_fn(self.state.clone(), Client { root: client }, params);");
                         s.line("Box::pin(async move { Ok(res.await?) })");
                     });
                     s.line("}"); // Some(slot_fn)
@@ -621,14 +621,14 @@ impl Generator {
                 s.line("}");
 
                 s.line("");
-                s.line("pub fn with_noop_handler(self) -> Result<Handle, lavish_rpc::Error> {");
+                s.line("pub fn with_noop_handler(self) -> Result<Client, lavish_rpc::Error> {");
                 s.in_scope(|s| {
                     s.line("self.with_handler(|_| {})");
                 });
                 s.line("}");
 
                 s.line("");
-                s.line("pub fn with_handler<S>(self, setup: S) -> Result<Handle, lavish_rpc::Error>");
+                s.line("pub fn with_handler<S>(self, setup: S) -> Result<Client, lavish_rpc::Error>");
                 s.line("where");
                 s.in_scope(|s| {
                     s.line("S: Fn(&mut Handler<()>),");
@@ -641,7 +641,7 @@ impl Generator {
 
                 s.line("");
                 s.line(
-                    "pub fn with_stateful_handler<T, S>(self, state: Arc<T>, setup: S) -> Result<Handle, lavish_rpc::Error>",
+                    "pub fn with_stateful_handler<T, S>(self, state: Arc<T>, setup: S) -> Result<Client, lavish_rpc::Error>",
                 );
                 s.line("where");
                 s.in_scope(|s| {
@@ -653,7 +653,7 @@ impl Generator {
                     s.line("let mut handler = Handler::new(state);");
                     s.line("setup(&mut handler);");
                     s.line("let root = lavish_rpc::connect(protocol(), handler, self.conn, self.pool)?;");
-                    s.line("Ok(Handle { root })");
+                    s.line("Ok(Client { root })");
                 });
                 s.line("}");
             });

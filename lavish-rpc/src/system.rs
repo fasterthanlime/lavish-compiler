@@ -50,7 +50,7 @@ where
     R: Atom,
     FT: Future<Output = Result<R, Error>> + Send + 'static,
 {
-    fn handle(&self, h: Handle<P, NP, R>, params: P) -> FT;
+    fn handle(&self, client: Client<P, NP, R>, params: P) -> FT;
 }
 
 impl<P, NP, R, F, FT> Handler<P, NP, R, FT> for F
@@ -58,15 +58,15 @@ where
     P: Atom,
     R: Atom,
     NP: Atom,
-    F: (Fn(Handle<P, NP, R>, P) -> FT) + Send + Sync,
+    F: (Fn(Client<P, NP, R>, P) -> FT) + Send + Sync,
     FT: Future<Output = Result<R, Error>> + Send + 'static,
 {
-    fn handle(&self, h: Handle<P, NP, R>, params: P) -> FT {
-        self(h, params)
+    fn handle(&self, client: Client<P, NP, R>, params: P) -> FT {
+        self(client, params)
     }
 }
 
-pub struct Handle<P, NP, R>
+pub struct Client<P, NP, R>
 where
     P: Atom,
     NP: Atom,
@@ -76,14 +76,14 @@ where
     sink: mpsc::Sender<Message<P, NP, R>>,
 }
 
-impl<P, NP, R> Handle<P, NP, R>
+impl<P, NP, R> Client<P, NP, R>
 where
     P: Atom,
     NP: Atom,
     R: Atom,
 {
     fn clone(&self) -> Self {
-        Handle {
+        Client {
             queue: self.queue.clone(),
             sink: self.sink.clone(),
         }
@@ -144,7 +144,7 @@ pub fn connect<C, H, FT, P, NP, R>(
     handler: H,
     io: C,
     mut pool: executor::ThreadPool,
-) -> Result<Handle<P, NP, R>, Error>
+) -> Result<Client<P, NP, R>, Error>
 where
     C: Conn,
     H: Handler<P, NP, R, FT> + 'static,
@@ -160,12 +160,12 @@ where
     let (mut sink, mut stream) = framed.split();
     let (tx, mut rx) = mpsc::channel(128);
 
-    let handle = Handle::<P, NP, R> {
+    let client = Client::<P, NP, R> {
         queue: queue.clone(),
         sink: tx,
     };
 
-    let ret = handle.clone();
+    let ret = client.clone();
 
     pool.clone().spawn(async move {
         while let Some(m) = rx.next().await {
@@ -178,7 +178,7 @@ where
             let handler = Arc::new(handler);
 
             while let Some(m) = stream.next().await {
-                let res = m.map(|m| pool.spawn(handle_message(m, handler.clone(), handle.clone())));
+                let res = m.map(|m| pool.spawn(handle_message(m, handler.clone(), client.clone())));
                 if let Err(e) = res {
                     eprintln!("message stream error: {:#?}", e);
                 }
@@ -192,7 +192,7 @@ where
 async fn handle_message<P, NP, R, H, FT>(
     inbound: Message<P, NP, R>,
     handler: Arc<H>,
-    mut handle: Handle<P, NP, R>,
+    mut client: Client<P, NP, R>,
 ) where
     P: Atom,
     NP: Atom,
@@ -202,7 +202,7 @@ async fn handle_message<P, NP, R, H, FT>(
 {
     match inbound {
         Message::Request { id, params } => {
-            let m = match handler.handle(handle.clone(), params).await {
+            let m = match handler.handle(client.clone(), params).await {
                 Ok(results) => Message::Response::<P, NP, R> {
                     id,
                     results: Some(results),
@@ -214,11 +214,11 @@ async fn handle_message<P, NP, R, H, FT>(
                     error: Some(format!("internal error: {:#?}", error)),
                 },
             };
-            handle.sink.send(m).await.unwrap();
+            client.sink.send(m).await.unwrap();
         }
         Message::Response { id, error, results } => {
             if let Some(in_flight) = {
-                let mut queue = handle.queue.lock().await;
+                let mut queue = client.queue.lock().await;
                 queue.in_flight_requests.remove(&id)
             } {
                 in_flight
