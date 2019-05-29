@@ -1,9 +1,10 @@
-use super::super::ast;
-use super::Error;
-use heck::SnakeCase;
-use indexmap::IndexMap;
+use crate::ast;
+use crate::codegen::Error;
 use std::fs::File;
 use std::time::Instant;
+
+mod ir;
+use ir::*;
 
 mod output;
 use output::*;
@@ -36,135 +37,6 @@ impl<'a> Context<'a> {
             self.all_funs()
                 .filter(move |x| x.is_notification() == is_notification),
         )
-    }
-}
-
-struct Namespace<'a> {
-    name: &'a str,
-
-    children: IndexMap<&'a str, Namespace<'a>>,
-    funs: IndexMap<&'a str, Fun<'a>>,
-    strus: IndexMap<&'a str, Stru<'a>>,
-}
-
-impl<'a> Namespace<'a> {
-    fn new(prefix: &str, name: &'a str, decl: &'a ast::NamespaceBody) -> Self {
-        let prefix = if name == "<root>" {
-            "".into()
-        } else {
-            format!("{}{}.", prefix, name)
-        };
-
-        let mut children: IndexMap<&'a str, Namespace<'a>> = IndexMap::new();
-        let mut funs: IndexMap<&'a str, Fun<'a>> = IndexMap::new();
-        let mut strus: IndexMap<&'a str, Stru<'a>> = IndexMap::new();
-
-        for decl in &decl.functions {
-            let ff = Fun::new(&prefix, decl);
-            funs.insert(&decl.name.text, ff);
-        }
-
-        for decl in &decl.structs {
-            let full_name = format!("{}{}", prefix, decl.name.text);
-            let st = Stru::new(decl, full_name);
-            strus.insert(&decl.name.text, st);
-        }
-
-        for decl in &decl.namespaces {
-            let name = decl.name.text.as_ref();
-            children.insert(name, Namespace::new(&prefix, name, &decl.body));
-        }
-
-        Namespace {
-            name,
-            children,
-            funs,
-            strus,
-        }
-    }
-
-    fn funs(&self) -> Box<Iterator<Item = &'a Fun> + 'a> {
-        Box::new(
-            self.children
-                .values()
-                .map(Namespace::funs)
-                .flatten()
-                .chain(self.funs.values().map(|f| f.funs()).flatten()),
-        )
-    }
-
-    fn name(&self) -> &'a str {
-        self.name
-    }
-}
-
-struct Fun<'a> {
-    decl: &'a ast::FunctionDecl,
-    tokens: Vec<String>,
-
-    body: Option<Namespace<'a>>,
-}
-
-impl<'a> Fun<'a> {
-    fn new(prefix: &str, decl: &'a ast::FunctionDecl) -> Self {
-        let name: &str = &decl.name.text;
-        let full_name = format!("{}{}", prefix, name);
-        Self {
-            decl,
-            tokens: full_name.split('.').map(|x| x.into()).collect(),
-            body: decl.body.as_ref().map(|b| Namespace::new(prefix, name, b)),
-        }
-    }
-
-    fn rpc_name(&self) -> String {
-        self.tokens.join(".")
-    }
-
-    fn variant_name(&self) -> String {
-        self.rpc_name().replace(".", "_").to_lowercase()
-    }
-
-    fn qualified_name(&self) -> String {
-        self.tokens.join("::")
-    }
-
-    fn mod_name(&self) -> String {
-        self.decl.name.text.to_snake_case()
-    }
-
-    fn is_notification(&self) -> bool {
-        self.decl
-            .modifiers
-            .contains(&ast::FunctionModifier::Notification)
-    }
-
-    fn has_empty_params(&self) -> bool {
-        self.decl.params.is_empty()
-    }
-
-    fn has_empty_results(&self) -> bool {
-        self.decl.results.is_empty()
-    }
-
-    fn funs(&self) -> Box<Iterator<Item = &'a Fun> + 'a> {
-        let iter = std::iter::once(self);
-        if let Some(body) = self.body.as_ref() {
-            Box::new(iter.chain(body.funs()))
-        } else {
-            Box::new(iter)
-        }
-    }
-}
-
-struct Stru<'a> {
-    decl: &'a ast::StructDecl,
-    #[allow(unused)]
-    full_name: String,
-}
-
-impl<'a> Stru<'a> {
-    fn new(decl: &'a ast::StructDecl, full_name: String) -> Self {
-        Self { decl, full_name }
     }
 }
 
@@ -230,18 +102,18 @@ fn visit_ns<'a>(s: &'a Scope<'a>, ns: &Namespace, depth: usize) -> Result {
     Ok(())
 }
 
-fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Result {
-    for (_, ns) in &ns.children {
+fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &'a Namespace<'a>, depth: usize) -> Result {
+    for (_, ns) in ns.children() {
         visit_ns(&s, ns, depth + 1)?;
     }
 
     s.line("use lavish_rpc::serde_derive::*;");
     s.line("");
 
-    for (_, st) in &ns.strus {
-        s.comment(&st.decl.comment);
-        s.def_struct(&st.decl.name.text, |s| {
-            for f in &st.decl.fields {
+    for (_, st) in ns.strus() {
+        s.comment(&st.comment());
+        s.def_struct(st.name(), |s| {
+            for f in st.fields() {
                 s.comment(&f.comment);
                 s.line(format!("pub {}: {},", f.name.text, f.typ.as_rust()));
             }
@@ -250,7 +122,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
     }
 
     let write_fun = |fun: &Fun<'a>| -> Result {
-        s.comment(&fun.decl.comment);
+        s.comment(fun.comment());
         s.line(format!("pub mod {} {{", fun.mod_name()));
 
         {
@@ -284,7 +156,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
             };
 
             s.def_struct("Params", |s| {
-                for f in &fun.decl.params {
+                for f in fun.params().fields() {
                     s.line(format!("pub {}: {},", f.name.text, f.typ.as_rust()));
                 }
             });
@@ -301,7 +173,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
             if !fun.is_notification() {
                 s.line("");
                 s.def_struct("Results", |s| {
-                    for f in &fun.decl.results {
+                    for f in fun.results().fields() {
                         s.line(format!("pub {}: {},", f.name.text, f.typ.as_rust()));
                     }
                 });
@@ -310,30 +182,9 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
                 s.line("impl Results {");
                 write_downgrade("Results");
                 s.line("}"); // impl Results
-
-                s.line("");
-                let params_type = if fun.has_empty_params() {
-                    "()"
-                } else {
-                    "Params"
-                };
-                s.line(format!("pub async fn call(h: &__::Handle, p: {}) -> Result<Results, lavish_rpc::Error> {{", params_type));
-                s.in_scope(|s| {
-                    s.line("h.root.call(");
-                    s.in_scope(|s| {
-                        if fun.has_empty_params() {
-                            s.line(format!("__::Params::{}(Params {{}}),", fun.variant_name()));
-                        } else {
-                            s.line(format!("__::Params::{}(p),", fun.variant_name()));
-                        }
-                        s.line("Results::downgrade,");
-                    }); // h.call arguments
-                    s.line(").await"); // h.call
-                });
-                s.line("}"); // async fn call
             }
 
-            if let Some(body) = fun.body.as_ref() {
+            if let Some(body) = fun.body() {
                 visit_ns_body(&s, body, depth + 1)?;
             }
 
@@ -343,7 +194,7 @@ fn visit_ns_body<'a>(s: &'a Scope<'a>, ns: &Namespace<'a>, depth: usize) -> Resu
         Ok(())
     };
 
-    for (_, fun) in &ns.funs {
+    for fun in ns.local_funs() {
         write_fun(fun)?;
     }
     Ok(())
@@ -470,11 +321,53 @@ impl Generator {
             });
             s.line("}"); // fn protocol
 
+            s.line("");
             s.line("pub struct Handle {");
             s.in_scope(|s| {
                 s.line("root: RootHandle,");
             });
-            s.line("}");
+            s.line("}"); // struct Handle
+
+            s.line("");
+            s.line("impl Handle {");
+            s.in_scope(|s| {
+                for fun in ctx.funs(FunKind::Request) {
+                    let params = fun.params();
+                    let results = fun.results();
+
+                    let params_def = if params.is_empty() {
+                        "".into()
+                    } else {
+                        format!(", p: {}", params.qualified_type())
+                    };
+
+                    s.line(format!(
+                        "pub async fn {}(&self{}) -> Result<{}, lavish_rpc::Error> {{",
+                        fun.variant_name(),
+                        params_def,
+                        results.qualified_type()
+                    ));
+                    s.in_scope(|s| {
+                        s.line("self.root.call(");
+                        s.in_scope(|s| {
+                            if params.is_empty() {
+                                s.line(format!(
+                                    "{}({}),",
+                                    params.variant(),
+                                    params.empty_literal()
+                                ));
+                            } else {
+                                s.line(format!("{}(p),", params.variant()));
+                            }
+                            s.line(format!("{}::downgrade,", results.qualified_type()));
+                        }); // h.call arguments
+                        s.line(").await"); // h.call
+                    });
+                    s.line("}");
+                    s.line("");
+                }
+            });
+            s.line("}"); // impl handle
 
             for (strukt, side, kind) in &[
                 ("Params", "Params", FunKind::Request),
@@ -600,12 +493,24 @@ impl Generator {
                 s.line("}");
 
                 for fun in ctx.funs(FunKind::Request) {
+                    let params = fun.params();
+                    let results = fun.results();
+
                     s.line("");
-                    s.line(format!("pub fn on_{}<F, FT> (&mut self, f: F)", fun.variant_name()));
+                    s.line(format!(
+                        "pub fn on_{}<F, FT> (&mut self, f: F)",
+                        fun.variant_name()
+                    ));
                     s.line("where");
                     s.in_scope(|s| {
-                        s.line(format!("F: Fn(Call<T, {}::Params>) -> FT + Sync + Send + 'static,", fun.qualified_name()));
-                        s.line(format!("FT: Future<Output = Result<{}::Results, lavish_rpc::Error>> + Send + 'static,", fun.qualified_name()));
+                        s.line(format!(
+                            "F: Fn(Call<T, {}>) -> FT + Sync + Send + 'static,",
+                            params.qualified_type()
+                        ));
+                        s.line(format!(
+                            "FT: Future<Output = Result<{}, lavish_rpc::Error>> + Send + 'static,",
+                            results.qualified_type()
+                        ));
                     });
                     s.line("{");
                     s.in_scope(|s| {
@@ -619,16 +524,19 @@ impl Generator {
                                 s.line("f(Call {");
                                 s.in_scope(|s| {
                                     s.line("state, handle,");
-                                    s.line(format!("params: {}::Params::downgrade(params).unwrap(),", fun.qualified_name()));
-                                });
-                                if fun.has_empty_results() {
                                     s.line(format!(
-                                        "}}).map_ok(|_| Results::{}({}::Results {{}}))",
-                                        fun.variant_name(),
-                                        fun.qualified_name(),
+                                        "params: {}::downgrade(params).unwrap(),",
+                                        params.qualified_type()
+                                    ));
+                                });
+                                if results.is_empty() {
+                                    s.line(format!(
+                                        "}}).map_ok(|_| {}({}))",
+                                        results.variant(),
+                                        results.empty_literal(),
                                     ));
                                 } else {
-                                    s.line(format!("}}).map_ok(Results::{})", fun.variant_name()));
+                                    s.line(format!("}}).map_ok({})", results.variant()));
                                 }
                             });
                             s.line(")");
