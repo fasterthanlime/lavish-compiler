@@ -509,7 +509,7 @@ impl Generator {
                         ));
                         s.line(format!(
                             "FT: Future<Output = Result<{}, lavish_rpc::Error>> + Send + 'static,",
-                            results.qualified_type()
+                            results.short_type()
                         ));
                     });
                     s.line("{");

@@ -101,6 +101,14 @@ impl<'a> FunStruct<'a> {
         format!("{}::{}", self.fun.qualified_name(), self.kind())
     }
 
+    pub fn short_type(&self) -> String {
+        if self.is_empty() {
+            "()".into()
+        } else {
+            self.qualified_type()
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.fields.is_empty()
     }
