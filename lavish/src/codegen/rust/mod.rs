@@ -1,5 +1,6 @@
 use crate::ast;
-use crate::codegen::Error;
+use crate::codegen::Result;
+use std::fmt::Write;
 use std::fs::File;
 use std::time::Instant;
 
@@ -39,8 +40,6 @@ impl<'a> Context<'a> {
         )
     }
 }
-
-pub type Result = std::result::Result<(), Error>;
 
 trait AsRust {
     fn as_rust<'a>(&'a self) -> Box<fmt::Display + 'a>;
@@ -92,13 +91,13 @@ impl<'a> fmt::Display for RustType<'a> {
 }
 
 fn visit_ns<'a>(s: &mut Scope<'a>, ns: &Namespace, depth: usize) -> Result {
-    s.line(format!("pub mod {} {{", ns.name()));
+    writeln!(s, "pub mod {} {{", ns.name())?;
     {
         let mut s = s.scope();
         visit_ns_body(&mut s, ns, depth)?;
     }
-    s.line("}"); // pub mod
-    s.line("");
+    writeln!(s, "}}")?; // pub mod
+    writeln!(s)?;
     Ok(())
 }
 
@@ -107,62 +106,65 @@ fn visit_ns_body<'a>(s: &mut Scope<'a>, ns: &'a Namespace<'a>, depth: usize) -> 
         visit_ns(s, ns, depth + 1)?;
     }
 
-    s.line("use lavish_rpc::serde_derive::*;");
-    s.line("");
+    writeln!(s, "use lavish_rpc::serde_derive::*;")?;
+    writeln!(s)?;
 
     for (_, st) in ns.strus() {
         s.comment(&st.comment());
         s.def_struct(st.name(), |s| {
             for f in st.fields() {
                 s.comment(&f.comment);
-                s.line(format!("pub {}: {},", f.name.text, f.typ.as_rust()));
+                writeln!(s, "pub {}: {},", f.name.text, f.typ.as_rust())?;
             }
-        });
-        s.line("");
+            Ok(())
+        })?;
+        writeln!(s)?;
     }
 
     let write_fun = |s: &mut Scope, fun: &Fun<'a>| -> Result {
         s.comment(fun.comment());
-        s.line(format!("pub mod {} {{", fun.mod_name()));
+        writeln!(s, "pub mod {} {{", fun.mod_name())?;
 
         {
             let mut s = s.scope();
-            s.line("use futures::prelude::*;");
-            s.line("use lavish_rpc::serde_derive::*;");
+            writeln!(s, "use futures::prelude::*;")?;
+            writeln!(s, "use lavish_rpc::serde_derive::*;")?;
             let super_ref = "super::".repeat(depth + 2);
-            s.line(format!("use {}__;", super_ref));
-            s.line("");
+            writeln!(s, "use {}__;", super_ref)?;
+            writeln!(s)?;
 
-            let write_downgrade = |s: &mut Scope, side: &str| {
+            let write_downgrade = |s: &mut Scope, side: &str| -> Result {
                 s.in_scope(|s| {
-                    s.line(format!(
-                        "pub fn downgrade(p: __::{}) -> Option<Self> {{",
-                        side,
-                    ));
+                    writeln!(s, "pub fn downgrade(p: __::{}) -> Option<Self> {{", side,)?;
                     s.in_scope(|s| {
-                        s.line("match p {");
+                        writeln!(s, "match p {{")?;
                         s.in_scope(|s| {
                             s.line(format!(
                                 "__::{}::{}(p) => Some(p),",
                                 side,
                                 fun.variant_name()
                             ));
-                            s.line("_ => None,");
-                        });
-                        s.line("}"); // match p
-                    });
-                    s.line("}"); // fn downgrade
-                });
+                            writeln!(s, "_ => None,")?;
+                            Ok(())
+                        })?;
+                        writeln!(s, "}}")?; // match p
+                        Ok(())
+                    })?;
+                    writeln!(s, "}}")?; // fn downgrade
+                    Ok(())
+                })?;
+                Ok(())
             };
 
             s.def_struct("Params", |s| {
                 for f in fun.params().fields() {
-                    s.line(format!("pub {}: {},", f.name.text, f.typ.as_rust()));
+                    writeln!(s, "pub {}: {},", f.name.text, f.typ.as_rust())?;
                 }
-            });
+                Ok(())
+            })?;
 
-            s.line("");
-            s.line("impl Params {");
+            writeln!(s)?;
+            writeln!(s, "impl Params {{")?;
             write_downgrade(
                 &mut s,
                 if fun.is_notification() {
@@ -170,29 +172,30 @@ fn visit_ns_body<'a>(s: &mut Scope<'a>, ns: &'a Namespace<'a>, depth: usize) -> 
                 } else {
                     "Params"
                 },
-            );
-            s.line("}"); // impl Params
+            )?;
+            writeln!(s, "}}")?; // impl Params
 
             if !fun.is_notification() {
-                s.line("");
+                writeln!(s)?;
                 s.def_struct("Results", |s| {
                     for f in fun.results().fields() {
-                        s.line(format!("pub {}: {},", f.name.text, f.typ.as_rust()));
+                        writeln!(s, "pub {}: {},", f.name.text, f.typ.as_rust())?;
                     }
-                });
+                    Ok(())
+                })?;
 
-                s.line("");
-                s.line("impl Results {");
-                write_downgrade(&mut s, "Results");
-                s.line("}"); // impl Results
+                writeln!(s)?;
+                writeln!(s, "impl Results {{")?;
+                write_downgrade(&mut s, "Results")?;
+                writeln!(s, "}}")?; // impl Results
             }
 
             if let Some(body) = fun.body() {
                 visit_ns_body(&mut s, body, depth + 1)?;
             }
 
-            s.line("}");
-            s.line("");
+            writeln!(s, "}}")?;
+            writeln!(s)?;
         }
         Ok(())
     };
@@ -224,10 +227,10 @@ impl super::Generator for Generator {
             let mod_path = workspace.dir.join("mod.rs");
             let mut output = std::io::BufWriter::new(File::create(&mod_path)?);
             let mut s = Scope::new(&mut output);
-            self.write_prelude(&mut s);
+            self.write_prelude(&mut s)?;
 
             for member in workspace.members.values() {
-                s.line(format!("pub mod {};", member.name));
+                writeln!(s, "pub mod {};", member.name)?;
             }
         }
 
@@ -236,15 +239,16 @@ impl super::Generator for Generator {
 }
 
 impl Generator {
-    fn write_prelude<'a>(&self, s: &mut Scope<'a>) {
-        s.line("// This file is generated by lavish: DO NOT EDIT");
-        s.line("// https://github.com/fasterthanlime/lavish");
-        s.line("");
-        s.line("#![cfg_attr(rustfmt, rustfmt_skip)]");
-        s.line("#![allow(clippy::all)]");
-        s.line("#![allow(unknown_lints)]");
-        s.line("#![allow(unused)]");
-        s.line("");
+    fn write_prelude<'a>(&self, s: &mut Scope<'a>) -> Result {
+        writeln!(s, "// This file is generated by lavish: DO NOT EDIT")?;
+        writeln!(s, "// https://github.com/fasterthanlime/lavish")?;
+        writeln!(s)?;
+        writeln!(s, "#![cfg_attr(rustfmt, rustfmt_skip)]")?;
+        writeln!(s, "#![allow(clippy::all)]")?;
+        writeln!(s, "#![allow(unknown_lints)]")?;
+        writeln!(s, "#![allow(unused)]")?;
+        writeln!(s)?;
+        Ok(())
     }
 
     fn emit(&self, workspace: &ast::Workspace, member: &ast::WorkspaceMember) -> Result {
@@ -255,7 +259,7 @@ impl Generator {
         let mut output = std::io::BufWriter::new(File::create(&output_path).unwrap());
 
         let mut s = Scope::new(&mut output);
-        self.write_prelude(&mut s);
+        self.write_prelude(&mut s)?;
 
         let schema = member.schema.as_ref().expect("schema to be parsed");
         let ctx = Context::new(&schema.body);
@@ -276,63 +280,74 @@ impl Generator {
         };
 
         {
-            s.line("pub use __::*;");
-            s.line("");
-            s.line("mod __ {");
+            writeln!(s, "pub use __::*;")?;
+            writeln!(s)?;
+            writeln!(s, "mod __ {{")?;
             let mut s = s.scope();
 
-            s.line("// Notes: as of 2019-05-21, futures-preview is required");
-            s.line("use futures::prelude::*;");
-            s.line("use std::pin::Pin;");
-            s.line("use std::sync::Arc;");
-            s.line("");
-            s.line("use lavish_rpc as rpc;");
-            s.line("use rpc::{Atom, erased_serde, serde_derive::*};");
+            writeln!(s, "// Notes: as of 2019-05-21, futures-preview is required")?;
+            writeln!(s, "use futures::prelude::*;")?;
+            writeln!(s, "use std::pin::Pin;")?;
+            writeln!(s, "use std::sync::Arc;")?;
+            writeln!(s)?;
+            writeln!(s, "use lavish_rpc as rpc;")?;
+            writeln!(s, "use rpc::{{Atom, erased_serde, serde_derive::*}};")?;
 
-            s.line("");
-            s.line("#[derive(Serialize, Debug)]");
-            s.line("#[serde(untagged)]");
-            s.line("#[allow(non_camel_case_types, unused)]");
-            s.line("pub enum Params {");
+            writeln!(s)?;
+            writeln!(s, "#[derive(Serialize, Debug)]")?;
+            writeln!(s, "#[serde(untagged)]")?;
+            writeln!(s, "#[allow(non_camel_case_types, unused)]")?;
+            writeln!(s, "pub enum Params {{")?;
             write_enum(&mut s, "Params", ctx.funs(FunKind::Request));
-            s.line("}"); // enum Params
+            writeln!(s, "}}")?; // enum Params
 
-            s.line("");
-            s.line("#[derive(Serialize, Debug)]");
-            s.line("#[serde(untagged)]");
-            s.line("#[allow(non_camel_case_types, unused)]");
-            s.line("pub enum Results {");
+            writeln!(s)?;
+            writeln!(s, "#[derive(Serialize, Debug)]")?;
+            writeln!(s, "#[serde(untagged)]")?;
+            writeln!(s, "#[allow(non_camel_case_types, unused)]")?;
+            writeln!(s, "pub enum Results {{")?;
             write_enum(&mut s, "Results", ctx.funs(FunKind::Request));
-            s.line("}"); // enum Results
+            writeln!(s, "}}")?; // enum Results
 
-            s.line("");
-            s.line("#[derive(Serialize, Debug)]");
-            s.line("#[serde(untagged)]");
-            s.line("#[allow(non_camel_case_types, unused)]");
-            s.line("pub enum NotificationParams {");
+            writeln!(s)?;
+            writeln!(s, "#[derive(Serialize, Debug)]")?;
+            writeln!(s, "#[serde(untagged)]")?;
+            writeln!(s, "#[allow(non_camel_case_types, unused)]")?;
+            writeln!(s, "pub enum NotificationParams {{")?;
             write_enum(&mut s, "Params", ctx.funs(FunKind::Notification));
-            s.line("}"); // enum NotificationParams
+            writeln!(s, "}}")?; // enum NotificationParams
 
-            s.line("");
-            s.line("pub type Message = rpc::Message<Params, NotificationParams, Results>;");
-            s.line("pub type RootClient = rpc::Client<Params, NotificationParams, Results>;");
-            s.line("pub type Protocol = rpc::Protocol<Params, NotificationParams, Results>;");
-            s.line("");
-            s.line("pub fn protocol() -> Protocol {");
+            writeln!(s)?;
+            writeln!(
+                s,
+                "pub type Message = rpc::Message<Params, NotificationParams, Results>;"
+            )?;
+            writeln!(
+                s,
+                "pub type RootClient = rpc::Client<Params, NotificationParams, Results>;"
+            )?;
+            writeln!(
+                s,
+                "pub type Protocol = rpc::Protocol<Params, NotificationParams, Results>;"
+            )?;
+            writeln!(s)?;
+            writeln!(s, "pub fn protocol() -> Protocol {{")?;
             s.in_scope(|s| {
-                s.line("Protocol::new()");
-            });
-            s.line("}"); // fn protocol
+                writeln!(s, "Protocol::new()")?;
+                Ok(())
+            })?;
+            writeln!(s, "}}")?; // fn protocol
 
-            s.line("");
-            s.line("pub struct Client {");
+            writeln!(s)?;
+            writeln!(s, "pub struct Client {{")?;
             s.in_scope(|s| {
-                s.line("root: RootClient,");
-            });
-            s.line("}"); // struct Client
+                writeln!(s, "root: RootClient,")?;
+                Ok(())
+            })?;
+            writeln!(s, "}}")?; // struct Client
 
-            s.line("");
-            s.line("impl Client {");
+            writeln!(s)?;
+            writeln!(s, "impl Client {{")?;
             s.in_scope(|s| {
                 for fun in ctx.funs(FunKind::Request) {
                     let params = fun.params();
@@ -344,14 +359,15 @@ impl Generator {
                         format!(", p: {}", params.qualified_type())
                     };
 
-                    s.line(format!(
+                    writeln!(
+                        s,
                         "pub async fn {}(&self{}) -> Result<{}, lavish_rpc::Error> {{",
                         fun.variant_name(),
                         params_def,
                         results.qualified_type()
-                    ));
+                    )?;
                     s.in_scope(|s| {
-                        s.line("self.root.call(");
+                        writeln!(s, "self.root.call(")?;
                         s.in_scope(|s| {
                             if params.is_empty() {
                                 s.line(format!(
@@ -360,63 +376,69 @@ impl Generator {
                                     params.empty_literal()
                                 ));
                             } else {
-                                s.line(format!("{}(p),", params.variant()));
+                                writeln!(s, "{}(p),", params.variant())?;
                             }
-                            s.line(format!("{}::downgrade,", results.qualified_type()));
-                        }); // h.call arguments
-                        s.line(").await"); // h.call
-                    });
-                    s.line("}");
-                    s.line("");
+                            writeln!(s, "{}::downgrade,", results.qualified_type())?;
+                            Ok(())
+                        })?; // h.call arguments
+                        writeln!(s, ").await")?; // h.call
+                        Ok(())
+                    })?;
+                    writeln!(s, "}}")?;
+                    writeln!(s)?;
                 }
-            });
-            s.line("}"); // impl Client
+                Ok(())
+            })?;
+            writeln!(s, "}}")?; // impl Client
 
             for (strukt, side, kind) in &[
                 ("Params", "Params", FunKind::Request),
                 ("Results", "Results", FunKind::Request),
                 ("Params", "NotificationParams", FunKind::Notification),
             ] {
-                s.line("");
-                s.line(format!("impl rpc::Atom for {} {{", side));
+                writeln!(s)?;
+                writeln!(s, "impl rpc::Atom for {} {{", side)?;
                 s.in_scope(|s| {
-                    s.line("fn method(&self) -> &'static str {");
+                    writeln!(s, "fn method(&self) -> &'static str {{")?;
                     s.in_scope(|s| {
-                        s.line("match self {");
+                        writeln!(s, "match self {{")?;
                         s.in_scope(|s| {
                             let mut count = 0;
                             for fun in ctx.funs(*kind) {
                                 count += 1;
-                                s.line(format!(
+                                writeln!(s, 
                                     "{}::{}(_) => {:?},",
                                     side,
                                     fun.variant_name(),
                                     fun.rpc_name()
-                                ));
+                                )?;
                             }
                             if count == 0 {
-                                s.line("_ => unimplemented!()")
+                                writeln!(s, "_ => unimplemented!()")?;
                             }
-                        });
-                        s.line("}");
-                    });
-                    s.line("}"); // fn method
+                            Ok(())
+                        })?;
+                        writeln!(s, "}}")?;
+                        Ok(())
+                    })?;
+                    writeln!(s, "}}")?; // fn method
 
-                    s.line("");
-                    s.line("fn deserialize(");
+                    writeln!(s)?;
+                    writeln!(s, "fn deserialize(")?;
                     s.in_scope(|s| {
-                        s.line("method: &str,");
-                        s.line("de: &mut erased_serde::Deserializer,");
-                    });
-                    s.line(") -> erased_serde::Result<Self> {");
+                        writeln!(s, "method: &str,")?;
+                        writeln!(s, "de: &mut erased_serde::Deserializer,")?;
+                        Ok(())
+                    })?;
+                    writeln!(s, ") -> erased_serde::Result<Self> {{")?;
                     s.in_scope(|s| {
-                        s.line("use erased_serde::deserialize as deser;");
-                        s.line("use serde::de::Error;");
-                        s.line("");
-                        s.line("match method {");
+                        writeln!(s, "use erased_serde::deserialize as deser;")?;
+                        writeln!(s, "use serde::de::Error;")?;
+                        writeln!(s)?;
+                        writeln!(s, "match method {{")?;
                         s.in_scope(|s| {
                             for fun in ctx.funs(*kind) {
-                                s.line(format!("{:?} =>", fun.rpc_name(),));
+                                writeln!(s, "{:?} =>", fun.rpc_name(),)?;
                                 {
                                     let mut s = s.scope();
                                     s.line(format!(
@@ -428,83 +450,99 @@ impl Generator {
                                     ));
                                 }
                             }
-                            s.line("_ => Err(erased_serde::Error::custom(format!(");
+                            writeln!(s, "_ => Err(erased_serde::Error::custom(format!(")?;
                             s.in_scope(|s| {
-                                s.line(format!("{:?},", "unknown method: {}"));
-                                s.line("method,");
-                            });
-                            s.line("))),");
-                        });
-                        s.line("}");
-                    });
-                    s.line("}"); // fn deserialize
-                });
-                s.line("}"); // impl Atom for side
+                                writeln!(s, "{:?},", "unknown method: {}")?;
+                                writeln!(s, "method,")?;
+                                Ok(())
+                            })?;
+                            writeln!(s, "))),")?;
+                            Ok(())
+                        })?;
+                        writeln!(s, "}}")?;
+                        Ok(())
+                    })?;
+                    writeln!(s, "}}")?; // fn deserialize
+                    Ok(())
+                })?;
+                writeln!(s, "}}")?; // impl Atom for side
             } // impl rpc::Atom for P, NP, R
 
-            s.line("");
-            s.line("pub struct Call<T, PP> {");
+            writeln!(s)?;
+            writeln!(s, "pub struct Call<T, PP> {{")?;
             s.in_scope(|s| {
-                s.line("pub state: Arc<T>,");
-                s.line("pub client: Client,");
-                s.line("pub params: PP,");
-            });
-            s.line("}"); // struct Call
+                writeln!(s, "pub state: Arc<T>,")?;
+                writeln!(s, "pub client: Client,")?;
+                writeln!(s, "pub params: PP,")?;
+                Ok(())
+            })?;
+            writeln!(s, "}}")?; // struct Call
 
-            s.line("");
-            s.line("pub type SlotFuture = ");
+            writeln!(s)?;
+            writeln!(s, "pub type SlotFuture = ")?;
             s.in_scope(|s| {
-                s.line("Future<Output = Result<Results, rpc::Error>> + Send + 'static;");
-            });
+                writeln!(
+                    s,
+                    "Future<Output = Result<Results, rpc::Error>> + Send + 'static;"
+                )?;
+                Ok(())
+            })?;
 
-            s.line("");
-            s.line("pub type SlotReturn = Pin<Box<SlotFuture>>;");
+            writeln!(s)?;
+            writeln!(s, "pub type SlotReturn = Pin<Box<SlotFuture>>;")?;
 
-            s.line("");
-            s.line("pub type SlotFn<T> = ");
+            writeln!(s)?;
+            writeln!(s, "pub type SlotFn<T> = ")?;
             s.in_scope(|s| {
-                s.line("Fn(Arc<T>, Client, Params) -> SlotReturn + 'static + Send + Sync;");
-            });
+                writeln!(
+                    s,
+                    "Fn(Arc<T>, Client, Params) -> SlotReturn + 'static + Send + Sync;"
+                )?;
+                Ok(())
+            })?;
 
-            s.line("");
-            s.line("pub type Slot<T> = Option<Box<SlotFn<T>>>;");
+            writeln!(s)?;
+            writeln!(s, "pub type Slot<T> = Option<Box<SlotFn<T>>>;")?;
 
-            s.line("");
-            s.line("pub struct Handler<T> {");
+            writeln!(s)?;
+            writeln!(s, "pub struct Handler<T> {{")?;
             s.in_scope(|s| {
-                s.line("state: Arc<T>,");
+                writeln!(s, "state: Arc<T>,")?;
                 for fun in ctx.funs(FunKind::Request) {
-                    s.line(format!("{}: Slot<T>,", fun.variant_name()));
+                    writeln!(s, "{}: Slot<T>,", fun.variant_name())?;
                 }
-            });
-            s.line("}"); // struct Handler
+                Ok(())
+            })?;
+            writeln!(s, "}}")?; // struct Handler
 
-            s.line("");
-            s.line("impl<T> Handler<T> {");
+            writeln!(s)?;
+            writeln!(s, "impl<T> Handler<T> {{")?;
             s.in_scope(|s| {
-                s.line("pub fn new(state: Arc<T>) -> Self {");
+                writeln!(s, "pub fn new(state: Arc<T>) -> Self {{")?;
                 s.in_scope(|s| {
-                    s.line("Self {");
+                    writeln!(s, "Self {{")?;
                     s.in_scope(|s| {
-                        s.line("state,");
+                        writeln!(s, "state,")?;
                         for fun in ctx.funs(FunKind::Request) {
-                            s.line(format!("{}: None,", fun.variant_name()));
+                            writeln!(s, "{}: None,", fun.variant_name())?;
                         }
-                    });
-                    s.line("}");
-                });
-                s.line("}");
+                        Ok(())
+                    })?;
+                    writeln!(s, "}}")?;
+                    Ok(())
+                })?;
+                writeln!(s, "}}")?;
 
                 for fun in ctx.funs(FunKind::Request) {
                     let params = fun.params();
                     let results = fun.results();
 
-                    s.line("");
+                    writeln!(s)?;
                     s.line(format!(
                         "pub fn on_{}<F, FT> (&mut self, f: F)",
                         fun.variant_name()
                     ));
-                    s.line("where");
+                    writeln!(s, "where")?;
                     s.in_scope(|s| {
                         s.line(format!(
                             "F: Fn(Call<T, {}>) -> FT + Sync + Send + 'static,",
@@ -514,58 +552,66 @@ impl Generator {
                             "FT: Future<Output = Result<{}, lavish_rpc::Error>> + Send + 'static,",
                             results.short_type()
                         ));
-                    });
-                    s.line("{");
+                        Ok(())
+                    })?;
+                    writeln!(s, "{{")?;
                     s.in_scope(|s| {
                         s.line(format!(
                             "self.{} = Some(Box::new(move |state, client, params| {{",
                             fun.variant_name(),
                         ));
                         s.in_scope(|s| {
-                            s.line("Box::pin(");
+                            writeln!(s, "Box::pin(")?;
                             s.in_scope(|s| {
-                                s.line("f(Call {");
+                                writeln!(s, "f(Call {{")?;
                                 s.in_scope(|s| {
-                                    s.line("state, client,");
+                                    writeln!(s, "state, client,")?;
                                     s.line(format!(
                                         "params: {}::downgrade(params).unwrap(),",
                                         params.qualified_type()
                                     ));
-                                });
+                                    Ok(())
+                                })?;
                                 if results.is_empty() {
-                                    s.line(format!(
+                                    writeln!(
+                                        s,
                                         "}}).map_ok(|_| {}({}))",
                                         results.variant(),
                                         results.empty_literal(),
-                                    ));
+                                    )?;
                                 } else {
-                                    s.line(format!("}}).map_ok({})", results.variant()));
+                                    writeln!(s, "}}).map_ok({})", results.variant())?;
                                 }
-                            });
-                            s.line(")");
-                        });
-                        s.line("}));");
-                    });
-                    s.line("}");
+                                Ok(())
+                            })?;
+                            writeln!(s, ")")?;
+                            Ok(())
+                        })?;
+                        writeln!(s, "}}));")?;
+                        Ok(())
+                    })?;
+                    writeln!(s, "}}")?;
                 }
-                s.line("");
-            });
-            s.line("}"); // impl Handler
+                writeln!(s)?;
+                Ok(())
+            })?;
+            writeln!(s, "}}")?; // impl Handler
 
-            s.line("");
-            s.line("type HandlerRet = Pin<Box<dyn Future<Output = Result<Results, rpc::Error>> + Send + 'static>>;");
-            s.line("");
-            s.line("impl<T> rpc::Handler<Params, NotificationParams, Results, HandlerRet> for Handler<T>");
-            s.line("where");
+            writeln!(s)?;
+            writeln!(s, "type HandlerRet = Pin<Box<dyn Future<Output = Result<Results, rpc::Error>> + Send + 'static>>;")?;
+            writeln!(s)?;
+            writeln!(s, "impl<T> rpc::Handler<Params, NotificationParams, Results, HandlerRet> for Handler<T>")?;
+            writeln!(s, "where")?;
             s.in_scope(|s| {
-                s.line("T: Send + Sync,");
-            });
-            s.line("{");
+                writeln!(s, "T: Send + Sync,")?;
+                Ok(())
+            })?;
+            writeln!(s, "{{")?;
             s.in_scope(|s| {
-            s.line("fn handle(&self, client: RootClient, params: Params) -> HandlerRet {");
+            writeln!(s, "fn handle(&self, client: RootClient, params: Params) -> HandlerRet {{")?;
             s.in_scope(|s| {
-                s.line("let method = params.method();");
-                s.line("let slot = match params {");
+                writeln!(s, "let method = params.method();")?;
+                writeln!(s, "let slot = match params {{")?;
                 s.in_scope(|s| {
                     for fun in ctx.funs(FunKind::Request) {
                         s.line(format!(
@@ -574,112 +620,126 @@ impl Generator {
                             fun.variant_name()
                         ));
                     }
-                    s.line("_ => None,");
-                });
-                s.line("};");
-                s.line("match slot {");
+                    writeln!(s, "_ => None,")?;
+                    Ok(())
+                })?;
+                writeln!(s, "}};")?;
+                writeln!(s, "match slot {{")?;
                 s.in_scope(|s| {
-                    s.line("Some(slot_fn) => {");
+                    writeln!(s, "Some(slot_fn) => {{")?;
                     s.in_scope(|s| {
-                        s.line("let res = slot_fn(self.state.clone(), Client { root: client }, params);");
-                        s.line("Box::pin(async move { Ok(res.await?) })");
-                    });
-                    s.line("}"); // Some(slot_fn)
-                    s.line("None => Box::pin(async move { Err(rpc::Error::MethodUnimplemented(method)) }),");
-                });
-                s.line("}"); // match slot
-            });
-            s.line("}");
-        });
-            s.line("}"); // impl rpc::Handler for Handler
+                        writeln!(s, "let res = slot_fn(self.state.clone(), Client {{ root: client }}, params);")?;
+                        writeln!(s, "Box::pin(async move {{ Ok(res.await?) }})")?;
+                        Ok(())
+                    })?;
+                    writeln!(s, "}}")?; // Some(slot_fn)?
+                    writeln!(s, "None => Box::pin(async move {{ Err(rpc::Error::MethodUnimplemented(method)) }}),")?;
+                    Ok(())
+                })?;
+                writeln!(s, "}}")?; // match slot
+                Ok(())
+            })?;
+            writeln!(s, "}}")?;
+            Ok(())
+        })?;
+            writeln!(s, "}}")?; // impl rpc::Handler for Handler
 
-            s.line("");
+            writeln!(s)?;
             visit_ns_body(&mut s, &ctx.root, 0)?;
 
-            s.line("");
-            s.line("pub struct PeerBuilder<C>");
-            s.line("where");
+            writeln!(s)?;
+            writeln!(s, "pub struct PeerBuilder<C>")?;
+            writeln!(s, "where")?;
             s.in_scope(|s| {
-                s.line("C: lavish_rpc::Conn,");
-            });
-            s.line("{");
+                writeln!(s, "C: lavish_rpc::Conn,")?;
+                Ok(())
+            })?;
+            writeln!(s, "{{")?;
             s.in_scope(|s| {
-                s.line("conn: C,");
-                s.line("pool: futures::executor::ThreadPool,");
-            });
-            s.line("}");
+                writeln!(s, "conn: C,")?;
+                writeln!(s, "pool: futures::executor::ThreadPool,")?;
+                Ok(())
+            })?;
+            writeln!(s, "}}")?;
 
-            s.line("");
-            s.line("impl<C> PeerBuilder<C>");
-            s.line("where");
+            writeln!(s)?;
+            writeln!(s, "impl<C> PeerBuilder<C>")?;
+            writeln!(s, "where")?;
             s.in_scope(|s| {
-                s.line("C: lavish_rpc::Conn,");
-            });
-            s.line("{");
+                writeln!(s, "C: lavish_rpc::Conn,")?;
+                Ok(())
+            })?;
+            writeln!(s, "{{")?;
             s.in_scope(|s| {
-                s.line("pub fn new(conn: C, pool: futures::executor::ThreadPool) -> Self {");
+                writeln!(s, "pub fn new(conn: C, pool: futures::executor::ThreadPool) -> Self {{")?;
                 s.in_scope(|s| {
-                    s.line("Self { conn, pool }");
-                });
-                s.line("}");
+                    writeln!(s, "Self {{ conn, pool }}")?;
+                    Ok(())
+                })?;
+                writeln!(s, "}}")?;
 
-                s.line("");
-                s.line("pub fn with_noop_handler(self) -> Result<Client, lavish_rpc::Error> {");
+                writeln!(s)?;
+                writeln!(s, "pub fn with_noop_handler(self) -> Result<Client, lavish_rpc::Error> {{")?;
                 s.in_scope(|s| {
-                    s.line("self.with_handler(|_| {})");
-                });
-                s.line("}");
+                    writeln!(s, "self.with_handler(|_| {{}})")?;
+                    Ok(())
+                })?;
+                writeln!(s, "}}")?;
 
-                s.line("");
-                s.line("pub fn with_handler<S>(self, setup: S) -> Result<Client, lavish_rpc::Error>");
-                s.line("where");
+                writeln!(s)?;
+                writeln!(s, "pub fn with_handler<S>(self, setup: S) -> Result<Client, lavish_rpc::Error>")?;
+                writeln!(s, "where")?;
                 s.in_scope(|s| {
-                    s.line("S: Fn(&mut Handler<()>),");
-                });
-                s.line("{");
+                    writeln!(s, "S: Fn(&mut Handler<()>),")?;
+                    Ok(())
+                })?;
+                writeln!(s, "{{")?;
                 s.in_scope(|s| {
-                    s.line("self.with_stateful_handler(std::sync::Arc::new(()), setup)");
-                });
-                s.line("}");
+                    writeln!(s, "self.with_stateful_handler(std::sync::Arc::new(()), setup)")?;
+                    Ok(())
+                })?;
+                writeln!(s, "}}")?;
 
-                s.line("");
-                s.line(
+                writeln!(s)?;
+                writeln!(s, 
                     "pub fn with_stateful_handler<T, S>(self, state: Arc<T>, setup: S) -> Result<Client, lavish_rpc::Error>",
-                );
-                s.line("where");
+                )?;
+                writeln!(s, "where")?;
                 s.in_scope(|s| {
-                    s.line("S: Fn(&mut Handler<T>),");
-                    s.line("T: Sync + Send + 'static,");
-                });
-                s.line("{");
+                    writeln!(s, "S: Fn(&mut Handler<T>),")?;
+                    writeln!(s, "T: Sync + Send + 'static,")?;
+                    Ok(())
+                })?;
+                writeln!(s, "{{")?;
                 s.in_scope(|s| {
-                    s.line("let mut handler = Handler::new(state);");
-                    s.line("setup(&mut handler);");
-                    s.line("let root = lavish_rpc::connect(protocol(), handler, self.conn, self.pool)?;");
-                    s.line("Ok(Client { root })");
-                });
-                s.line("}");
-            });
-            s.line("}"); // impl PeerBuilder
+                    writeln!(s, "let mut handler = Handler::new(state);")?;
+                    writeln!(s, "setup(&mut handler);")?;
+                    writeln!(s, "let root = lavish_rpc::connect(protocol(), handler, self.conn, self.pool)?;")?;
+                    writeln!(s, "Ok(Client {{ root }})")?;
+                    Ok(())
+                })?;
+                writeln!(s, "}}")?;
+                Ok(())
+            })?;
+            writeln!(s, "}}")?; // impl PeerBuilder
 
-            s.line("");
+            writeln!(s)?;
             s.line(
                 "pub fn peer<C>(conn: C, pool: futures::executor::ThreadPool) -> PeerBuilder<C>",
             );
-            s.line("where");
+            writeln!(s, "where")?;
             s.in_scope(|s| {
-                s.line("C: lavish_rpc::Conn,");
-            });
-            s.line("{");
+                writeln!(s, "C: lavish_rpc::Conn,")?;
+                Ok(())
+            })?;
+            writeln!(s, "{{")?;
             s.in_scope(|s| {
-                s.line("PeerBuilder::new(conn, pool)");
-                // FIXME: WIP
-                // writeln!(s, "PeerBuilder::new(conn, pool)");
-            });
-            s.line("}"); // fn peer
+                writeln!(s, "PeerBuilder::new(conn, pool)")?;
+                Ok(())
+            })?;
+            writeln!(s, "}}")?; // fn peer
         }
-
-        s.line("}"); // mod __
+        writeln!(s, "}}")?; // mod __
 
         let end_instant = Instant::now();
         println!(

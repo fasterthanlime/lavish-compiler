@@ -1,4 +1,5 @@
 use super::super::ast;
+use crate::codegen::Result;
 use std::fmt;
 use std::io;
 
@@ -39,22 +40,24 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn def_struct<F>(&mut self, name: &str, f: F)
+    pub fn def_struct<F>(&mut self, name: &str, f: F) -> Result
     where
-        F: Fn(&mut Scope),
+        F: Fn(&mut Scope) -> Result,
     {
         self.line("#[derive(Serialize, Deserialize, Debug)]");
         self.line(format!("pub struct {} {{", name));
-        self.in_scope(f);
+        self.in_scope(f)?;
         self.line("}");
+        Ok(())
     }
 
-    pub fn in_scope<F>(&mut self, f: F)
+    pub fn in_scope<F>(&mut self, f: F) -> Result
     where
-        F: Fn(&mut Scope),
+        F: Fn(&mut Scope) -> Result,
     {
         let mut s = self.scope();
-        f(&mut s);
+        f(&mut s)?;
+        Ok(())
     }
 
     pub fn scope(&mut self) -> Scope {

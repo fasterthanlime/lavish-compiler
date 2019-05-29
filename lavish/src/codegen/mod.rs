@@ -8,6 +8,14 @@ pub struct Error {
     message: String,
 }
 
+impl From<std::fmt::Error> for Error {
+    fn from(_: std::fmt::Error) -> Self {
+        Self {
+            message: "formatting error".into(),
+        }
+    }
+}
+
 pub type Result = std::result::Result<(), Error>;
 
 pub trait Generator {
