@@ -1,12 +1,39 @@
 use super::super::ast;
 use crate::codegen::Result;
-use std::fmt;
-use std::io;
+use std::fmt::{self, Write};
+use std::io::{self, BufWriter};
 
 const INDENT_WIDTH: usize = 4;
 
+pub struct Writer<W> {
+    writer: W,
+}
+
+impl<W> Writer<W>
+where
+    W: std::io::Write,
+{
+    pub fn new(writer: W) -> Self {
+        Self { writer }
+    }
+
+    #[allow(unused)]
+    pub fn into_inner(self) -> W {
+        self.writer
+    }
+}
+
+impl<W> fmt::Write for Writer<W>
+where
+    W: std::io::Write,
+{
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        write!(self.writer, "{}", s).map_err(|_| fmt::Error {})
+    }
+}
+
 pub struct Scope<'a> {
-    writer: &'a mut io::Write,
+    writer: &'a mut fmt::Write,
     indent: usize,
     state: ScopeState,
 }
@@ -17,7 +44,7 @@ enum ScopeState {
 }
 
 impl<'a> Scope<'a> {
-    pub fn new(writer: &'a mut io::Write) -> Self {
+    pub fn new(writer: &'a mut fmt::Write) -> Self {
         Self {
             writer,
             indent: 0,
@@ -25,11 +52,30 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn line<S>(&mut self, line: S)
+    pub fn writer<W>(w: W) -> Writer<BufWriter<W>>
     where
-        S: AsRef<str>,
+        W: io::Write,
     {
-        writeln!(self.writer, "{}{}", " ".repeat(self.indent), line.as_ref()).unwrap();
+        Writer::new(BufWriter::new(w))
+    }
+
+    pub fn lf(&mut self) {
+        writeln!(self).unwrap();
+    }
+
+    pub fn line<D>(&mut self, d: D)
+    where
+        D: fmt::Display,
+    {
+        self.write(d).lf()
+    }
+
+    pub fn write<D>(&mut self, d: D) -> &mut Self
+    where
+        D: fmt::Display,
+    {
+        write!(self, "{}", d).unwrap();
+        self
     }
 
     pub fn comment(&mut self, comment: &Option<ast::Comment>) {
@@ -56,8 +102,26 @@ impl<'a> Scope<'a> {
         F: Fn(&mut Scope) -> Result,
     {
         let mut s = self.scope();
+        f(&mut s)
+    }
+
+    pub fn in_block<F>(&mut self, f: F) -> Result
+    where
+        F: Fn(&mut Scope) -> Result,
+    {
+        writeln!(self, " {{")?;
+        let mut s = self.scope();
         f(&mut s)?;
+        writeln!(self, "}}")?;
         Ok(())
+    }
+
+    pub fn fmt<F>(writer: &'a mut fmt::Write, f: F) -> std::fmt::Result
+    where
+        F: Fn(&mut Scope) -> Result,
+    {
+        let mut s = Self::new(writer);
+        f(&mut s).map_err(|_| std::fmt::Error {})
     }
 
     pub fn scope(&mut self) -> Scope {
@@ -109,7 +173,8 @@ mod tests {
     fn test_scope() -> Result<(), Box<dyn std::error::Error + 'static>> {
         let mut buf = Buf::new();
         {
-            let mut s = Scope::new(&mut buf);
+            let mut w = super::Writer::new(&mut buf);
+            let mut s = Scope::new(&mut w);
             writeln!(s, "fn sample() {{")?;
             {
                 let mut s = s.scope();

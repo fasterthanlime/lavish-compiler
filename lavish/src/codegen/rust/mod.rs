@@ -14,12 +14,6 @@ struct Context<'a> {
     root: Namespace<'a>,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
-enum FunKind {
-    Request,
-    Notification,
-}
-
 impl<'a> Context<'a> {
     fn new(root_body: &'a ast::NamespaceBody) -> Self {
         Self {
@@ -142,7 +136,7 @@ fn visit_ns_body<'a>(s: &mut Scope<'a>, ns: &'a Namespace<'a>, depth: usize) -> 
                             s.line(format!(
                                 "__::{}::{}(p) => Some(p),",
                                 side,
-                                fun.variant_name()
+                                fun.variant()
                             ));
                             writeln!(s, "_ => None,")?;
                             Ok(())
@@ -225,7 +219,7 @@ impl super::Generator for Generator {
 
         {
             let mod_path = workspace.dir.join("mod.rs");
-            let mut output = std::io::BufWriter::new(File::create(&mod_path)?);
+            let mut output = Scope::writer(File::create(&mod_path)?);
             let mut s = Scope::new(&mut output);
             self.write_prelude(&mut s)?;
 
@@ -256,8 +250,7 @@ impl Generator {
 
         let output_path = workspace.dir.join(&member.name).join("mod.rs");
         std::fs::create_dir_all(output_path.parent().unwrap())?;
-        let mut output = std::io::BufWriter::new(File::create(&output_path).unwrap());
-
+        let mut output = Scope::writer(File::create(&output_path)?);
         let mut s = Scope::new(&mut output);
         self.write_prelude(&mut s)?;
 
@@ -272,7 +265,7 @@ impl Generator {
             for fun in funs {
                 s.line(format!(
                     "{}({}::{}),",
-                    fun.variant_name(),
+                    fun.variant(),
                     fun.qualified_name(),
                     kind,
                 ));
@@ -282,6 +275,16 @@ impl Generator {
         {
             writeln!(s, "pub use __::*;")?;
             writeln!(s)?;
+
+            writeln!(s)?;
+            writeln!(s, "//============= FIXME: experimental (start)")?;
+            {
+                let funs = ctx.all_funs().collect::<Vec<_>>();
+                writeln!(s, "{}", Protocol { funs: &funs[..], depth: 0 })?;
+            }
+            writeln!(s, "//============= FIXME: experimental (end)")?;
+            writeln!(s)?;
+
             writeln!(s, "mod __ {{")?;
             let mut s = s.scope();
 
@@ -362,7 +365,7 @@ impl Generator {
                     writeln!(
                         s,
                         "pub async fn {}(&self{}) -> Result<{}, lavish_rpc::Error> {{",
-                        fun.variant_name(),
+                        fun.variant(),
                         params_def,
                         results.qualified_type()
                     )?;
@@ -409,7 +412,7 @@ impl Generator {
                                 writeln!(s, 
                                     "{}::{}(_) => {:?},",
                                     side,
-                                    fun.variant_name(),
+                                    fun.variant(),
                                     fun.rpc_name()
                                 )?;
                             }
@@ -444,7 +447,7 @@ impl Generator {
                                     s.line(format!(
                                         "Ok({}::{}(deser::<{}::{}>(de)?)),",
                                         side,
-                                        fun.variant_name(),
+                                        fun.variant(),
                                         fun.qualified_name(),
                                         strukt,
                                     ));
@@ -509,7 +512,7 @@ impl Generator {
             s.in_scope(|s| {
                 writeln!(s, "state: Arc<T>,")?;
                 for fun in ctx.funs(FunKind::Request) {
-                    writeln!(s, "{}: Slot<T>,", fun.variant_name())?;
+                    writeln!(s, "{}: Slot<T>,", fun.variant())?;
                 }
                 Ok(())
             })?;
@@ -524,7 +527,7 @@ impl Generator {
                     s.in_scope(|s| {
                         writeln!(s, "state,")?;
                         for fun in ctx.funs(FunKind::Request) {
-                            writeln!(s, "{}: None,", fun.variant_name())?;
+                            writeln!(s, "{}: None,", fun.variant())?;
                         }
                         Ok(())
                     })?;
@@ -540,7 +543,7 @@ impl Generator {
                     writeln!(s)?;
                     s.line(format!(
                         "pub fn on_{}<F, FT> (&mut self, f: F)",
-                        fun.variant_name()
+                        fun.variant()
                     ));
                     writeln!(s, "where")?;
                     s.in_scope(|s| {
@@ -558,7 +561,7 @@ impl Generator {
                     s.in_scope(|s| {
                         s.line(format!(
                             "self.{} = Some(Box::new(move |state, client, params| {{",
-                            fun.variant_name(),
+                            fun.variant(),
                         ));
                         s.in_scope(|s| {
                             writeln!(s, "Box::pin(")?;
@@ -616,8 +619,8 @@ impl Generator {
                     for fun in ctx.funs(FunKind::Request) {
                         s.line(format!(
                             "Params::{}(_) => self.{}.as_ref(),",
-                            fun.variant_name(),
-                            fun.variant_name()
+                            fun.variant(),
+                            fun.variant()
                         ));
                     }
                     writeln!(s, "_ => None,")?;

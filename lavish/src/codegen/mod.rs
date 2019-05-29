@@ -16,6 +16,12 @@ impl From<std::fmt::Error> for Error {
     }
 }
 
+impl Into<std::fmt::Error> for Error {
+    fn into(self) -> std::fmt::Error {
+        std::fmt::Error {}
+    }
+}
+
 pub type Result = std::result::Result<(), Error>;
 
 pub trait Generator {
