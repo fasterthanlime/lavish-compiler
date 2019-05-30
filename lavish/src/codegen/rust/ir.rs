@@ -189,6 +189,7 @@ impl Allow {
     }
 }
 
+#[derive(Clone)]
 pub struct TypeParam {
     name: String,
     constraint: Option<String>,
@@ -327,6 +328,82 @@ pub fn serde_untagged() -> impl Display {
     "#[serde(untagged)]\n"
 }
 
+pub struct _Impl<'a> {
+    trt: String,
+    name: String,
+    type_params: Vec<TypeParam>,
+    body: Option<Box<Fn(&mut Scope) + 'a>>,
+}
+
+impl<'a> _Impl<'a> {
+    pub fn type_param(mut self, name: &str, constraint: Option<&str>) -> Self {
+        self.type_params.push(TypeParam {
+            name: name.into(),
+            constraint: constraint.map(|x| x.into()),
+        });
+        self
+    }
+
+    pub fn type_params(mut self, params: &Vec<TypeParam>) -> Self {
+        for param in params {
+            self.type_params.push(param.clone());
+        }
+        self
+    }
+
+    pub fn body<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&mut Scope) + 'a,
+    {
+        self.body = Some(Box::new(f));
+        self
+    }
+}
+
+pub fn _impl<'a, T, N>(trt: T, name: N) -> _Impl<'a>
+where
+    T: Into<String>,
+    N: Into<String>,
+{
+    _Impl {
+        trt: trt.into(),
+        name: name.into(),
+        type_params: Vec::new(),
+        body: None,
+    }
+}
+
+impl<'a> Display for _Impl<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Scope::fmt(f, |s| {
+            s.write("impl");
+            s.in_list(Brackets::Angle, |s| {
+                for tp in &self.type_params {
+                    s.item(&tp.name);
+                }
+            });
+            writeln!(s, " {trt} for {name}", trt = &self.trt, name = &self.name).unwrap();
+            s.in_block(|s| {
+                if let Some(body) = self.body.as_ref() {
+                    body(s);
+                }
+            });
+            s.in_list(Brackets::Angle, |s| {
+                for tp in &self.type_params {
+                    match tp.constraint.as_ref() {
+                        Some(constraint) => s.item(format!(
+                            "{name}: {constraint}",
+                            name = tp.name,
+                            constraint = constraint
+                        )),
+                        None => s.item(&tp.name),
+                    };
+                }
+            });
+        })
+    }
+}
+
 pub struct Atom<'a> {
     pub proto: &'a Protocol<'a>,
     pub name: &'a str,
@@ -438,10 +515,10 @@ impl<'a> Display for Atom<'a> {
             }
             s.write(e);
 
-            s.line(Block::Impl("lavish_rpc::Atom", self.name, |s| {
+            let mut i = _impl("lavish_rpc::Atom", self.name).body(|s| {
                 self.implement_method(s);
                 self.implement_deserialize(s);
-            }));
+            });
         })
     }
 }
@@ -518,53 +595,6 @@ impl Display for _Enum {
     }
 }
 
-pub struct Block<F>
-where
-    F: Fn(&mut Scope),
-{
-    prefix: String,
-    f: F,
-}
-
-impl<F> Display for Block<F>
-where
-    F: Fn(&mut Scope),
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Scope::fmt(f, |s| {
-            write!(s, "{prefix}", prefix = self.prefix).unwrap();
-            s.in_block(|s| (self.f)(s));
-        })
-    }
-}
-
-#[allow(non_snake_case)]
-impl<F> Block<F>
-where
-    F: Fn(&mut Scope),
-{
-    pub fn Mod<N>(name: N, f: F) -> Self
-    where
-        N: Display,
-    {
-        Self {
-            prefix: format!("pub mod {name}", name = name),
-            f,
-        }
-    }
-
-    pub fn Impl<T, N>(trt: T, name: N, f: F) -> Self
-    where
-        T: Display,
-        N: Display,
-    {
-        Self {
-            prefix: format!("impl {trt} for {name}", trt = trt, name = name),
-            f,
-        }
-    }
-}
-
 pub struct Protocol<'a> {
     pub funs: &'a [&'a Fun<'a>],
     pub depth: usize,
@@ -572,32 +602,34 @@ pub struct Protocol<'a> {
 
 impl<'a> Display for Protocol<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let b = Block::Mod("protocol", |s| {
-            let depth = self.depth + 1;
-            for a in &[
-                Atom {
-                    proto: &self,
-                    kind: FunKind::Request,
-                    name: "Params",
-                    depth,
-                },
-                Atom {
-                    proto: &self,
-                    kind: FunKind::Request,
-                    name: "Results",
-                    depth,
-                },
-                Atom {
-                    proto: &self,
-                    kind: FunKind::Notification,
-                    name: "NotificationParams",
-                    depth,
-                },
-            ] {
-                s.line(a);
-            }
-        });
-        writeln!(f, "{}", b)
+        Scope::fmt(f, |s| {
+            s.write("pub mod protocol");
+            s.in_block(|s| {
+                let depth = self.depth + 1;
+                for a in &[
+                    Atom {
+                        proto: &self,
+                        kind: FunKind::Request,
+                        name: "Params",
+                        depth,
+                    },
+                    Atom {
+                        proto: &self,
+                        kind: FunKind::Request,
+                        name: "Results",
+                        depth,
+                    },
+                    Atom {
+                        proto: &self,
+                        kind: FunKind::Notification,
+                        name: "NotificationParams",
+                        depth,
+                    },
+                ] {
+                    s.line(a);
+                }
+            });
+        })
     }
 }
 
