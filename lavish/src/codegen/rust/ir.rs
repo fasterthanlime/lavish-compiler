@@ -422,18 +422,18 @@ impl<'a> Display for Atom<'a> {
             s.write(derive().debug().serialize());
             s.write(allow().non_camel_case().unused());
             s.write(serde_untagged());
-            s.write(Block::Enum(self.name, |s| {
-                for fun in self.funs() {
-                    s.write(fun.variant())
-                        .write("(")
-                        .write(self.root())
-                        .write(fun.qualified_name())
-                        .write("::")
-                        .write(&self.name)
-                        .write("),")
-                        .lf();
-                }
-            }));
+
+            let mut e = _enum(self.name).kw_pub();
+            for fun in self.funs() {
+                e = e.variant(format!(
+                    "{variant}({root}{fqn}::{name})",
+                    variant = fun.variant(),
+                    root = self.root(),
+                    fqn = fun.qualified_name(),
+                    name = &self.name
+                ));
+            }
+            s.write(e);
 
             s.line(Block::Impl("lavish_rpc::Atom", self.name, |s| {
                 self.implement_method(s);
@@ -448,6 +448,71 @@ where
     D: fmt::Debug,
 {
     format!("{:?}", d)
+}
+
+pub struct _Enum {
+    kw_pub: bool,
+    name: String,
+    annotations: Vec<String>,
+    variants: Vec<String>,
+}
+
+impl _Enum {
+    pub fn kw_pub(mut self) -> Self {
+        self.kw_pub = true;
+        self
+    }
+
+    pub fn annotation<D>(mut self, d: D) -> Self
+    where
+        D: Display,
+    {
+        self.annotations.push(format!("{}", d));
+        self
+    }
+
+    pub fn variant<D>(mut self, d: D) -> Self
+    where
+        D: Display,
+    {
+        self.variants.push(format!("{}", d));
+        self
+    }
+}
+
+pub fn _enum<S>(name: S) -> _Enum
+where
+    S: Into<String>,
+{
+    _Enum {
+        name: name.into(),
+        kw_pub: false,
+        annotations: Vec::new(),
+        variants: Vec::new(),
+    }
+}
+
+impl Display for _Enum {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Scope::fmt(f, |s| {
+            for annotation in &self.annotations {
+                s.write(annotation);
+            }
+            if self.kw_pub {
+                s.write("pub ");
+            }
+            s.write("enum ").write(&self.name);
+            if self.variants.is_empty() {
+                s.write(" {}").lf();
+            } else {
+                s.in_block(|s| {
+                    for variant in &self.variants {
+                        s.write(variant).write(",").lf();
+                    }
+                });
+            }
+        })
+    }
 }
 
 pub struct Block<F>
@@ -481,16 +546,6 @@ where
     {
         Self {
             prefix: format!("pub mod {name}", name = name),
-            f,
-        }
-    }
-
-    pub fn Enum<N>(name: N, f: F) -> Self
-    where
-        N: Display,
-    {
-        Self {
-            prefix: format!("pub enum {name}", name = name),
             f,
         }
     }
