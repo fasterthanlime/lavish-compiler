@@ -187,8 +187,9 @@ fn visit_ns_body<'a>(s: &mut Scope<'a>, ns: &'a Namespace<'a>, depth: usize) -> 
             if let Some(body) = fun.body() {
                 visit_ns_body(&mut s, body, depth + 1)?;
                 {
-                    let funs = body.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Server)).collect::<Vec<_>>();
-                    s.line(Client { funs: &funs[..], depth });
+                    let handled = body.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Client)).collect::<Vec<_>>();
+                    let called = body.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Server)).collect::<Vec<_>>();
+                    s.line(Client { handled: &handled[..], called: &called[..], depth: depth + 1 });
                 }
             }
         }
@@ -285,18 +286,20 @@ impl Generator {
             }
 
             {
-                let funs = ctx.root.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Client)).collect::<Vec<_>>();
+                let handled = ctx.root.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Client)).collect::<Vec<_>>();
+                let called = ctx.root.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Server)).collect::<Vec<_>>();
                 write!(s, "pub mod client").unwrap();
                 s.in_block(|s| {
-                    s.line(Client { funs: &funs[..], depth:0 });
+                    s.line(Client { handled: &handled[..], called: &called[..], depth:0 });
                 });
             }
 
             {
-                let funs = ctx.root.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Server)).collect::<Vec<_>>();
+                let handled = ctx.root.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Server)).collect::<Vec<_>>();
+                let called = ctx.root.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Client)).collect::<Vec<_>>();
                 write!(s, "pub mod server").unwrap();
                 s.in_block(|s| {
-                    s.line(Client { funs: &funs[..], depth: 0 });
+                    s.line(Client { handled: &handled[..], called: &called[..], depth:0 });
                 });
             }
             writeln!(s, "//============= FIXME: experimental (end)")?;

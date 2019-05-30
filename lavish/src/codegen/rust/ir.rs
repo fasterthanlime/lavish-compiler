@@ -527,26 +527,81 @@ impl<'a> Display for Atom<'a> {
 }
 
 pub struct Client<'a> {
-    pub funs: &'a [&'a Fun<'a>],
+    pub handled: &'a [&'a Fun<'a>],
+    pub called: &'a [&'a Fun<'a>],
     pub depth: usize,
+}
+
+impl<'a> Client<'a> {
+    fn root(&self) -> String {
+        "super::".repeat(self.depth + 1)
+    }
+
+    fn protocol(&self) -> String {
+        format!("{root}protocol", root = self.root())
+    }
+
+    fn define_client(&self, s: &mut Scope) {
+        s.write("pub struct Client");
+        s.in_block(|s| {
+            for fun in self.called {
+                writeln!(s, "{variant}: (),", variant = fun.variant()).unwrap();
+            }
+            s.line("// TODO");
+        });
+        s.lf();
+    }
+
+    fn define_call(&self, s: &mut Scope) {
+        s.write("pub struct Call<T, PP>");
+        s.in_block(|s| {
+            s.line("pub state: std::sync::Arc<T>,");
+            s.line("pub client: Client,");
+            s.line("pub params: PP,");
+        });
+        s.lf();
+    }
+
+    fn define_slot(&self, s: &mut Scope) {
+        s.write("pub type SlotFuture = Future")
+            .in_list(Brackets::Angle, |l| {
+                l.item(format!("Output = Result<{protocol}::Results, lavish_rpc::Error>", protocol = self.protocol()));
+            })
+            .write(" + Send + 'static;")
+            .lf();
+
+        s.write("pub type SlotReturn = std::pin::Pin<Box<SlotFuture>>;")
+            .lf();
+
+        writeln!(s, 
+            "pub type SlotFn<T> = Fn(std::sync::Arc<T>, Client, {protocol}::Params) -> SlotReturn + 'static + Send + Sync;",
+            protocol = self.protocol(),
+        ).unwrap();
+
+        s.write("pub type Slot<T> = Option<Box<SlotFn<T>>>;").lf();
+    }
+
+    fn define_handler(&self, s: &mut Scope) {
+        s.write("pub struct Handler<T>");
+        s.in_block(|s| {
+            s.line("// TODO");
+            s.line("state: std::sync::Arc<T>,");
+            for fun in self.handled {
+                writeln!(s, "on_{name}: Slot<T>,", name = fun.name()).unwrap();
+            }
+        });
+        s.lf();
+    }
 }
 
 impl<'a> Display for Client<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
-            s.write("pub struct Client");
-            s.in_block(|s| s.line("// TODO"));
-            s.lf();
-
-            s.write("pub struct Handler<T>");
-            s.in_block(|s| {
-                s.line("// TODO");
-                s.line("state: std::sync::Arc<T>,");
-                for fun in self.funs {
-                    writeln!(s, "on_{variant}: (),", variant = fun.variant()).unwrap();
-                }
-            });
-            s.lf();
+            s.line("use futures::prelude::*;");
+            self.define_client(s);
+            self.define_call(s);
+            self.define_slot(s);
+            self.define_handler(s);
         })
     }
 }
@@ -744,6 +799,10 @@ impl<'a> Fun<'a> {
 
     pub fn body(&self) -> Option<&Namespace<'a>> {
         self.body.as_ref()
+    }
+
+    pub fn name(&self) -> &str {
+        self.decl.name.text.as_ref()
     }
 }
 
