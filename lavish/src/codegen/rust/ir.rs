@@ -377,27 +377,30 @@ impl<'a> Display for _Impl<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
             s.write("impl");
-            s.in_list(Brackets::Angle, |s| {
+            s.in_list(Brackets::Angle, |l| {
+                l.omit_empty();
                 for tp in &self.type_params {
-                    s.item(&tp.name);
+                    l.item(&tp.name);
                 }
             });
-            writeln!(s, " {trt} for {name}", trt = &self.trt, name = &self.name).unwrap();
-            s.in_block(|s| {
-                if let Some(body) = self.body.as_ref() {
-                    body(s);
-                }
-            });
-            s.in_list(Brackets::Angle, |s| {
+            write!(s, " {trt} for {name}", trt = &self.trt, name = &self.name).unwrap();
+            s.in_list(Brackets::Angle, |l| {
+                l.omit_empty();
                 for tp in &self.type_params {
                     match tp.constraint.as_ref() {
-                        Some(constraint) => s.item(format!(
+                        Some(constraint) => l.item(format!(
                             "{name}: {constraint}",
                             name = tp.name,
                             constraint = constraint
                         )),
-                        None => s.item(&tp.name),
+                        None => l.item(&tp.name),
                     };
+                }
+            });
+
+            s.in_block(|s| {
+                if let Some(body) = self.body.as_ref() {
+                    body(s);
                 }
             });
         })
@@ -502,7 +505,6 @@ impl<'a> Display for Atom<'a> {
             s.write(derive().debug().serialize());
             s.write(allow().non_camel_case().unused());
             s.write(serde_untagged());
-
             let mut e = _enum(self.name).kw_pub();
             for fun in self.funs() {
                 e = e.variant(format!(
@@ -519,6 +521,7 @@ impl<'a> Display for Atom<'a> {
                 self.implement_method(s);
                 self.implement_deserialize(s);
             });
+            s.write(i);
         })
     }
 }
