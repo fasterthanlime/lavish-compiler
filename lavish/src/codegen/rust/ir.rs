@@ -202,7 +202,7 @@ pub struct _Fn<'a> {
     type_params: Vec<TypeParam>,
     name: String,
     ret: Option<String>,
-    body: Option<&'a Fn(&mut Scope)>,
+    body: Option<Box<Fn(&mut Scope) + 'a>>,
 }
 
 impl<'a> _Fn<'a> {
@@ -224,8 +224,11 @@ impl<'a> _Fn<'a> {
         self
     }
 
-    pub fn body(mut self, f: &'a Fn(&mut Scope)) -> Self {
-        self.body = Some(f);
+    pub fn body<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&mut Scope) + 'a,
+    {
+        self.body = Some(Box::new(f));
         self
     }
 
@@ -349,7 +352,7 @@ impl<'a> Atom<'a> {
         _fn("method")
             .self_param("&self")
             .returns("&'static str")
-            .body(&|s| {
+            .body(|s| {
                 if self.funs().count() == 0 {
                     writeln!(s, "panic!(\"no variants for {}\")", self.name).unwrap();
                     return;
@@ -377,7 +380,7 @@ impl<'a> Atom<'a> {
             .param("method: &str")
             .param("de: &mut lavish_rpc::erased_serde::Deserializer")
             .returns("lavish_rpc::erased_serde::Result<Self>")
-            .body(&|s| {
+            .body(|s| {
                 s.line("use lavish_rpc::erased_serde::deserialize as __DS;");
                 s.line("use lavish_rpc::serde::de::Error;");
                 s.lf();

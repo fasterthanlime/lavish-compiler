@@ -9,7 +9,7 @@ serde = "1.0.91"
 rmp-serde = "0.13.7"
 erased-serde = "0.3.9"
 serde_derive = "1.0.91"
-futures-preview = "0.3.0-alpha.16"
+futures-preview = { version = "0.3.0-alpha.16", default-features = false }
 futures_codec = "0.2.2"
 romio = "0.3.0-alpha.8"
 bytes = "0.4.12"
