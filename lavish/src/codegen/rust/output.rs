@@ -1,6 +1,9 @@
+// TODO: remove at some point
+#![allow(unused)]
+
 use super::super::ast;
 use crate::codegen::Result;
-use std::fmt::{self, Write};
+use std::fmt::{self, Display, Write};
 use std::io::{self, BufWriter};
 
 const INDENT_WIDTH: usize = 4;
@@ -65,14 +68,14 @@ impl<'a> Scope<'a> {
 
     pub fn line<D>(&mut self, d: D)
     where
-        D: fmt::Display,
+        D: Display,
     {
         self.write(d).lf()
     }
 
     pub fn write<D>(&mut self, d: D) -> &mut Self
     where
-        D: fmt::Display,
+        D: Display,
     {
         write!(self, "{}", d).unwrap();
         self
@@ -105,23 +108,26 @@ impl<'a> Scope<'a> {
         f(&mut s)
     }
 
-    pub fn in_block<F>(&mut self, f: F) -> Result
+    pub fn in_block<F>(&mut self, f: F) -> &mut Self
     where
-        F: Fn(&mut Scope) -> Result,
+        F: Fn(&mut Scope),
     {
-        writeln!(self, " {{")?;
-        let mut s = self.scope();
-        f(&mut s)?;
-        writeln!(self, "}}")?;
-        Ok(())
+        self.line(" {");
+        {
+            let mut s = self.scope();
+            f(&mut s);
+        }
+        self.line("}");
+        self
     }
 
     pub fn fmt<F>(writer: &'a mut fmt::Write, f: F) -> std::fmt::Result
     where
-        F: Fn(&mut Scope) -> Result,
+        F: Fn(&mut Scope),
     {
         let mut s = Self::new(writer);
-        f(&mut s).map_err(|_| std::fmt::Error {})
+        f(&mut s);
+        Ok(())
     }
 
     pub fn scope(&mut self) -> Scope {
@@ -129,6 +135,123 @@ impl<'a> Scope<'a> {
             writer: self.writer,
             indent: self.indent + INDENT_WIDTH,
             state: ScopeState::NeedIndent,
+        }
+    }
+
+    pub fn in_list<F>(&mut self, brackets: Brackets, f: F) -> &mut Self
+    where
+        F: Fn(&mut CommaList),
+    {
+        {
+            let mut list = CommaList::new(self, brackets);
+            f(&mut list);
+        }
+        self
+    }
+
+    pub fn in_parens_list<F>(&mut self, f: F) -> &mut Self
+    where
+        F: Fn(&mut CommaList),
+    {
+        self.in_list(Brackets::Round, f)
+    }
+
+    pub fn in_brackets<F>(&mut self, brackets: Brackets, f: F) -> &mut Self
+    where
+        F: Fn(&mut Scope),
+    {
+        {
+            self.write(brackets.open());
+            f(self);
+            self.write(brackets.close());
+        }
+        self
+    }
+
+    pub fn in_parens<F>(&mut self, f: F) -> &mut Self
+    where
+        F: Fn(&mut Scope),
+    {
+        self.in_brackets(Brackets::Round, f)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum Brackets {
+    Round,
+    Squares,
+    Curly,
+    Angle,
+}
+
+impl Brackets {
+    pub fn pair(&self) -> (char, char) {
+        match self {
+            Brackets::Round => ('(', ')'),
+            Brackets::Squares => ('[', ']'),
+            Brackets::Curly => ('{', '}'),
+            Brackets::Angle => ('<', '>'),
+        }
+    }
+
+    pub fn open(&self) -> char {
+        self.pair().0
+    }
+
+    pub fn close(&self) -> char {
+        self.pair().1
+    }
+}
+
+pub struct CommaList<'a: 'b, 'b> {
+    scope: &'b mut Scope<'a>,
+    brackets: Brackets,
+
+    empty_list: bool,
+    omit_empty: bool,
+}
+
+impl<'a: 'b, 'b> CommaList<'a, 'b> {
+    pub fn new(scope: &'b mut Scope<'a>, brackets: Brackets) -> Self {
+        Self {
+            scope,
+            brackets,
+            empty_list: true,
+            omit_empty: false,
+        }
+    }
+
+    pub fn omit_empty(&mut self) {
+        self.omit_empty = true;
+    }
+
+    pub fn item<D>(&mut self, item: D)
+    where
+        D: Display,
+    {
+        let s = &mut self.scope;
+        if self.empty_list {
+            s.write(self.brackets.open());
+            self.empty_list = false
+        } else {
+            s.write(", ");
+        }
+        s.write(item);
+    }
+}
+
+impl<'a, 'b> Drop for CommaList<'a, 'b> {
+    fn drop(&mut self) {
+        if self.empty_list {
+            if self.omit_empty {
+                return;
+            }
+
+            self.scope
+                .write(self.brackets.open())
+                .write(self.brackets.close());
+        } else {
+            self.scope.write(self.brackets.close());
         }
     }
 }

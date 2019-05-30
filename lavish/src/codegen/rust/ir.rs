@@ -1,8 +1,11 @@
+// TODO: remove at some point
+#![allow(unused)]
+
 use heck::SnakeCase;
 use indexmap::IndexMap;
 use std::fmt::{self, Display, Write};
 
-use super::output::Scope;
+use super::output::*;
 use crate::ast;
 use crate::codegen::Result;
 
@@ -186,13 +189,20 @@ impl Allow {
     }
 }
 
+pub struct TypeParam {
+    name: String,
+    constraint: Option<String>,
+}
+
 pub struct _Fn<'a> {
     kw_pub: bool,
     kw_async: bool,
     self_arg: Option<String>,
+    params: Vec<String>,
+    type_params: Vec<TypeParam>,
     name: String,
     ret: Option<String>,
-    body: Option<&'a Fn(&mut Scope) -> Result>,
+    body: Option<&'a Fn(&mut Scope)>,
 }
 
 impl<'a> _Fn<'a> {
@@ -214,7 +224,7 @@ impl<'a> _Fn<'a> {
         self
     }
 
-    pub fn body(mut self, f: &'a Fn(&mut Scope) -> Result) -> Self {
+    pub fn body(mut self, f: &'a Fn(&mut Scope)) -> Self {
         self.body = Some(f);
         self
     }
@@ -224,6 +234,19 @@ impl<'a> _Fn<'a> {
         D: Display,
     {
         self.self_arg = Some(format!("{}", self_arg));
+        self
+    }
+
+    pub fn type_param(mut self, name: &str, constraint: Option<&str>) -> Self {
+        self.type_params.push(TypeParam {
+            name: name.into(),
+            constraint: constraint.map(|x| x.into()),
+        });
+        self
+    }
+
+    pub fn param(mut self, name: &str) -> Self {
+        self.params.push(name.into());
         self
     }
 }
@@ -239,16 +262,21 @@ impl<'a> Display for _Fn<'a> {
             }
 
             s.write("fn ").write(&self.name);
-            // TODO: write type parameters
+            s.in_list(Brackets::Angle, |l| {
+                l.omit_empty();
+                for tp in &self.type_params {
+                    l.item(&tp.name);
+                }
+            });
 
-            s.write("(");
-            let mut _prev_arg = false;
-            if let Some(self_param) = self.self_arg.as_ref() {
-                s.write(self_param);
-                _prev_arg = true;
-            }
-            // TODO: write args
-            s.write(")");
+            s.in_list(Brackets::Round, |l| {
+                if let Some(self_param) = self.self_arg.as_ref() {
+                    l.item(self_param);
+                }
+                for p in &self.params {
+                    l.item(&p);
+                }
+            });
 
             if let Some(ret) = self.ret.as_ref() {
                 s.write(" -> ").write(ret);
@@ -257,14 +285,11 @@ impl<'a> Display for _Fn<'a> {
             // TODO: write where clauses
             if let Some(body) = self.body.as_ref() {
                 s.in_block(|s| {
-                    body(s)?;
-                    Ok(())
-                })?;
+                    body(s);
+                });
             } else {
                 s.write(";").lf();
             }
-
-            Ok(())
         })
     }
 }
@@ -277,6 +302,8 @@ where
         kw_pub: false,
         kw_async: false,
         name: name.into(),
+        params: Vec::new(),
+        type_params: Vec::new(),
         self_arg: None,
         body: None,
         ret: None,
@@ -317,6 +344,78 @@ impl<'a> Atom<'a> {
     }
 }
 
+impl<'a> Atom<'a> {
+    fn implement_method(&self, s: &mut Scope) {
+        _fn("method")
+            .self_param("&self")
+            .returns("&'static str")
+            .body(&|s| {
+                if self.funs().count() == 0 {
+                    writeln!(s, "panic!(\"no variants for {}\")", self.name).unwrap();
+                    return;
+                }
+
+                s.write("match self");
+                s.in_block(|s| {
+                    for fun in self.funs() {
+                        writeln!(
+                            s,
+                            "{name}::{variant}(_) => {lit},",
+                            name = &self.name,
+                            variant = fun.variant(),
+                            lit = quoted(fun.rpc_name())
+                        )
+                        .unwrap();
+                    }
+                });
+            })
+            .write_to(s);
+    }
+
+    fn implement_deserialize(&self, s: &mut Scope) {
+        _fn("deserialize")
+            .param("method: &str")
+            .param("de: &mut lavish_rpc::erased_serde::Deserializer")
+            .returns("lavish_rpc::erased_serde::Result<Self>")
+            .body(&|s| {
+                s.line("use lavish_rpc::erased_serde::deserialize as __DS;");
+                s.line("use lavish_rpc::serde::de::Error;");
+                s.lf();
+
+                s.write("match method");
+                s.in_block(|s| {
+                    for fun in self.funs() {
+                        s.line(format!("{rpc_name} => ", rpc_name = quoted(fun.rpc_name())));
+                        s.scope()
+                            .write("Ok")
+                            .in_list(Brackets::Round, |l| {
+                                l.item(format!(
+                                    "{name}::{variant}(__DS::<{root}{qfn}::{name}>(de)?)",
+                                    root = self.root(),
+                                    name = &self.name,
+                                    variant = fun.variant(),
+                                    qfn = fun.qualified_name(),
+                                ));
+                            })
+                            .write(",")
+                            .lf();
+                    }
+                    s.write("_ =>").lf();
+                    s.scope().write("Err").in_parens(|s| {
+                        s.write("lavish_rpc::erased_serde::Error::custom")
+                            .in_parens(|s| {
+                                s.write("format!").in_parens_list(|l| {
+                                    l.item(quoted("unknown method: {}"));
+                                    l.item("method")
+                                });
+                            });
+                    });
+                });
+            })
+            .write_to(s);
+    }
+}
+
 impl<'a> Display for Atom<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
@@ -334,47 +433,26 @@ impl<'a> Display for Atom<'a> {
                         .write("),")
                         .lf();
                 }
-                Ok(())
             }));
 
             s.line(Block::Impl("lavish_rpc::Atom", self.name, |s| {
-                _fn("method")
-                    .self_param("&self")
-                    .returns("&'static str")
-                    .body(&|s| {
-                        s.line("// TODO");
-                        s.write("match self");
-                        s.in_block(|s| {
-                            for fun in self.funs() {
-                                s.write(&self.name)
-                                    .write("::")
-                                    .write(fun.variant())
-                                    .write("(_)");
-                                writeln!(s, " => {:?},", fun.rpc_name())?;
-                            }
-                            Ok(())
-                        })?;
-                        Ok(())
-                    })
-                    .write_to(s);
-
-                _fn("deserialize")
-                    .returns("erased_serde::Result<Self>")
-                    .body(&|s| {
-                        s.line("unimplemented!()");
-                        Ok(())
-                    })
-                    .write_to(s);
-                Ok(())
+                self.implement_method(s);
+                self.implement_deserialize(s);
             }));
-            Ok(())
         })
     }
 }
 
+fn quoted<D>(d: D) -> String
+where
+    D: fmt::Debug,
+{
+    format!("{:?}", d)
+}
+
 pub struct Block<F>
 where
-    F: Fn(&mut Scope) -> Result,
+    F: Fn(&mut Scope),
 {
     prefix: String,
     f: F,
@@ -382,12 +460,12 @@ where
 
 impl<F> Display for Block<F>
 where
-    F: Fn(&mut Scope) -> Result,
+    F: Fn(&mut Scope),
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
-            write!(s, "{prefix}", prefix = self.prefix)?;
-            s.in_block(|s| (self.f)(s))
+            write!(s, "{prefix}", prefix = self.prefix).unwrap();
+            s.in_block(|s| (self.f)(s));
         })
     }
 }
@@ -395,7 +473,7 @@ where
 #[allow(non_snake_case)]
 impl<F> Block<F>
 where
-    F: Fn(&mut Scope) -> Result,
+    F: Fn(&mut Scope),
 {
     pub fn Mod<N>(name: N, f: F) -> Self
     where
@@ -458,10 +536,8 @@ impl<'a> Display for Protocol<'a> {
                     depth,
                 },
             ] {
-                writeln!(s, "{}\n", a)?;
+                s.line(a);
             }
-
-            Ok(())
         });
         writeln!(f, "{}", b)
     }

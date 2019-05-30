@@ -482,7 +482,7 @@ impl Generator {
             writeln!(s, "}}")?; // struct Call
 
             writeln!(s)?;
-            writeln!(s, "pub type SlotFuture = ")?;
+            writeln!(s, "pub type SlotFuture =")?;
             s.in_scope(|s| {
                 writeln!(
                     s,
@@ -495,7 +495,7 @@ impl Generator {
             writeln!(s, "pub type SlotReturn = Pin<Box<SlotFuture>>;")?;
 
             writeln!(s)?;
-            writeln!(s, "pub type SlotFn<T> = ")?;
+            writeln!(s, "pub type SlotFn<T> =")?;
             s.in_scope(|s| {
                 writeln!(
                     s,

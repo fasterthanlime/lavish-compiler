@@ -1,8 +1,9 @@
 use serde::{de::*, ser::*};
+use std::marker::{PhantomData, Send};
 use std::{fmt, fmt::Debug};
-use std::marker::{Send,PhantomData};
 
 pub use erased_serde;
+pub use serde;
 pub use serde_derive;
 
 pub trait PendingRequests {
@@ -39,19 +40,22 @@ where
 }
 
 struct AtomOptionApply<T: ?Sized>
-where T: Atom,
+where
+    T: Atom,
 {
     pub kind: String,
     pub phantom: PhantomData<T>,
 }
 
 impl<'de, T: ?Sized> DeserializeSeed<'de> for AtomOptionApply<T>
-where T: Atom,
+where
+    T: Atom,
 {
     type Value = Option<T>;
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-    where D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         deserializer.deserialize_option(AtomOptionVisitor {
             kind: self.kind,
@@ -61,14 +65,16 @@ where T: Atom,
 }
 
 struct AtomOptionVisitor<T: ?Sized>
-where T: Atom,
+where
+    T: Atom,
 {
     pub kind: String,
     pub phantom: PhantomData<T>,
 }
 
 impl<'de, T: ?Sized> Visitor<'de> for AtomOptionVisitor<T>
-where T: Atom,
+where
+    T: Atom,
 {
     type Value = Option<T>;
 
@@ -81,9 +87,13 @@ where T: Atom,
     }
 
     fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         let mut erased = erased_serde::Deserializer::erase(deserializer);
-        T::deserialize(&self.kind, &mut erased).map(Some).map_err(serde::de::Error::custom)
+        T::deserialize(&self.kind, &mut erased)
+            .map(Some)
+            .map_err(serde::de::Error::custom)
     }
 }
 
