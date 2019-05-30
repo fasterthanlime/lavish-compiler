@@ -186,11 +186,15 @@ fn visit_ns_body<'a>(s: &mut Scope<'a>, ns: &'a Namespace<'a>, depth: usize) -> 
 
             if let Some(body) = fun.body() {
                 visit_ns_body(&mut s, body, depth + 1)?;
+                {
+                    let funs = body.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Server)).collect::<Vec<_>>();
+                    s.line(Client { funs: &funs[..], depth });
+                }
             }
-
-            writeln!(s, "}}")?;
-            writeln!(s)?;
         }
+        writeln!(s, "}}")?;
+        writeln!(s)?;
+
         Ok(())
     };
 
@@ -277,7 +281,23 @@ impl Generator {
             writeln!(s, "//============= FIXME: experimental (start)")?;
             {
                 let funs = ctx.all_funs().collect::<Vec<_>>();
-                writeln!(s, "{}", Protocol { funs: &funs[..], depth: 0 })?;
+                s.line(Protocol { funs: &funs[..], depth: 0 });
+            }
+
+            {
+                let funs = ctx.root.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Client)).collect::<Vec<_>>();
+                write!(s, "pub mod client").unwrap();
+                s.in_block(|s| {
+                    s.line(Client { funs: &funs[..], depth:0 });
+                });
+            }
+
+            {
+                let funs = ctx.root.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Server)).collect::<Vec<_>>();
+                write!(s, "pub mod server").unwrap();
+                s.in_block(|s| {
+                    s.line(Client { funs: &funs[..], depth: 0 });
+                });
             }
             writeln!(s, "//============= FIXME: experimental (end)")?;
             writeln!(s)?;

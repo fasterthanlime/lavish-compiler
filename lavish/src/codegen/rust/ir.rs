@@ -27,7 +27,7 @@ pub struct Namespace<'a> {
     name: &'a str,
 
     children: IndexMap<&'a str, Namespace<'a>>,
-    funs: IndexMap<&'a str, Fun<'a>>,
+    pub funs: IndexMap<&'a str, Fun<'a>>,
     strus: IndexMap<&'a str, Stru<'a>>,
 }
 
@@ -526,6 +526,31 @@ impl<'a> Display for Atom<'a> {
     }
 }
 
+pub struct Client<'a> {
+    pub funs: &'a [&'a Fun<'a>],
+    pub depth: usize,
+}
+
+impl<'a> Display for Client<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Scope::fmt(f, |s| {
+            s.write("pub struct Client");
+            s.in_block(|s| s.line("// TODO"));
+            s.lf();
+
+            s.write("pub struct Handler<T>");
+            s.in_block(|s| {
+                s.line("// TODO");
+                s.line("state: std::sync::Arc<T>,");
+                for fun in self.funs {
+                    writeln!(s, "on_{variant}: (),", variant = fun.variant()).unwrap();
+                }
+            });
+            s.lf();
+        })
+    }
+}
+
 fn quoted<D>(d: D) -> String
 where
     D: fmt::Debug,
@@ -637,7 +662,7 @@ impl<'a> Display for Protocol<'a> {
 }
 
 pub struct Fun<'a> {
-    decl: &'a ast::FunctionDecl,
+    pub decl: &'a ast::FunctionDecl,
     tokens: Vec<String>,
 
     body: Option<Namespace<'a>>,
