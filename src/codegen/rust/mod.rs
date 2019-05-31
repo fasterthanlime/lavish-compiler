@@ -114,6 +114,20 @@ impl Generator {
         let root = Namespace::new("", "<root>", &schema.body);
 
         {
+            let stack = Stack::new();
+            let funs = all_funs(stack.anchor(&schema.body)).collect::<Vec<_>>();
+            for af in funs {
+                s.line(format!(
+                    "/////////////\n// name = {:?}\n// module = {:?}\n// variant = {:?}\n// method = {:?}",
+                    af.name(),
+                    af.module(),
+                    af.variant(),
+                    af.method(),
+                ));
+            }
+        }
+
+        {
             let funs = root.funs().collect::<Vec<_>>();
             s.write(Protocol {
                 funs: &funs[..],

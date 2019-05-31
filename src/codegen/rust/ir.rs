@@ -1,4 +1,4 @@
-use heck::SnakeCase;
+use heck::{SnakeCase,CamelCase};
 use indexmap::IndexMap;
 use std::fmt::{self, Display, Write};
 
@@ -645,7 +645,7 @@ impl<'a> Display for Symbols<'a> {
 
             s.line(format!("// trace = {}", body.stack.trace()));
 
-            for ns in &body.t.namespaces {
+            for ns in &body.inner.namespaces {
                 let stack = body.stack.push(ns);
                 write!(s, "pub mod {}", ns.name.text).unwrap();
                 s.in_block(|s| {
@@ -656,13 +656,23 @@ impl<'a> Display for Symbols<'a> {
     }
 }
 
+pub enum AnchorKind {
+    Namespace,
+    Function,
+}
+
 pub trait Anchor {
     fn name(&self) -> &str;
+    fn kind(&self) -> AnchorKind;
 }
 
 impl Anchor for ast::NamespaceDecl {
     fn name(&self) -> &str {
         &self.name.text
+    }
+
+    fn kind(&self) -> AnchorKind {
+        AnchorKind::Namespace
     }
 }
 
@@ -670,8 +680,13 @@ impl Anchor for ast::FunctionDecl {
     fn name(&self) -> &str {
         &self.name.text
     }
+
+    fn kind(&self) -> AnchorKind {
+        AnchorKind::Function
+    }
 }
 
+#[derive(Clone)]
 pub struct Stack<'a> {
     frames: Vec<&'a Anchor>,
 }
@@ -681,17 +696,14 @@ impl<'a> Stack<'a> {
         Self { frames: Vec::new() }
     }
 
-    pub fn push<'b: 'a>(&'b self, frame: &'b Anchor) -> Stack<'b> {
-        let mut frames: Vec<&'b Anchor> = Vec::new();
-        for f in &self.frames {
-            frames.push(*f);
-        }
-        frames.push(frame);
-        Stack { frames }
+    pub fn push(&self, frame: &'a Anchor) -> Stack<'a> {
+        let mut clone = self.clone();
+        clone.frames.push(frame);
+        clone
     }
 
-    pub fn anchor<'b, T>(&'b self, t: &'b T) -> Anchored<'b, T> where 'a: 'b {
-        Anchored { stack: &self, t }
+    pub fn anchor<T>(&self, inner: &'a T) -> Anchored<'a, T> {
+        Anchored { stack: self.clone(), inner }
     }
 
     pub fn names(&self) -> Vec<String> {
@@ -707,11 +719,51 @@ impl<'a> Stack<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct Anchored<'a, T> {
-    t: &'a T,
-    stack: &'a Stack<'a>,
+    inner: &'a T,
+    stack: Stack<'a>,
 }
 
 impl<'a, T> Anchored<'a, T> {
-    // muffin for now
+    pub fn inner(&self) -> &'a T {
+        self.inner
+    }
+
+    pub fn stack(&self) -> &Stack<'a> {
+        &self.stack
+    }
+}
+
+pub fn all_funs<'a>(body: Anchored<'a, ast::NamespaceBody>) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
+    let body1 = body.clone();
+    let body2 = body.clone();
+    Box::new(body.inner.functions.iter().map(move |f| body1.stack.anchor(f)).chain(body.inner.namespaces.iter().map(move |ns| {
+        let child = body2.stack.push(ns).anchor(&ns.body);
+        all_funs(child)
+    }).flatten()))
+}
+
+impl<'a> Anchored<'a, ast::FunctionDecl> {
+    fn names(&self) -> Vec<String> {
+        let mut names = self.stack.names();
+        names.push(self.name().into());
+        names
+    }
+
+    pub fn variant(&self) -> String {
+        self.names().iter().map(|x| x.to_camel_case()).collect::<Vec<_>>().join("_")
+    }
+
+    pub fn module(&self) -> String {
+        self.names().join("::")
+    }
+
+    pub fn method(&self) -> String {
+        self.names().join(".")
+    }
+
+    pub fn name(&self) -> &str {
+        self.inner.name()
+    }
 }
