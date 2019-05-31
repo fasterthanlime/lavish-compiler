@@ -656,9 +656,23 @@ impl<'a> Display for Symbols<'a> {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub enum AnchorKind {
+    Root,
     Namespace,
     Function,
+}
+
+pub struct RootAnchor {}
+static ROOT_ANCHOR: RootAnchor = RootAnchor {};
+
+impl Anchor for RootAnchor {
+    fn name(&self) -> &str {
+        "<root>"
+    }
+    fn kind(&self) -> AnchorKind {
+        AnchorKind::Root
+    }
 }
 
 pub trait Anchor {
@@ -688,26 +702,45 @@ impl Anchor for ast::FunctionDecl {
 
 #[derive(Clone)]
 pub struct Stack<'a> {
-    frames: Vec<&'a Anchor>,
+    anchor: &'a Anchor,
+    parent: Option<&'a Stack<'a>>,
 }
 
 impl<'a> Stack<'a> {
     pub fn new() -> Self {
-        Self { frames: Vec::new() }
+        Self { anchor: &ROOT_ANCHOR, parent: None }
     }
 
-    pub fn push(&self, frame: &'a Anchor) -> Stack<'a> {
-        let mut clone = self.clone();
-        clone.frames.push(frame);
-        clone
+    pub fn push(&'a self, anchor: &'a Anchor) -> Stack<'a> {
+        Stack { anchor, parent: Some(self) }
     }
 
-    pub fn anchor<T>(&self, inner: &'a T) -> Anchored<'a, T> {
+    pub fn anchor<T>(&'a self, inner: &'a T) -> Anchored<'a, T> {
         Anchored { stack: self.clone(), inner }
     }
 
+    pub fn anchors(&'a self) -> Box<dyn Iterator<Item = &'a Anchor> + 'a> {
+        if self.anchor.kind() == AnchorKind::Root {
+            return Box::new(std::iter::empty());
+        }
+
+        if let Some(parent) = self.parent {
+            Box::new(parent.anchors().chain(std::iter::once(self.anchor)))
+        } else {
+            Box::new(std::iter::once(self.anchor))
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        if let Some(parent) = self.parent {
+            parent.len() + 1
+        } else {
+            0
+        }
+    }
+
     pub fn names(&self) -> Vec<String> {
-        self.frames.iter().map(|x| x.name().into()).collect()
+        self.anchors().map(|x| x.name().into()).collect()
     }
 
     pub fn trace(&self) -> String {
@@ -715,7 +748,8 @@ impl<'a> Stack<'a> {
     }
 
     pub fn protocol(&self) -> String {
-        format!("{}protocol", "super::".repeat(self.frames.len() + 1))
+        // FIXME: inefficient
+        format!("{}protocol", "super::".repeat(self.anchors().count() + 1))
     }
 }
 
@@ -783,13 +817,16 @@ impl <'a> Anchored<'a, ast::NamespaceBody> {
     }
     
     pub fn local_namespaces(&'a self) -> Vec<Anchored<'a, ast::NamespaceBody>> {
-        self.namespaces.iter().map(|ns| self.stack.push(ns).anchor(&ns.body)).collect()
+        self.namespaces.iter().map(move |ns| self.stack.push(ns).anchor(&ns.body)).collect()
     }
 
     pub fn all_funs(&'a self) -> Vec<Anchored<'a, ast::FunctionDecl>> {
         let mut funs = self.local_funs();
-        for ns in self.local_namespaces() {
-            funs.extend(ns.all_funs());
+        for ns in &self.namespaces {
+            let ns = self.stack.push(ns).anchor(&ns.body);
+            for fun in ns.all_funs() {
+                funs.push(fun);
+            }
         }
         funs
     }
