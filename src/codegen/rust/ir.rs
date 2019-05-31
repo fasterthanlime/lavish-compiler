@@ -738,10 +738,22 @@ impl<'a, T> Anchored<'a, T> {
 pub fn all_funs<'a>(body: Anchored<'a, ast::NamespaceBody>) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
     let body1 = body.clone();
     let body2 = body.clone();
-    Box::new(body.inner.functions.iter().map(move |f| body1.stack.anchor(f)).chain(body.inner.namespaces.iter().map(move |ns| {
+    Box::new(body.inner.functions.iter().map(move |f| all_fun_funs(body1.stack.anchor(f))).chain(body.inner.namespaces.iter().map(move |ns| {
         let child = body2.stack.push(ns).anchor(&ns.body);
         all_funs(child)
-    }).flatten()))
+    })).flatten())
+}
+
+pub fn all_fun_funs<'a>(fun: Anchored<'a, ast::FunctionDecl>) -> Box<dyn Iterator<Item = Anchored<ast::FunctionDecl>> + 'a> {
+    if let Some(body) = fun.inner.body.as_ref() {
+        let fun1 = fun.clone();
+        Box::new(std::iter::once(fun).chain(body.functions.iter().map(move |f| {
+            let child = fun1.stack.push(fun1.inner).anchor(f);
+            all_fun_funs(child)
+        }).flatten()))
+    } else {
+        Box::new(std::iter::once(fun))
+    }
 }
 
 impl<'a> Anchored<'a, ast::FunctionDecl> {
