@@ -1,7 +1,4 @@
-// TODO: remove at some point
-#![allow(unused)]
-
-use super::super::ast;
+use crate::ast;
 use crate::codegen::Result;
 use std::fmt::{self, Display, Write};
 use std::io::{self, BufWriter};
