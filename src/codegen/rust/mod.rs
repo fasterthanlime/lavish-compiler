@@ -115,15 +115,35 @@ impl Generator {
 
         {
             let stack = Stack::new();
-            let funs = all_funs(stack.anchor(&schema.body)).collect::<Vec<_>>();
-            for af in funs {
-                s.line(format!(
-                    "/////////////\n// name = {:?}\n// module = {:?}\n// variant = {:?}\n// method = {:?}",
-                    af.name(),
-                    af.module(),
-                    af.variant(),
-                    af.method(),
-                ));
+            let body = stack.anchor(&schema.body);
+
+            {
+                let funs = all_funs(&body).collect::<Vec<_>>();
+                s.lf();
+                s.lf();
+                s.line("// ALL FUNS:");
+                for af in funs {
+                    s.line(format!("// {}", af.module(),));
+                }
+
+                s.lf();
+                s.lf();
+                s.line("// LOCAL FUNS:");
+                let funs = body.local_funs().collect::<Vec<_>>();
+                for af in funs {
+                    s.line(format!("// {}", af.module(),));
+                }
+
+                s.lf();
+                s.lf();
+                s.line("// SERVER FUNS:");
+                let funs = body
+                    .local_funs()
+                    .filter(|f| f.side == ast::Side::Server)
+                    .collect::<Vec<_>>();
+                for af in funs {
+                    s.line(format!("// {}", af.module(),));
+                }
             }
         }
 

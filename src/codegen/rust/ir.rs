@@ -725,6 +725,14 @@ pub struct Anchored<'a, T> {
     stack: Stack<'a>,
 }
 
+impl<'a, T> std::ops::Deref for Anchored<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner
+    }
+}
+
 impl<'a, T> Anchored<'a, T> {
     pub fn inner(&self) -> &'a T {
         self.inner
@@ -735,12 +743,12 @@ impl<'a, T> Anchored<'a, T> {
     }
 }
 
-pub fn all_funs<'a>(body: Anchored<'a, ast::NamespaceBody>) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
+pub fn all_funs<'a>(body: &Anchored<'a, ast::NamespaceBody>) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
     let body1 = body.clone();
     let body2 = body.clone();
     Box::new(body.inner.functions.iter().map(move |f| all_fun_funs(body1.stack.anchor(f))).chain(body.inner.namespaces.iter().map(move |ns| {
         let child = body2.stack.push(ns).anchor(&ns.body);
-        all_funs(child)
+        all_funs(&child)
     })).flatten())
 }
 
@@ -753,6 +761,13 @@ pub fn all_fun_funs<'a>(fun: Anchored<'a, ast::FunctionDecl>) -> Box<dyn Iterato
         }).flatten()))
     } else {
         Box::new(std::iter::once(fun))
+    }
+}
+
+impl <'a> Anchored<'a, ast::NamespaceBody> {
+    pub fn local_funs(&'a self) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
+        let stack = self.stack.clone();
+        Box::new(self.inner.functions.iter().map(move |f| stack.anchor(f)))
     }
 }
 
