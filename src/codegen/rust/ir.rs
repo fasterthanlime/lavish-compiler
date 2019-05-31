@@ -207,7 +207,7 @@ impl<'a> Atom<'a> {
     fn implement_deserialize(&self, s: &mut Scope) {
         _fn("deserialize")
             .param("method: &str")
-            .param(format!("de: &mut {es}::Deserializer", es = Mods::es()))
+            .param(format!("de: &mut {Deserializer}", Deserializer = Structs::Deserializer()))
             .returns(format!("{es}::Result<Self>", es = Mods::es()))
             .body(|s| {
                 writeln!(s, "use {es}::deserialize as __DS;", es = Mods::es()).unwrap();
@@ -264,13 +264,12 @@ impl<'a> Display for Atom<'a> {
                     name = &self.name
                 ));
             }
-            s.write(e);
+            e.write_to(s);
 
-            let mut i = _impl(Traits::Atom(), self.name).body(|s| {
+            _impl(Traits::Atom(), self.name).body(|s| {
                 self.implement_method(s);
                 self.implement_deserialize(s);
-            });
-            s.write(i);
+            }).write_to(s);
         })
     }
 }
@@ -305,7 +304,7 @@ impl<'a> Client<'a> {
     fn define_call(&self, s: &mut Scope) {
         s.write("pub struct Call<T, PP>");
         s.in_block(|s| {
-            s.line("pub state: std::sync::Arc<T>,");
+            s.line(format!("pub state: {Arc}<T>,", Arc = Structs::Arc()));
             s.line("pub client: Client,");
             s.line("pub params: PP,");
         });
@@ -317,7 +316,8 @@ impl<'a> Client<'a> {
             .lf();
 
         writeln!(s, 
-            "pub type SlotFn<T> = Fn(std::sync::Arc<T>, Client, {protocol}::Params) -> SlotReturn + 'static + Send + Sync;",
+            "pub type SlotFn<T> = Fn({Arc}<T>, Client, {protocol}::Params) -> SlotReturn + 'static + Send + Sync;",
+            Arc = Structs::Arc(),
             protocol = self.protocol(),
         ).unwrap();
 
@@ -450,7 +450,7 @@ impl<'a> Display for Protocol<'a> {
                         depth,
                     },
                 ] {
-                    s.line(a);
+                    s.write(a).lf();
                 }
             });
         })
@@ -619,5 +619,27 @@ impl Structs {
 
     pub fn Error() -> String {
         format!("{}::Error", Mods::lavish())
+    }
+
+    pub fn Arc() -> String {
+        format!("{}::Arc", Mods::sync())
+    }
+}
+
+pub struct Schema<'a> {
+    root: &'a Namespace<'a>
+}
+
+impl<'a> Schema<'a> {
+    pub fn new(root: &'a Namespace<'a>) -> Self {
+        Self { root }
+    }
+}
+
+impl<'a> Display for Schema<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Scope::fmt(f, |s| {
+            s.line("// TODO!")
+        })
     }
 }

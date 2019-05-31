@@ -10,22 +10,6 @@ mod ir;
 mod lang;
 use ir::*;
 
-struct Context<'a> {
-    root: Namespace<'a>,
-}
-
-impl<'a> Context<'a> {
-    fn new(root_body: &'a ast::NamespaceBody) -> Self {
-        Self {
-            root: Namespace::new("", "<root>", root_body),
-        }
-    }
-
-    fn all_funs(&self) -> Box<Iterator<Item = &'a Fun> + 'a> {
-        Box::new(self.root.funs())
-    }
-}
-
 trait AsRust {
     fn as_rust<'a>(&'a self) -> Box<fmt::Display + 'a>;
 }
@@ -127,26 +111,34 @@ impl Generator {
         self.write_prelude(&mut s);
 
         let schema = member.schema.as_ref().expect("schema to be parsed");
-        let ctx = Context::new(&schema.body);
+        let root = Namespace::new("", "<root>", &schema.body);
 
         {
-            let funs = ctx.all_funs().collect::<Vec<_>>();
-            s.line(Protocol {
+            let funs = root.funs().collect::<Vec<_>>();
+            s.write(Protocol {
                 funs: &funs[..],
                 depth: 0,
             });
+            s.lf();
         }
 
         {
-            let (client_funs, server_funs): (Vec<&Fun>, Vec<&Fun>) = ctx
-                .root
+            write!(s, "pub mod schema").unwrap();
+            s.in_block(|s| {
+                s.write(Schema::new(&root));
+            });
+            s.lf();
+        }
+
+        {
+            let (client_funs, server_funs): (Vec<&Fun>, Vec<&Fun>) = root
                 .funs
                 .values()
                 .partition(|f| f.side() == ast::Side::Client);
             {
                 write!(s, "pub mod client").unwrap();
                 s.in_block(|s| {
-                    s.line(Client {
+                    s.write(Client {
                         handled: client_funs.as_ref(),
                         called: server_funs.as_ref(),
                         depth: 0,
@@ -154,11 +146,11 @@ impl Generator {
                     });
                 });
             }
-
+            s.lf();
             {
                 write!(s, "pub mod server").unwrap();
                 s.in_block(|s| {
-                    s.line(Client {
+                    s.write(Client {
                         handled: server_funs.as_ref(),
                         called: client_funs.as_ref(),
                         depth: 0,
