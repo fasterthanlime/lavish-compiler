@@ -6,6 +6,37 @@ use crate::ast;
 use crate::codegen::*;
 use super::lang::*;
 
+pub struct Derive {
+    items: Vec<String>,
+}
+
+impl Derive {
+    pub fn debug(mut self) -> Self {
+        self.items.push("Debug".into());
+        self
+    }
+
+    pub fn serialize(mut self) -> Self {
+        self.items.push(Traits::Serialize());
+        self
+    }
+
+    pub fn deserialize(mut self) -> Self {
+        self.items.push(Traits::Deserialize());
+        self
+    }
+}
+
+impl Display for Derive {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "#[derive({items})]", items = self.items.join(", "))
+    }
+}
+
+pub fn derive() -> Derive {
+    Derive { items: Vec::new() }
+}
+
 pub struct Namespace<'a> {
     name: &'a str,
 
@@ -176,11 +207,11 @@ impl<'a> Atom<'a> {
     fn implement_deserialize(&self, s: &mut Scope) {
         _fn("deserialize")
             .param("method: &str")
-            .param("de: &mut lavish_rpc::erased_serde::Deserializer")
-            .returns("lavish_rpc::erased_serde::Result<Self>")
+            .param(format!("de: &mut {es}::Deserializer", es = Mods::es()))
+            .returns(format!("{es}::Result<Self>", es = Mods::es()))
             .body(|s| {
-                s.line("use lavish_rpc::erased_serde::deserialize as __DS;");
-                s.line("use lavish_rpc::serde::de::Error;");
+                writeln!(s, "use {es}::deserialize as __DS;", es = Mods::es()).unwrap();
+                writeln!(s, "use {serde}::de::Error;", serde = Mods::serde()).unwrap();
                 s.lf();
 
                 s.write("match method");
@@ -203,14 +234,14 @@ impl<'a> Atom<'a> {
                     }
                     s.write("_ =>").lf();
                     s.scope().write("Err").in_parens(|s| {
-                        s.write("lavish_rpc::erased_serde::Error::custom")
+                        s.write(format!("{es}::Error::custom", es = Mods::es()))
                             .in_parens(|s| {
                                 s.write("format!").in_parens_list(|l| {
                                     l.item(quoted("unknown method: {}"));
                                     l.item("method")
                                 });
                             });
-                    });
+                    }).write(",").lf();
                 });
             })
             .write_to(s);
@@ -235,7 +266,7 @@ impl<'a> Display for Atom<'a> {
             }
             s.write(e);
 
-            let mut i = _impl("lavish_rpc::Atom", self.name).body(|s| {
+            let mut i = _impl(Traits::Atom(), self.name).body(|s| {
                 self.implement_method(s);
                 self.implement_deserialize(s);
             });
@@ -282,14 +313,7 @@ impl<'a> Client<'a> {
     }
 
     fn define_slot(&self, s: &mut Scope) {
-        s.write("pub type SlotFuture = Future")
-            .in_list(Brackets::Angle, |l| {
-                l.item(format!("Output = Result<{protocol}::Results, lavish_rpc::Error>", protocol = self.protocol()));
-            })
-            .write(" + Send + 'static;")
-            .lf();
-
-        s.write("pub type SlotReturn = std::pin::Pin<Box<SlotFuture>>;")
+        s.write(format!("pub type SlotReturn = Result<{protocol}::Results, {Error}>;", protocol = self.protocol(), Error = Structs::Error()))
             .lf();
 
         writeln!(s, 
@@ -303,7 +327,6 @@ impl<'a> Client<'a> {
     fn define_handler(&self, s: &mut Scope) {
         s.write("pub struct Handler<T>");
         s.in_block(|s| {
-            s.line("// TODO");
             s.line("state: std::sync::Arc<T>,");
             for fun in self.handled {
                 writeln!(s, "on_{name}: Slot<T>,", name = fun.name()).unwrap();
@@ -316,7 +339,6 @@ impl<'a> Client<'a> {
 impl<'a> Display for Client<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
-            s.line("use futures::prelude::*;");
             self.define_client(s);
             self.define_call(s);
             self.define_slot(s);
@@ -536,5 +558,66 @@ impl<'a> Stru<'a> {
 
     pub fn fields(&self) -> &Vec<ast::Field> {
         &self.decl.fields
+    }
+}
+
+pub struct Mods {}
+
+#[allow(non_snake_case)]
+impl Mods {
+    pub fn lavish() -> String {
+        "::lavish".into()
+    }
+
+    pub fn chrono() -> String {
+        "::chrono".into()
+    }
+
+    pub fn collections() -> String {
+        "::std::collections".into()
+    }
+
+    pub fn sync() -> String {
+        "::std::sync".into()
+    }
+
+    pub fn es() -> String {
+        format!("{}::erased_serde", Self::lavish())
+    }
+
+    pub fn serde() -> String {
+        format!("{}::serde", Self::lavish())
+    }
+
+    pub fn serde_derive() -> String {
+        format!("{}::serde_derive", Self::lavish())
+    }
+}
+
+pub struct Traits {}
+
+impl Traits {
+    pub fn Serialize() -> String {
+        format!("{}::Serialize", Mods::serde_derive())
+    }
+
+    pub fn Deserialize() -> String {
+        format!("{}::Deserialize", Mods::serde_derive())
+    }
+
+    pub fn Atom() -> String {
+        format!("{}::Atom", Mods::lavish())
+    }
+}
+
+pub struct Structs {}
+
+impl Structs {
+    pub fn Deserializer() -> String {
+        format!("{}::Deserializer", Mods::es())
+    }
+
+    pub fn Error() -> String {
+        format!("{}::Error", Mods::lavish())
     }
 }

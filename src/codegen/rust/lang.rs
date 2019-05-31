@@ -9,37 +9,6 @@ pub trait WriteTo: Display {
 
 impl<T> WriteTo for T where T: Display {}
 
-pub struct Derive {
-    items: Vec<&'static str>,
-}
-
-impl Derive {
-    pub fn debug(mut self) -> Self {
-        self.items.push("Debug");
-        self
-    }
-
-    pub fn serialize(mut self) -> Self {
-        self.items.push("lavish_rpc::serde_derive::Serialize");
-        self
-    }
-
-    pub fn deserialize(mut self) -> Self {
-        self.items.push("lavish_rpc::serde_derive::Deserialize");
-        self
-    }
-}
-
-impl Display for Derive {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "#[derive({items})]", items = self.items.join(", "))
-    }
-}
-
-pub fn derive() -> Derive {
-    Derive { items: Vec::new() }
-}
-
 pub struct Allow {
     items: Vec<&'static str>,
 }
@@ -116,7 +85,10 @@ impl<'a> _Fn<'a> {
         self
     }
 
-    pub fn type_param(mut self, name: &str, constraint: Option<&str>) -> Self {
+    pub fn type_param<N>(mut self, name: N, constraint: Option<&str>) -> Self
+    where
+        N: Into<String>,
+    {
         self.type_params.push(TypeParam {
             name: name.into(),
             constraint: constraint.map(|x| x.into()),
@@ -124,7 +96,10 @@ impl<'a> _Fn<'a> {
         self
     }
 
-    pub fn param(mut self, name: &str) -> Self {
+    pub fn param<N>(mut self, name: N) -> Self
+    where
+        N: Into<String>,
+    {
         self.params.push(name.into());
         self
     }
