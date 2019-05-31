@@ -185,7 +185,7 @@ pub enum Brackets {
 }
 
 impl Brackets {
-    pub fn pair(&self) -> (char, char) {
+    pub fn pair(self) -> (char, char) {
         match self {
             Brackets::Round => ('(', ')'),
             Brackets::Squares => ('[', ']'),
@@ -194,11 +194,11 @@ impl Brackets {
         }
     }
 
-    pub fn open(&self) -> char {
+    pub fn open(self) -> char {
         self.pair().0
     }
 
-    pub fn close(&self) -> char {
+    pub fn close(self) -> char {
         self.pair().1
     }
 }

@@ -16,9 +16,6 @@ use super::ast::*;
 pub use errors::*;
 pub use span::*;
 
-use std::collections::HashSet;
-use std::iter::FromIterator;
-
 /// Parses an entire lavish schema
 pub fn schema<E: ParseError<Span>>(i: Span) -> IResult<Span, Schema, E> {
     let (i, loc) = loc(i)?;
@@ -302,16 +299,11 @@ fn fields<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
 }
 
 // Function modifiers (server, client)
-fn fnmod<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionModifier, E> {
+fn side<E: ParseError<Span>>(i: Span) -> IResult<Span, Side, E> {
     alt((
-        map(tag("server"), |_| FunctionModifier::Server),
-        map(tag("client"), |_| FunctionModifier::Client),
+        map(tag("server"), |_| Side::Server),
+        map(tag("client"), |_| Side::Client),
     ))(i)
-}
-
-// Any number of function modifiers
-fn fnmods<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<FunctionModifier>, E> {
-    preceded(sp, separated_list(sp, fnmod))(i)
 }
 
 // Results, in the context of a function declaration: `-> (fields)`
@@ -327,7 +319,7 @@ fn results<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
 // Function declaration
 fn fndecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     let (i, comment) = opt(comment)(i)?;
-    let (i, modifiers) = fnmods(i)?;
+    let (i, side) = side(i)?;
     let (i, _) = spaced(tag("fn"))(i)?;
     let (i, loc) = spaced(loc)(i)?;
 
@@ -349,7 +341,8 @@ fn fndecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
             move |(name, params, results, body)| FunctionDecl {
                 loc: loc.clone(),
                 comment: comment.clone(),
-                modifiers: HashSet::from_iter(modifiers.iter().cloned()),
+                side,
+                kind: Kind::Request,
                 name: name.clone(),
                 params,
                 results: results.unwrap_or_default(),
@@ -369,7 +362,7 @@ fn fnbody<E: ParseError<Span>>(i: Span) -> IResult<Span, NamespaceBody, E> {
 // Notification declaration: like function, but no results and no body
 fn notifdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
     let (i, comment) = opt(comment)(i)?;
-    let (i, modifiers) = fnmods(i)?;
+    let (i, side) = side(i)?;
     let (i, _) = spaced(tag("nf"))(i)?;
     let (i, loc) = spaced(loc)(i)?;
 
@@ -389,11 +382,8 @@ fn notifdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
             move |(name, params)| FunctionDecl {
                 loc: loc.clone(),
                 comment: comment.clone(),
-                modifiers: {
-                    let mut hs = HashSet::from_iter(modifiers.iter().cloned());
-                    hs.insert(FunctionModifier::Notification);
-                    hs
-                },
+                kind: Kind::Notification,
+                side,
                 name: name.clone(),
                 params,
                 results: Vec::new(),

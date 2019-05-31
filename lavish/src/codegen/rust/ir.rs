@@ -17,12 +17,6 @@ pub trait WriteTo: fmt::Display {
 
 impl<T> WriteTo for T where T: fmt::Display {}
 
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub enum FunKind {
-    Request,
-    Notification,
-}
-
 pub struct Namespace<'a> {
     name: &'a str,
 
@@ -344,8 +338,8 @@ impl<'a> _Impl<'a> {
         self
     }
 
-    pub fn type_params(mut self, params: &Vec<TypeParam>) -> Self {
-        for param in params {
+    pub fn type_params<P>(mut self, params: P) -> Self where P: AsRef<[TypeParam]> {
+        for param in params.as_ref() {
             self.type_params.push(param.clone());
         }
         self
@@ -410,7 +404,7 @@ impl<'a> Display for _Impl<'a> {
 pub struct Atom<'a> {
     pub proto: &'a Protocol<'a>,
     pub name: &'a str,
-    pub kind: FunKind,
+    pub kind: ast::Kind,
     pub depth: usize,
 }
 
@@ -530,6 +524,7 @@ pub struct Client<'a> {
     pub handled: &'a [&'a Fun<'a>],
     pub called: &'a [&'a Fun<'a>],
     pub depth: usize,
+    pub is_root: bool,
 }
 
 impl<'a> Client<'a> {
@@ -692,19 +687,19 @@ impl<'a> Display for Protocol<'a> {
                 for a in &[
                     Atom {
                         proto: &self,
-                        kind: FunKind::Request,
+                        kind: ast::Kind::Request,
                         name: "Params",
                         depth,
                     },
                     Atom {
                         proto: &self,
-                        kind: FunKind::Request,
+                        kind: ast::Kind::Request,
                         name: "Results",
                         depth,
                     },
                     Atom {
                         proto: &self,
-                        kind: FunKind::Notification,
+                        kind: ast::Kind::Notification,
                         name: "NotificationParams",
                         depth,
                     },
@@ -732,10 +727,6 @@ impl<'a> Fun<'a> {
             tokens: full_name.split('.').map(|x| x.into()).collect(),
             body: decl.body.as_ref().map(|b| Namespace::new(prefix, name, b)),
         }
-    }
-
-    pub fn has_modifier(&self, modif: ast::FunctionModifier) -> bool {
-        self.decl.modifiers.contains(&modif)
     }
 
     pub fn rpc_name(&self) -> String {
@@ -770,20 +761,6 @@ impl<'a> Fun<'a> {
         self.decl.name.text.to_snake_case()
     }
 
-    pub fn is_notification(&self) -> bool {
-        self.decl
-            .modifiers
-            .contains(&ast::FunctionModifier::Notification)
-    }
-
-    pub fn kind(&self) -> FunKind {
-        if self.is_notification() {
-            FunKind::Notification
-        } else {
-            FunKind::Request
-        }
-    }
-
     pub fn comment(&self) -> &Option<ast::Comment> {
         &self.decl.comment
     }
@@ -803,6 +780,14 @@ impl<'a> Fun<'a> {
 
     pub fn name(&self) -> &str {
         self.decl.name.text.as_ref()
+    }
+
+    pub fn side(&self) -> ast::Side {
+        self.decl.side
+    }
+
+    pub fn kind(&self) -> ast::Kind {
+        self.decl.kind
     }
 }
 

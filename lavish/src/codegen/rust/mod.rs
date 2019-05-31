@@ -25,12 +25,10 @@ impl<'a> Context<'a> {
         Box::new(self.root.funs())
     }
 
-    fn funs(&self, kind: FunKind) -> Box<Iterator<Item = &'a Fun> + 'a> {
-        let is_notification = kind == FunKind::Notification;
-
+    fn funs(&self, kind: ast::Kind) -> Box<Iterator<Item = &'a Fun> + 'a> {
         Box::new(
             self.all_funs()
-                .filter(move |x| x.is_notification() == is_notification),
+                .filter(move |x| x.decl.kind == kind),
         )
     }
 }
@@ -161,15 +159,14 @@ fn visit_ns_body<'a>(s: &mut Scope<'a>, ns: &'a Namespace<'a>, depth: usize) -> 
             writeln!(s, "impl Params {{")?;
             write_downgrade(
                 &mut s,
-                if fun.is_notification() {
-                    "NotificationParams"
-                } else {
-                    "Params"
+                match fun.kind() {
+                    ast::Kind::Notification => "NotificationParams",
+                    ast::Kind::Request => "Params",
                 },
             )?;
             writeln!(s, "}}")?; // impl Params
 
-            if !fun.is_notification() {
+            if fun.kind() != ast::Kind::Notification {
                 writeln!(s)?;
                 s.def_struct("Results", |s| {
                     for f in fun.results().fields() {
@@ -187,9 +184,9 @@ fn visit_ns_body<'a>(s: &mut Scope<'a>, ns: &'a Namespace<'a>, depth: usize) -> 
             if let Some(body) = fun.body() {
                 visit_ns_body(&mut s, body, depth + 1)?;
                 {
-                    let handled = body.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Client)).collect::<Vec<_>>();
-                    let called = body.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Server)).collect::<Vec<_>>();
-                    s.line(Client { handled: &handled[..], called: &called[..], depth: depth + 1 });
+                    let children_side = fun.side().other();
+                    let children: Vec<&Fun> = body.funs.values().filter(|f| f.side() == children_side).collect();
+                    s.line(Client { handled: children.as_ref(), called: children.as_ref(), depth: depth + 1, is_root: false });
                 }
             }
         }
@@ -286,22 +283,22 @@ impl Generator {
             }
 
             {
-                let handled = ctx.root.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Client)).collect::<Vec<_>>();
-                let called = ctx.root.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Server)).collect::<Vec<_>>();
-                write!(s, "pub mod client").unwrap();
-                s.in_block(|s| {
-                    s.line(Client { handled: &handled[..], called: &called[..], depth:0 });
-                });
+                let (client_funs, server_funs): (Vec<&Fun>, Vec<&Fun>) = ctx.root.funs.values().partition(|f| f.side() == ast::Side::Client);
+                {
+                    write!(s, "pub mod client").unwrap();
+                    s.in_block(|s| {
+                        s.line(Client { handled: client_funs.as_ref(), called: server_funs.as_ref(), depth:0, is_root: true });
+                    });
+                }
+
+                {
+                    write!(s, "pub mod server").unwrap();
+                    s.in_block(|s| {
+                        s.line(Client { handled: server_funs.as_ref(), called: client_funs.as_ref(), depth:0, is_root: true });
+                    });
+                }
             }
 
-            {
-                let handled = ctx.root.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Server)).collect::<Vec<_>>();
-                let called = ctx.root.funs.values().filter(|f| f.has_modifier(ast::FunctionModifier::Client)).collect::<Vec<_>>();
-                write!(s, "pub mod server").unwrap();
-                s.in_block(|s| {
-                    s.line(Client { handled: &handled[..], called: &called[..], depth:0 });
-                });
-            }
             writeln!(s, "//============= FIXME: experimental (end)")?;
             writeln!(s)?;
 
@@ -321,7 +318,7 @@ impl Generator {
             writeln!(s, "#[serde(untagged)]")?;
             writeln!(s, "#[allow(non_camel_case_types, unused)]")?;
             writeln!(s, "pub enum Params {{")?;
-            write_enum(&mut s, "Params", ctx.funs(FunKind::Request));
+            write_enum(&mut s, "Params", ctx.funs(ast::Kind::Request));
             writeln!(s, "}}")?; // enum Params
 
             writeln!(s)?;
@@ -329,7 +326,7 @@ impl Generator {
             writeln!(s, "#[serde(untagged)]")?;
             writeln!(s, "#[allow(non_camel_case_types, unused)]")?;
             writeln!(s, "pub enum Results {{")?;
-            write_enum(&mut s, "Results", ctx.funs(FunKind::Request));
+            write_enum(&mut s, "Results", ctx.funs(ast::Kind::Request));
             writeln!(s, "}}")?; // enum Results
 
             writeln!(s)?;
@@ -337,7 +334,7 @@ impl Generator {
             writeln!(s, "#[serde(untagged)]")?;
             writeln!(s, "#[allow(non_camel_case_types, unused)]")?;
             writeln!(s, "pub enum NotificationParams {{")?;
-            write_enum(&mut s, "Params", ctx.funs(FunKind::Notification));
+            write_enum(&mut s, "Params", ctx.funs(ast::Kind::Notification));
             writeln!(s, "}}")?; // enum NotificationParams
 
             writeln!(s)?;
@@ -372,7 +369,7 @@ impl Generator {
             writeln!(s)?;
             writeln!(s, "impl Client {{")?;
             s.in_scope(|s| {
-                for fun in ctx.funs(FunKind::Request) {
+                for fun in ctx.funs(ast::Kind::Request) {
                     let params = fun.params();
                     let results = fun.results();
 
@@ -415,9 +412,9 @@ impl Generator {
             writeln!(s, "}}")?; // impl Client
 
             for (strukt, side, kind) in &[
-                ("Params", "Params", FunKind::Request),
-                ("Results", "Results", FunKind::Request),
-                ("Params", "NotificationParams", FunKind::Notification),
+                ("Params", "Params", ast::Kind::Request),
+                ("Results", "Results", ast::Kind::Request),
+                ("Params", "NotificationParams", ast::Kind::Notification),
             ] {
                 writeln!(s)?;
                 writeln!(s, "impl rpc::Atom for {} {{", side)?;
@@ -531,7 +528,7 @@ impl Generator {
             writeln!(s, "pub struct Handler<T> {{")?;
             s.in_scope(|s| {
                 writeln!(s, "state: Arc<T>,")?;
-                for fun in ctx.funs(FunKind::Request) {
+                for fun in ctx.funs(ast::Kind::Request) {
                     writeln!(s, "{}: Slot<T>,", fun.variant())?;
                 }
                 Ok(())
@@ -546,7 +543,7 @@ impl Generator {
                     writeln!(s, "Self {{")?;
                     s.in_scope(|s| {
                         writeln!(s, "state,")?;
-                        for fun in ctx.funs(FunKind::Request) {
+                        for fun in ctx.funs(ast::Kind::Request) {
                             writeln!(s, "{}: None,", fun.variant())?;
                         }
                         Ok(())
@@ -556,7 +553,7 @@ impl Generator {
                 })?;
                 writeln!(s, "}}")?;
 
-                for fun in ctx.funs(FunKind::Request) {
+                for fun in ctx.funs(ast::Kind::Request) {
                     let params = fun.params();
                     let results = fun.results();
 
@@ -636,7 +633,7 @@ impl Generator {
                 writeln!(s, "let method = params.method();")?;
                 writeln!(s, "let slot = match params {{")?;
                 s.in_scope(|s| {
-                    for fun in ctx.funs(FunKind::Request) {
+                    for fun in ctx.funs(ast::Kind::Request) {
                         s.line(format!(
                             "Params::{}(_) => self.{}.as_ref(),",
                             fun.variant(),

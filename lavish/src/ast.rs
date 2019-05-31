@@ -1,7 +1,7 @@
 use super::parser::Span;
 use log::*;
 use simple_error::SimpleError;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub const LAVISH_EXT: &str = ".lavish";
@@ -185,19 +185,36 @@ pub enum NamespaceItem {
 pub struct FunctionDecl {
     pub loc: Span,
     pub comment: Option<Comment>,
-    pub modifiers: HashSet<FunctionModifier>,
     pub name: Identifier,
     pub params: Vec<Field>,
     pub results: Vec<Field>,
     pub body: Option<NamespaceBody>,
+    pub kind: Kind,
+    pub side: Side,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum FunctionModifier {
-    Server,
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum Side {
     Client,
+    Server,
+}
+
+impl Side {
+    pub fn other(self) -> Self {
+        match self {
+            Side::Client => Side::Server,
+            Side::Server => Side::Client,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum Kind {
+    Request,
     Notification,
 }
+
+impl FunctionDecl {}
 
 #[derive(Debug, Clone)]
 pub struct Field {
