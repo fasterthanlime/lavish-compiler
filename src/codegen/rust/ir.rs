@@ -737,28 +737,34 @@ impl<T> Anchored<T> {
     }
 }
 
-impl Anchored<&ast::NamespaceBody> {
-    pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
+// pub fn all_ns_funs<'a>(ns: &'a Anchored<&ast::NamespaceBody>) -> Box<dyn Iterator<Item = Anchored<&'a ast::FunctionDecl>> + 'a> {
+//     let stack = ns.stack.clone();
+//     Box::new(ns.functions.iter().map(move |f| stack.anchor(f)))
+// }
+
+impl<'a> Anchored<&'a ast::NamespaceBody> {
+    pub fn local_funs(&'a self) -> Box<dyn Iterator<Item = Anchored<&'a ast::FunctionDecl>> + 'a> {
         Box::new(self.functions.iter().map(move |f| self.stack.anchor(f)))
     }
 
-    pub fn local_namespaces(&self) -> Box<dyn Iterator<Item = Anchored<&ast::NamespaceBody>> + '_> {
-        Box::new(self.namespaces.iter().map(move |ns| self.stack.push(ns).anchor(&ns.body)))
+    pub fn local_namespaces(&'a self) -> Box<dyn Iterator<Item = Anchored<&'a ast::NamespaceBody>> + 'a> {
+        let stack = self.stack.clone();
+        Box::new(self.namespaces.iter().map(move |ns| stack.push(ns).anchor(&ns.body)))
     }
 
-    pub fn all_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
+    pub fn all_funs(&'a self) -> Box<dyn Iterator<Item = Anchored<&'a ast::FunctionDecl>> + 'a> {
         Box::new(self.local_funs().chain(self.local_namespaces().map(|ns| ns.all_funs()).flatten()))
     }
 }
 
 impl Anchored<&ast::FunctionDecl> {
-    pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
-        if let Some(body) = self.body.as_ref() {
-            Box::new(body.functions.iter().map(move |f| self.stack.push(self.inner).anchor(f)))
-        } else {
-            Box::new(std::iter::empty())
-        }
-    }
+    // pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
+    //     if let Some(body) = self.body.as_ref() {
+    //         Box::new(body.functions.iter().map(move |f| self.stack.push(self.inner).anchor(f)))
+    //     } else {
+    //         Box::new(std::iter::empty())
+    //     }
+    // }
 
     fn names(&self) -> Vec<String> {
         let mut names = self.stack.names();
