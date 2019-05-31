@@ -113,39 +113,39 @@ impl Generator {
         let schema = member.schema.as_ref().expect("schema to be parsed");
         let root = Namespace::new("", "<root>", &schema.body);
 
-        {
-            let stack = Stack::new();
-            let body = stack.anchor(&schema.body);
+        // {
+        //     let stack = Stack::new();
+        //     let body = stack.anchor(&schema.body);
 
-            {
-                let funs = all_funs(&body).collect::<Vec<_>>();
-                s.lf();
-                s.lf();
-                s.line("// ALL FUNS:");
-                for af in funs {
-                    s.line(format!("// {}", af.module(),));
-                }
+        //     {
+        //         let funs = all_funs(&body).collect::<Vec<_>>();
+        //         s.lf();
+        //         s.lf();
+        //         s.line("// ALL FUNS:");
+        //         for af in funs {
+        //             s.line(format!("// {}", af.module()));
+        //         }
 
-                s.lf();
-                s.lf();
-                s.line("// LOCAL FUNS:");
-                let funs = body.local_funs().collect::<Vec<_>>();
-                for af in funs {
-                    s.line(format!("// {}", af.module(),));
-                }
+        //         s.lf();
+        //         s.lf();
+        //         s.line("// LOCAL FUNS:");
+        //         let funs = body.local_funs().collect::<Vec<_>>();
+        //         for af in funs {
+        //             s.line(format!("// {}", af.module()));
+        //         }
 
-                s.lf();
-                s.lf();
-                s.line("// SERVER FUNS:");
-                let funs = body
-                    .local_funs()
-                    .filter(|f| f.side == ast::Side::Server)
-                    .collect::<Vec<_>>();
-                for af in funs {
-                    s.line(format!("// {}", af.module(),));
-                }
-            }
-        }
+        //         s.lf();
+        //         s.lf();
+        //         s.line("// SERVER FUNS:");
+        //         let funs = body
+        //             .local_funs()
+        //             .filter(|f| f.side == ast::Side::Server)
+        //             .collect::<Vec<_>>();
+        //         for af in funs {
+        //             s.line(format!("// {}", af.module()));
+        //         }
+        //     }
+        // }
 
         {
             let funs = root.funs().collect::<Vec<_>>();

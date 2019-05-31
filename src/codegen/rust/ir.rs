@@ -743,35 +743,51 @@ impl<'a, T> Anchored<'a, T> {
     }
 }
 
-pub fn all_funs<'a>(body: &Anchored<'a, ast::NamespaceBody>) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
-    let body1 = body.clone();
-    let body2 = body.clone();
-    Box::new(body.inner.functions.iter().map(move |f| all_fun_funs(body1.stack.anchor(f))).chain(body.inner.namespaces.iter().map(move |ns| {
-        let child = body2.stack.push(ns).anchor(&ns.body);
-        all_funs(&child)
-    })).flatten())
-}
+// pub fn all_funs<'a>(body: &Anchored<'a, ast::NamespaceBody>) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
+//     let body1 = body.clone();
+//     let body2 = body.clone();
 
-pub fn all_fun_funs<'a>(fun: Anchored<'a, ast::FunctionDecl>) -> Box<dyn Iterator<Item = Anchored<ast::FunctionDecl>> + 'a> {
-    if let Some(body) = fun.inner.body.as_ref() {
-        let fun1 = fun.clone();
-        Box::new(std::iter::once(fun).chain(body.functions.iter().map(move |f| {
-            let child = fun1.stack.push(fun1.inner).anchor(f);
-            all_fun_funs(child)
-        }).flatten()))
-    } else {
-        Box::new(std::iter::once(fun))
-    }
-}
+//     Box::new(body.inner.functions.iter().map(move |f| all_fun_funs(body1.stack.anchor(f))).chain(body.inner.namespaces.iter().map(move |ns| {
+//         let child = body2.stack.push(ns).anchor(&ns.body);
+//         all_funs(&child)
+//     })).flatten())
+// }
+
+// pub fn all_fun_funs<'a>(fun: Anchored<'a, ast::FunctionDecl>) -> Box<dyn Iterator<Item = Anchored<ast::FunctionDecl>> + 'a> {
+//     if let Some(body) = fun.inner.body.as_ref() {
+//         let fun1 = fun.clone();
+//         Box::new(std::iter::once(fun).chain(body.functions.iter().map(move |f| {
+//             let child = fun1.stack.push(fun1.inner).anchor(f);
+//             all_fun_funs(child)
+//         }).flatten()))
+//     } else {
+//         Box::new(std::iter::once(fun))
+//     }
+// }
 
 impl <'a> Anchored<'a, ast::NamespaceBody> {
-    pub fn local_funs(&'a self) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
-        let stack = self.stack.clone();
-        Box::new(self.inner.functions.iter().map(move |f| stack.anchor(f)))
+    pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<'_, ast::FunctionDecl>> + '_> {
+        Box::new(self.functions.iter().map(move |f| self.stack.anchor(f)))
+    }
+
+    pub fn local_namespaces(&self) -> Box<dyn Iterator<Item = Anchored<'_, ast::NamespaceBody>> + '_> {
+        Box::new(self.namespaces.iter().map(move |ns| self.stack.push(ns).anchor(&ns.body)))
+    }
+
+    pub fn all_funs(&self) -> Box<dyn Iterator<Item = Anchored<'_, ast::FunctionDecl>> + '_> {
+        Box::new(self.local_funs().chain(self.local_namespaces().map(|ns| ns.all_funs()).flatten()))
     }
 }
 
 impl<'a> Anchored<'a, ast::FunctionDecl> {
+    pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<'_, ast::FunctionDecl>> + '_> {
+        if let Some(body) = self.body.as_ref() {
+            Box::new(body.functions.iter().map(move |f| self.stack.push(self.inner).anchor(f)))
+        } else {
+            Box::new(std::iter::empty())
+        }
+    }
+
     fn names(&self) -> Vec<String> {
         let mut names = self.stack.names();
         names.push(self.name().into());
