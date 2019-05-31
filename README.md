@@ -1,5 +1,7 @@
+# lavish-compiler
 
-## What lavish does
+[![Build Status](https://travis-ci.org/lavish-lang/lavish-compiler.svg?branch=master)](https://travis-ci.org/lavish-lang/lavish-compiler)
+![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)
 
 `lavish` lets you declare services, and implement/consume them
 easily from a variety of languages.
@@ -10,6 +12,22 @@ It is opinionated:
   * It targets (for now) Rust, Go, and TypeScript
   * It comes with its own RPC runtime for Rust
   * It's designed with "bidirectional framed MessagePack-RPC over TCP" in mind
+
+## Status
+
+lavish is still under development, it is not usable yet:
+
+  * Nearly done: rules language, schema language
+  * Nearly done: [parser](/src/parser), [checker](/src/checker)
+  * Rust
+    * Nearly done: [codegen](src/codegen/rust)
+    * Nearly done: [runtime](https://github.com/lavish-lang/lavish-rs)
+  * Go
+    * Researched only: runtime
+    * Not started: codegen
+  * TypeScript
+    * Researched only: runtime
+    * Not started: codegen
   
 ## Schemas
 
