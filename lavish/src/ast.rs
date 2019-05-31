@@ -2,6 +2,7 @@ use super::parser::Span;
 use log::*;
 use simple_error::SimpleError;
 use std::collections::HashMap;
+use std::fmt;
 use std::path::PathBuf;
 
 pub const LAVISH_EXT: &str = ".lavish";
@@ -197,6 +198,15 @@ pub struct FunctionDecl {
 pub enum Side {
     Client,
     Server,
+}
+
+impl fmt::Display for Side {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Side::Client => "client",
+            Side::Server => "server",
+        })
+    }
 }
 
 impl Side {

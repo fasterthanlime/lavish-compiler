@@ -1,5 +1,6 @@
 use super::ast;
 
+mod convos;
 mod noredef;
 use std::fmt;
 
@@ -18,5 +19,6 @@ impl std::error::Error for Error {}
 
 pub fn check(schema: &ast::Schema) -> Result<(), Error> {
     noredef::check(schema)?;
+    convos::check(schema)?;
     Ok(())
 }

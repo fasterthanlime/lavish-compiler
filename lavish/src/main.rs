@@ -27,6 +27,14 @@ fn main() {
                     .index(1),
             ),
         )
+        .subcommand(
+            SubCommand::with_name("print").arg(
+                Arg::with_name("schema")
+                    .help("The schema to print")
+                    .required(true)
+                    .index(1),
+            ),
+        )
         .get_matches();
 
     match matches.subcommand() {
@@ -34,6 +42,12 @@ fn main() {
             let workspace_path = Path::new(cmd.value_of("workspace").unwrap());
             let workspace = parse_workspace(workspace_path).unwrap();
             codegen::codegen(&workspace).unwrap();
+        }
+        ("print", Some(cmd)) => {
+            let schema_path = Path::new(cmd.value_of("schema").unwrap());
+            let source = parser::Source::from_path(&schema_path).unwrap();
+            let schema = parser::parse_schema(source).unwrap();
+            printer::print(&schema);
         }
         _ => {
             println!("{}", matches.usage());
@@ -71,8 +85,6 @@ fn parse_workspace(workspace_path: &Path) -> Result<ast::Workspace, Box<dyn std:
         println!("Parsing {} from {:?}", name, source_path);
         let source = parser::Source::from_path(&source_path)?;
         let schema = parser::parse_schema(source)?;
-
-        checker::check(&schema)?;
 
         workspace.members.insert(
             name.clone(),

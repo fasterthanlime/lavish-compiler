@@ -8,14 +8,14 @@ use std::iter::repeat;
 use std::path::Path;
 use std::rc::Rc;
 
-use super::super::ast;
-use super::super::parser;
+use crate::{ast, checker, parser};
 use parser::Span;
 
 #[derive(Debug)]
 pub enum Error {
     IO(std::io::Error),
     Source(SourceError),
+    Checker(checker::Error),
     Unknown(UnknownError),
     #[allow(unused)]
     UnexpectedSourceError(UnexpectedSourceError),
@@ -26,6 +26,7 @@ impl<'a> fmt::Display for Error {
         match self {
             Error::IO(e) => write!(f, "{}", e),
             Error::Source(e) => write!(f, "{:#?}", e),
+            Error::Checker(e) => write!(f, "{:#?}", e),
             Error::UnexpectedSourceError(e) => write!(f, "{:#?}", e),
             Error::Unknown(_) => write!(f, "unknown error"),
         }
@@ -76,6 +77,12 @@ impl fmt::Debug for UnknownError {
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
         Error::IO(e)
+    }
+}
+
+impl From<checker::Error> for Error {
+    fn from(e: checker::Error) -> Self {
+        Error::Checker(e)
     }
 }
 
@@ -140,7 +147,7 @@ where
 
 pub fn parse_schema(source: Rc<Source>) -> Result<ast::Schema, Error> {
     let schema = parse(source, parser::schema::<VerboseError<parser::Span>>)?;
-    super::super::printer::print(&schema);
+    checker::check(&schema)?;
     Ok(schema)
 }
 

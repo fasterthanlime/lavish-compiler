@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 nom = "5.0.0-beta1"
-simple-error = "0.1.13"
+simple-error = "0.2.0"
 colored = "1.8.0"
 clap = "2.33.0"
 indexmap = "1.0.2"
