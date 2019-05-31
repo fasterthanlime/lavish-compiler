@@ -766,27 +766,43 @@ impl<'a, T> Anchored<'a, T> {
 // }
 
 impl <'a> Anchored<'a, ast::NamespaceBody> {
-    pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<'_, ast::FunctionDecl>> + '_> {
-        Box::new(self.functions.iter().map(move |f| self.stack.anchor(f)))
+    // pub fn local_funs(&'a self) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
+    //     Box::new(self.functions.iter().map(move |f| self.stack.anchor(f)))
+    // }
+
+    // pub fn local_namespaces(&'a self) -> Box<dyn Iterator<Item = Anchored<'a, ast::NamespaceBody>> + 'a> {
+    //     Box::new(self.namespaces.iter().map(move |ns| self.stack.push(ns).anchor(&ns.body)))
+    // }
+
+    // pub fn all_funs(&'a self) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
+    //     Box::new(self.local_funs().chain(self.local_namespaces().map(|ns| ns.all_funs()).flatten()))
+    // }
+
+    pub fn local_funs(&'a self) -> Vec<Anchored<'a, ast::FunctionDecl>> {
+        self.functions.iter().map(|f| self.stack.anchor(f)).collect()
+    }
+    
+    pub fn local_namespaces(&'a self) -> Vec<Anchored<'a, ast::NamespaceBody>> {
+        self.namespaces.iter().map(|ns| self.stack.push(ns).anchor(&ns.body)).collect()
     }
 
-    pub fn local_namespaces(&self) -> Box<dyn Iterator<Item = Anchored<'_, ast::NamespaceBody>> + '_> {
-        Box::new(self.namespaces.iter().map(move |ns| self.stack.push(ns).anchor(&ns.body)))
-    }
-
-    pub fn all_funs(&self) -> Box<dyn Iterator<Item = Anchored<'_, ast::FunctionDecl>> + '_> {
-        Box::new(self.local_funs().chain(self.local_namespaces().map(|ns| ns.all_funs()).flatten()))
+    pub fn all_funs(&'a self) -> Vec<Anchored<'a, ast::FunctionDecl>> {
+        let mut funs = self.local_funs();
+        for ns in self.local_namespaces() {
+            funs.extend(ns.all_funs());
+        }
+        funs
     }
 }
 
 impl<'a> Anchored<'a, ast::FunctionDecl> {
-    pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<'_, ast::FunctionDecl>> + '_> {
-        if let Some(body) = self.body.as_ref() {
-            Box::new(body.functions.iter().map(move |f| self.stack.push(self.inner).anchor(f)))
-        } else {
-            Box::new(std::iter::empty())
-        }
-    }
+    // pub fn local_funs(&'a self) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
+    //     if let Some(body) = self.body.as_ref() {
+    //         Box::new(body.functions.iter().map(move |f| self.stack.push(self.inner).anchor(f)))
+    //     } else {
+    //         Box::new(std::iter::empty())
+    //     }
+    // }
 
     fn names(&self) -> Vec<String> {
         let mut names = self.stack.names();
