@@ -1,14 +1,27 @@
-[workspace]
+[package]
+name = "lavish-compiler"
+version = "0.1.0"
+authors = ["Amos Wenger <amoswenger@gmail.com>"]
+edition = "2018"
 
-members = [
-    "lavish",
-    "lavish-rpc"
-]
+[[bin]]
+name = "lavish"
+path = "src/main.rs"
 
-exclude = [
-    "output"
-]
+[dependencies]
+nom = "5.0.0-beta1"
+simple-error = "0.2.0"
+colored = "1.8.0"
+clap = "2.33.0"
+indexmap = "1.0.2"
+heck = "0.3.1"
+log = "0.4.6"
+env_logger = "0.6.1"
 
-[profile.release]
-debug = true
+# work around https://github.com/rust-lang/rust/issues/59134
+bitflags = "=1.0.4"
+
+[dev-dependencies]
+strip-ansi-escapes = "0.1.0"
+netbuf = "0.4.1"
 
