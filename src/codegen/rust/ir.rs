@@ -596,6 +596,7 @@ impl Mods {
 
 pub struct Traits {}
 
+#[allow(non_snake_case)]
 impl Traits {
     pub fn Serialize() -> String {
         format!("{}::Serialize", Mods::serde_derive())
@@ -612,6 +613,7 @@ impl Traits {
 
 pub struct Structs {}
 
+#[allow(non_snake_case)]
 impl Structs {
     pub fn Deserializer() -> String {
         format!("{}::Deserializer", Mods::es())
@@ -626,20 +628,90 @@ impl Structs {
     }
 }
 
-pub struct Schema<'a> {
-    root: &'a Namespace<'a>
+pub struct Symbols<'a> {
+    body: Anchored<'a, ast::NamespaceBody>,
 }
 
-impl<'a> Schema<'a> {
-    pub fn new(root: &'a Namespace<'a>) -> Self {
-        Self { root }
+impl<'a> Symbols<'a> {
+    pub fn new(body: Anchored<'a, ast::NamespaceBody>) -> Self {
+        Self { body }
     }
 }
 
-impl<'a> Display for Schema<'a> {
+impl<'a> Display for Symbols<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
-            s.line("// TODO!")
+            let body = &self.body;
+
+            s.line(format!("// trace = {}", body.stack.trace()));
+
+            for ns in &body.t.namespaces {
+                let stack = body.stack.push(ns);
+                write!(s, "pub mod {}", ns.name.text).unwrap();
+                s.in_block(|s| {
+                    s.write(Symbols::new(stack.anchor(&ns.body)));
+                });
+            }
         })
     }
+}
+
+pub trait Anchor {
+    fn name(&self) -> &str;
+}
+
+impl Anchor for ast::NamespaceDecl {
+    fn name(&self) -> &str {
+        &self.name.text
+    }
+}
+
+impl Anchor for ast::FunctionDecl {
+    fn name(&self) -> &str {
+        &self.name.text
+    }
+}
+
+pub struct Stack<'a> {
+    frames: Vec<&'a Anchor>,
+}
+
+impl<'a> Stack<'a> {
+    pub fn new() -> Self {
+        Self { frames: Vec::new() }
+    }
+
+    pub fn push<'b: 'a>(&'b self, frame: &'b Anchor) -> Stack<'b> {
+        let mut frames: Vec<&'b Anchor> = Vec::new();
+        for f in &self.frames {
+            frames.push(*f);
+        }
+        frames.push(frame);
+        Stack { frames }
+    }
+
+    pub fn anchor<'b, T>(&'b self, t: &'b T) -> Anchored<'b, T> where 'a: 'b {
+        Anchored { stack: &self, t }
+    }
+
+    pub fn names(&self) -> Vec<String> {
+        self.frames.iter().map(|x| x.name().into()).collect()
+    }
+
+    pub fn trace(&self) -> String {
+        self.names().join("::")
+    }
+
+    pub fn protocol(&self) -> String {
+        format!("{}protocol", "super::".repeat(self.frames.len() + 1))
+    }
+}
+
+pub struct Anchored<'a, T> {
+    t: &'a T,
+    stack: &'a Stack<'a>,
+}
+
+impl<'a, T> Anchored<'a, T> {
+    // muffin for now
 }

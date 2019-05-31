@@ -125,7 +125,8 @@ impl Generator {
         {
             write!(s, "pub mod schema").unwrap();
             s.in_block(|s| {
-                s.write(Schema::new(&root));
+                let stack = Stack::new();
+                s.write(Symbols::new(stack.anchor(&schema.body)));
             });
             s.lf();
         }
