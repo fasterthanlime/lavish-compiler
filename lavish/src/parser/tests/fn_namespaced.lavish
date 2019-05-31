@@ -1,5 +1,5 @@
 
 namespace utils {
-    fn shutdown() -> (ok: bool)
+    server fn shutdown() -> (ok: bool)
 }
 
