@@ -629,11 +629,11 @@ impl Structs {
 }
 
 pub struct Symbols<'a> {
-    body: Anchored<'a, ast::NamespaceBody>,
+    body: Anchored<&'a ast::NamespaceBody>,
 }
 
 impl<'a> Symbols<'a> {
-    pub fn new(body: Anchored<'a, ast::NamespaceBody>) -> Self {
+    pub fn new(body: Anchored<&'a ast::NamespaceBody>) -> Self {
         Self { body }
     }
 }
@@ -656,91 +656,52 @@ impl<'a> Display for Symbols<'a> {
     }
 }
 
-#[derive(PartialEq, Eq)]
-pub enum AnchorKind {
-    Root,
+#[derive(PartialEq, Eq, Clone)]
+pub enum FrameKind {
     Namespace,
     Function,
 }
 
-pub struct RootAnchor {}
-static ROOT_ANCHOR: RootAnchor = RootAnchor {};
+#[derive(Clone)]
+pub struct Frame {
+    name: String,
+    kind: FrameKind,
+}
 
-impl Anchor for RootAnchor {
-    fn name(&self) -> &str {
-        "<root>"
-    }
-    fn kind(&self) -> AnchorKind {
-        AnchorKind::Root
+impl From<&ast::FunctionDecl> for Frame {
+    fn from(fd: &ast::FunctionDecl) -> Frame {
+        Frame { name: fd.name.text.clone(), kind: FrameKind::Function }
     }
 }
 
-pub trait Anchor {
-    fn name(&self) -> &str;
-    fn kind(&self) -> AnchorKind;
-}
-
-impl Anchor for ast::NamespaceDecl {
-    fn name(&self) -> &str {
-        &self.name.text
-    }
-
-    fn kind(&self) -> AnchorKind {
-        AnchorKind::Namespace
-    }
-}
-
-impl Anchor for ast::FunctionDecl {
-    fn name(&self) -> &str {
-        &self.name.text
-    }
-
-    fn kind(&self) -> AnchorKind {
-        AnchorKind::Function
+impl From<&ast::NamespaceDecl> for Frame {
+    fn from(nd: &ast::NamespaceDecl) -> Frame {
+        Frame { name: nd.name.text.clone(), kind: FrameKind::Namespace }
     }
 }
 
 #[derive(Clone)]
-pub struct Stack<'a> {
-    anchor: &'a Anchor,
-    parent: Option<&'a Stack<'a>>,
+pub struct Stack {
+    frames: Vec<Frame>,
 }
 
-impl<'a> Stack<'a> {
+impl Stack {
     pub fn new() -> Self {
-        Self { anchor: &ROOT_ANCHOR, parent: None }
+        Self { frames: Vec::new() }
     }
 
-    pub fn push(&'a self, anchor: &'a Anchor) -> Stack<'a> {
-        Stack { anchor, parent: Some(self) }
+    pub fn push<F>(&self, frame: F) -> Self where F: Into<Frame> {
+        let mut frames = self.frames.clone();
+        frames.push(frame.into());
+        Self { frames }
     }
 
-    pub fn anchor<T>(&'a self, inner: &'a T) -> Anchored<'a, T> {
+    pub fn anchor<T>(&self, inner: T) -> Anchored<T> {
         Anchored { stack: self.clone(), inner }
     }
 
-    pub fn anchors(&'a self) -> Box<dyn Iterator<Item = &'a Anchor> + 'a> {
-        if self.anchor.kind() == AnchorKind::Root {
-            return Box::new(std::iter::empty());
-        }
-
-        if let Some(parent) = self.parent {
-            Box::new(parent.anchors().chain(std::iter::once(self.anchor)))
-        } else {
-            Box::new(std::iter::once(self.anchor))
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        if let Some(parent) = self.parent {
-            parent.len() + 1
-        } else {
-            0
-        }
-    }
-
     pub fn names(&self) -> Vec<String> {
-        self.anchors().map(|x| x.name().into()).collect()
+        self.frames.iter().map(|x| x.name.clone()).collect()
     }
 
     pub fn trace(&self) -> String {
@@ -748,98 +709,56 @@ impl<'a> Stack<'a> {
     }
 
     pub fn protocol(&self) -> String {
-        // FIXME: inefficient
-        format!("{}protocol", "super::".repeat(self.anchors().count() + 1))
+        format!("{}protocol", "super::".repeat(self.frames.len()))
     }
 }
 
 #[derive(Clone)]
-pub struct Anchored<'a, T> {
-    inner: &'a T,
-    stack: Stack<'a>,
+pub struct Anchored<T> {
+    inner: T,
+    stack: Stack,
 }
 
-impl<'a, T> std::ops::Deref for Anchored<'a, T> {
+impl<T> std::ops::Deref for Anchored<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.inner
+        &self.inner
     }
 }
 
-impl<'a, T> Anchored<'a, T> {
-    pub fn inner(&self) -> &'a T {
-        self.inner
+impl<T> Anchored<T> {
+    pub fn inner(&self) -> &T {
+        &self.inner
     }
 
-    pub fn stack(&self) -> &Stack<'a> {
+    pub fn stack(&self) -> &Stack {
         &self.stack
     }
 }
 
-// pub fn all_funs<'a>(body: &Anchored<'a, ast::NamespaceBody>) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
-//     let body1 = body.clone();
-//     let body2 = body.clone();
-
-//     Box::new(body.inner.functions.iter().map(move |f| all_fun_funs(body1.stack.anchor(f))).chain(body.inner.namespaces.iter().map(move |ns| {
-//         let child = body2.stack.push(ns).anchor(&ns.body);
-//         all_funs(&child)
-//     })).flatten())
-// }
-
-// pub fn all_fun_funs<'a>(fun: Anchored<'a, ast::FunctionDecl>) -> Box<dyn Iterator<Item = Anchored<ast::FunctionDecl>> + 'a> {
-//     if let Some(body) = fun.inner.body.as_ref() {
-//         let fun1 = fun.clone();
-//         Box::new(std::iter::once(fun).chain(body.functions.iter().map(move |f| {
-//             let child = fun1.stack.push(fun1.inner).anchor(f);
-//             all_fun_funs(child)
-//         }).flatten()))
-//     } else {
-//         Box::new(std::iter::once(fun))
-//     }
-// }
-
-impl <'a> Anchored<'a, ast::NamespaceBody> {
-    // pub fn local_funs(&'a self) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
-    //     Box::new(self.functions.iter().map(move |f| self.stack.anchor(f)))
-    // }
-
-    // pub fn local_namespaces(&'a self) -> Box<dyn Iterator<Item = Anchored<'a, ast::NamespaceBody>> + 'a> {
-    //     Box::new(self.namespaces.iter().map(move |ns| self.stack.push(ns).anchor(&ns.body)))
-    // }
-
-    // pub fn all_funs(&'a self) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
-    //     Box::new(self.local_funs().chain(self.local_namespaces().map(|ns| ns.all_funs()).flatten()))
-    // }
-
-    pub fn local_funs(&'a self) -> Vec<Anchored<'a, ast::FunctionDecl>> {
-        self.functions.iter().map(|f| self.stack.anchor(f)).collect()
-    }
-    
-    pub fn local_namespaces(&'a self) -> Vec<Anchored<'a, ast::NamespaceBody>> {
-        self.namespaces.iter().map(move |ns| self.stack.push(ns).anchor(&ns.body)).collect()
+impl Anchored<&ast::NamespaceBody> {
+    pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
+        Box::new(self.functions.iter().map(move |f| self.stack.anchor(f)))
     }
 
-    pub fn all_funs(&'a self) -> Vec<Anchored<'a, ast::FunctionDecl>> {
-        let mut funs = self.local_funs();
-        for ns in &self.namespaces {
-            let ns = self.stack.push(ns).anchor(&ns.body);
-            for fun in ns.all_funs() {
-                funs.push(fun);
-            }
-        }
-        funs
+    pub fn local_namespaces(&self) -> Box<dyn Iterator<Item = Anchored<&ast::NamespaceBody>> + '_> {
+        Box::new(self.namespaces.iter().map(move |ns| self.stack.push(ns).anchor(&ns.body)))
+    }
+
+    pub fn all_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
+        Box::new(self.local_funs().chain(self.local_namespaces().map(|ns| ns.all_funs()).flatten()))
     }
 }
 
-impl<'a> Anchored<'a, ast::FunctionDecl> {
-    // pub fn local_funs(&'a self) -> Box<dyn Iterator<Item = Anchored<'a, ast::FunctionDecl>> + 'a> {
-    //     if let Some(body) = self.body.as_ref() {
-    //         Box::new(body.functions.iter().map(move |f| self.stack.push(self.inner).anchor(f)))
-    //     } else {
-    //         Box::new(std::iter::empty())
-    //     }
-    // }
+impl Anchored<&ast::FunctionDecl> {
+    pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
+        if let Some(body) = self.body.as_ref() {
+            Box::new(body.functions.iter().map(move |f| self.stack.push(self.inner).anchor(f)))
+        } else {
+            Box::new(std::iter::empty())
+        }
+    }
 
     fn names(&self) -> Vec<String> {
         let mut names = self.stack.names();
@@ -860,6 +779,6 @@ impl<'a> Anchored<'a, ast::FunctionDecl> {
     }
 
     pub fn name(&self) -> &str {
-        self.inner.name()
+        self.inner.name.text.as_ref()
     }
 }
