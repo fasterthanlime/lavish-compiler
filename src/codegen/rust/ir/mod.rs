@@ -359,6 +359,12 @@ impl Anchored<&ast::NamespaceBody> {
         });
         self.local_namespaces().for_each(|ns| ns.walk_all_funs(cb));
     }
+
+    pub fn walk_client_funs(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+        self.local_funs().for_each(|f| cb(f));
+        self.local_namespaces()
+            .for_each(|ns| ns.walk_client_funs(cb));
+    }
 }
 
 impl Anchored<&ast::FunctionDecl> {

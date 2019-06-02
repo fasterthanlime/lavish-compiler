@@ -9,29 +9,20 @@ pub struct Client<'a> {
 }
 
 impl<'a> Client<'a> {
-    fn for_each_fun<F>(&self, mut f: F)
-    where
-        F: FnMut(Anchored<&ast::FunctionDecl>),
-    {
-        unimplemented!()
+    fn for_each_fun(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+        self.body.walk_client_funs(cb);
     }
 
-    fn for_each_handled_fun<F>(&self, mut cb: F)
-    where
-        F: FnMut(Anchored<&ast::FunctionDecl>),
-    {
-        self.for_each_fun(|f| {
+    fn for_each_handled_fun(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+        self.for_each_fun(&mut |f| {
             if f.side == self.side {
                 cb(f);
             }
         });
     }
 
-    fn for_each_called_fun<F>(&self, mut cb: F)
-    where
-        F: FnMut(Anchored<&ast::FunctionDecl>),
-    {
-        self.for_each_fun(|f| {
+    fn for_each_called_fun(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+        self.for_each_fun(&mut |f| {
             if f.side == self.side.other() {
                 cb(f);
             }
@@ -41,8 +32,8 @@ impl<'a> Client<'a> {
     fn define_client(&self, s: &mut Scope) {
         s.write("pub struct Client");
         s.in_block(|s| {
-            self.for_each_called_fun(|fun| {
-                writeln!(s, "{qfn}: (),", qfn = fun.qualified_name()).unwrap();
+            self.for_each_called_fun(&mut |f| {
+                writeln!(s, "{qfn}: (),", qfn = f.qualified_name()).unwrap();
             });
             s.line("// TODO");
         });
@@ -80,8 +71,8 @@ impl<'a> Client<'a> {
         s.write("pub struct Handler<T>");
         s.in_block(|s| {
             s.line("state: std::sync::Arc<T>,");
-            self.for_each_handled_fun(|fun| {
-                writeln!(s, "on_{fqn}: Slot<T>,", fqn = fun.qualified_name()).unwrap();
+            self.for_each_handled_fun(&mut |f| {
+                writeln!(s, "on_{fqn}: Slot<T>,", fqn = f.qualified_name()).unwrap();
             });
         });
         s.lf();

@@ -70,13 +70,13 @@ impl<'a> Atom<'a> {
 
                 s.write("match self");
                 s.in_block(|s| {
-                    self.for_each_fun(&mut |fun| {
+                    self.for_each_fun(&mut |f| {
                         writeln!(
                             s,
                             "{name}::{variant}(_) => {lit},",
                             name = &self.name,
-                            variant = fun.variant(),
-                            lit = quoted(fun.method())
+                            variant = f.variant(),
+                            lit = quoted(f.method())
                         )
                         .unwrap();
                     });
@@ -100,8 +100,8 @@ impl<'a> Atom<'a> {
 
                 s.write("match method");
                 s.in_block(|s| {
-                    self.for_each_fun(&mut |fun| {
-                        s.line(format!("{method} => ", method = quoted(fun.method())));
+                    self.for_each_fun(&mut |f| {
+                        s.line(format!("{method} => ", method = quoted(f.method())));
                         s.scope()
                             .write("Ok")
                             .in_list(Brackets::Round, |l| {
@@ -109,8 +109,8 @@ impl<'a> Atom<'a> {
                                     "{name}::{variant}(__DS::<{schema}::{module}::{name}>(de)?)",
                                     schema = self.proto.body.stack.schema(),
                                     name = &self.name,
-                                    variant = fun.variant(),
-                                    module = fun.module(),
+                                    variant = f.variant(),
+                                    module = f.module(),
                                 ));
                             })
                             .write(",")
@@ -144,12 +144,12 @@ impl<'a> Display for Atom<'a> {
             s.write(serde_untagged());
             let mut e = _enum(self.name);
             e.kw_pub();
-            self.for_each_fun(&mut |fun| {
+            self.for_each_fun(&mut |f| {
                 e.variant(format!(
                     "{variant}({schema}::{module}::{name})",
-                    variant = fun.variant(),
+                    variant = f.variant(),
                     schema = self.proto.body.stack.schema(),
-                    module = fun.module(),
+                    module = f.module(),
                     name = &self.name
                 ));
             });
