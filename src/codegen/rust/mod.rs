@@ -7,7 +7,6 @@ use std::fs::File;
 use std::time::Instant;
 
 mod ir;
-mod lang;
 use ir::*;
 
 trait AsRust {
@@ -111,37 +110,29 @@ impl Generator {
         self.write_prelude(&mut s);
 
         let schema = member.schema.as_ref().expect("schema to be parsed");
-        let root = Namespace::new("", "<root>", &schema.body);
+        let stack = Stack::new();
+        let body = stack.anchor(&schema.body);
 
         {
-            let stack = Stack::new();
-            let body = stack.anchor(&schema.body);
-            s.write(Protocol { body });
+            s.write(Protocol { body: body.clone() });
             s.lf();
         }
 
         {
             write!(s, "pub mod schema").unwrap();
             s.in_block(|s| {
-                let stack = Stack::new();
-                s.write(Symbols::new(stack.anchor(&schema.body)));
+                s.write(Symbols::new(body.clone()));
             });
             s.lf();
         }
 
         {
-            let (client_funs, server_funs): (Vec<&Fun>, Vec<&Fun>) = root
-                .funs
-                .values()
-                .partition(|f| f.side() == ast::Side::Client);
             {
                 write!(s, "pub mod client").unwrap();
                 s.in_block(|s| {
                     s.write(Client {
-                        handled: client_funs.as_ref(),
-                        called: server_funs.as_ref(),
-                        depth: 0,
-                        is_root: true,
+                        body: body.clone(),
+                        side: ast::Side::Client,
                     });
                 });
             }
@@ -150,10 +141,8 @@ impl Generator {
                 write!(s, "pub mod server").unwrap();
                 s.in_block(|s| {
                     s.write(Client {
-                        handled: server_funs.as_ref(),
-                        called: client_funs.as_ref(),
-                        depth: 0,
-                        is_root: true,
+                        body: body.clone(),
+                        side: ast::Side::Server,
                     });
                 });
             }

@@ -1,3 +1,4 @@
+use super::common::*;
 use crate::codegen::output::*;
 use std::fmt::{self, Display, Write};
 
@@ -250,4 +251,107 @@ impl<'a> Display for _Impl<'a> {
 pub struct TypeParam {
     name: String,
     constraint: Option<String>,
+}
+
+pub fn quoted<D>(d: D) -> String
+where
+    D: fmt::Debug,
+{
+    format!("{:?}", d)
+}
+
+pub struct _Enum {
+    kw_pub: bool,
+    name: String,
+    annotations: Vec<String>,
+    variants: Vec<String>,
+}
+
+impl _Enum {
+    pub fn kw_pub(&mut self) -> &mut Self {
+        self.kw_pub = true;
+        self
+    }
+
+    pub fn annotation<D>(&mut self, d: D) -> &mut Self
+    where
+        D: Display,
+    {
+        self.annotations.push(format!("{}", d));
+        self
+    }
+
+    pub fn variant<D>(&mut self, d: D) -> &mut Self
+    where
+        D: Display,
+    {
+        self.variants.push(format!("{}", d));
+        self
+    }
+}
+
+pub fn _enum<S>(name: S) -> _Enum
+where
+    S: Into<String>,
+{
+    _Enum {
+        name: name.into(),
+        kw_pub: false,
+        annotations: Vec::new(),
+        variants: Vec::new(),
+    }
+}
+
+impl Display for _Enum {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Scope::fmt(f, |s| {
+            for annotation in &self.annotations {
+                s.write(annotation);
+            }
+            if self.kw_pub {
+                s.write("pub ");
+            }
+            s.write("enum ").write(&self.name);
+            if self.variants.is_empty() {
+                s.write(" {}").lf();
+            } else {
+                s.in_block(|s| {
+                    for variant in &self.variants {
+                        s.write(variant).write(",").lf();
+                    }
+                });
+            }
+        })
+    }
+}
+
+pub struct Derive {
+    items: Vec<String>,
+}
+
+impl Derive {
+    pub fn debug(mut self) -> Self {
+        self.items.push("Debug".into());
+        self
+    }
+
+    pub fn serialize(mut self) -> Self {
+        self.items.push(Traits::Serialize());
+        self
+    }
+
+    pub fn deserialize(mut self) -> Self {
+        self.items.push(Traits::Deserialize());
+        self
+    }
+}
+
+impl Display for Derive {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "#[derive({items})]", items = self.items.join(", "))
+    }
+}
+
+pub fn derive() -> Derive {
+    Derive { items: Vec::new() }
 }
