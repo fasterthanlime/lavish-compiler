@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use heck::{SnakeCase,CamelCase};
 use indexmap::IndexMap;
 use std::fmt::{self, Display, Write};
@@ -737,34 +739,42 @@ impl<T> Anchored<T> {
     }
 }
 
-// pub fn all_ns_funs<'a>(ns: &'a Anchored<&ast::NamespaceBody>) -> Box<dyn Iterator<Item = Anchored<&'a ast::FunctionDecl>> + 'a> {
-//     let stack = ns.stack.clone();
-//     Box::new(ns.functions.iter().map(move |f| stack.anchor(f)))
-// }
-
-impl<'a> Anchored<&'a ast::NamespaceBody> {
-    pub fn local_funs(&'a self) -> Box<dyn Iterator<Item = Anchored<&'a ast::FunctionDecl>> + 'a> {
+impl Anchored<&ast::NamespaceBody> {
+    pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
         Box::new(self.functions.iter().map(move |f| self.stack.anchor(f)))
     }
 
-    pub fn local_namespaces(&'a self) -> Box<dyn Iterator<Item = Anchored<&'a ast::NamespaceBody>> + 'a> {
-        let stack = self.stack.clone();
-        Box::new(self.namespaces.iter().map(move |ns| stack.push(ns).anchor(&ns.body)))
+    pub fn local_namespaces(&self) -> Box<dyn Iterator<Item = Anchored<&ast::NamespaceBody>> + '_> {
+        Box::new(self.namespaces.iter().map(move |ns| self.stack.push(ns).anchor(&ns.body)))
     }
 
-    pub fn all_funs(&'a self) -> Box<dyn Iterator<Item = Anchored<&'a ast::FunctionDecl>> + 'a> {
-        Box::new(self.local_funs().chain(self.local_namespaces().map(|ns| ns.all_funs()).flatten()))
+    pub fn walk_all_funs(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+        self.local_funs().for_each(|f| {
+            cb(f.clone());
+            f.walk_all_funs(cb);
+        });
+        self.local_namespaces().for_each(|ns| ns.walk_all_funs(cb));
     }
 }
 
 impl Anchored<&ast::FunctionDecl> {
-    // pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
-    //     if let Some(body) = self.body.as_ref() {
-    //         Box::new(body.functions.iter().map(move |f| self.stack.push(self.inner).anchor(f)))
-    //     } else {
-    //         Box::new(std::iter::empty())
-    //     }
-    // }
+    pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
+        if let Some(body) = self.body.as_ref() {
+            Box::new(body.functions.iter().map(move |f| self.stack.push(self.inner).anchor(f)))
+        } else {
+            Box::new(std::iter::empty())
+        }
+    }
+
+    pub fn all_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
+        unimplemented!()
+    }
+
+    pub fn walk_all_funs(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+        if let Some(body) = self.body.as_ref() {
+            self.stack.push(self.inner).anchor(body).walk_all_funs(cb);
+        }
+    }
 
     fn names(&self) -> Vec<String> {
         let mut names = self.stack.names();
