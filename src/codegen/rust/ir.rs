@@ -1,12 +1,12 @@
 #![allow(unused)]
 
-use heck::{SnakeCase,CamelCase};
+use heck::{CamelCase, SnakeCase};
 use indexmap::IndexMap;
 use std::fmt::{self, Display, Write};
 
+use super::lang::*;
 use crate::ast;
 use crate::codegen::*;
-use super::lang::*;
 
 pub struct Derive {
     items: Vec<String>,
@@ -162,45 +162,46 @@ pub struct Atom<'a> {
     pub proto: &'a Protocol<'a>,
     pub name: &'a str,
     pub kind: ast::Kind,
-    pub depth: usize,
 }
 
 impl<'a> Atom<'a> {
-    fn funs(&self) -> impl Iterator<Item = &&Fun> {
+    fn for_each_fun(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
         let kind = self.kind;
-        self.proto.funs.iter().filter(move |f| f.kind() == kind)
+        self.proto.body.walk_all_funs(&mut |f| {
+            if f.kind == kind {
+                cb(f);
+            }
+        });
     }
-}
 
-impl<'a> Atom<'a> {
-    fn root(&self) -> String {
-        "super::".repeat(self.depth)
+    fn fun_count(&self) -> usize {
+        let mut count = 0;
+        self.for_each_fun(&mut |_| count += 1);
+        count
     }
-}
 
-impl<'a> Atom<'a> {
     fn implement_method(&self, s: &mut Scope) {
         _fn("method")
             .self_param("&self")
             .returns("&'static str")
             .body(|s| {
-                if self.funs().count() == 0 {
+                if self.fun_count() == 0 {
                     writeln!(s, "panic!(\"no variants for {}\")", self.name).unwrap();
                     return;
                 }
 
                 s.write("match self");
                 s.in_block(|s| {
-                    for fun in self.funs() {
+                    self.for_each_fun(&mut |fun| {
                         writeln!(
                             s,
                             "{name}::{variant}(_) => {lit},",
                             name = &self.name,
                             variant = fun.variant(),
-                            lit = quoted(fun.rpc_name())
+                            lit = quoted(fun.method())
                         )
                         .unwrap();
-                    }
+                    });
                 });
             })
             .write_to(s);
@@ -209,7 +210,10 @@ impl<'a> Atom<'a> {
     fn implement_deserialize(&self, s: &mut Scope) {
         _fn("deserialize")
             .param("method: &str")
-            .param(format!("de: &mut {Deserializer}", Deserializer = Structs::Deserializer()))
+            .param(format!(
+                "de: &mut {Deserializer}",
+                Deserializer = Structs::Deserializer()
+            ))
             .returns(format!("{es}::Result<Self>", es = Mods::es()))
             .body(|s| {
                 writeln!(s, "use {es}::deserialize as __DS;", es = Mods::es()).unwrap();
@@ -218,32 +222,36 @@ impl<'a> Atom<'a> {
 
                 s.write("match method");
                 s.in_block(|s| {
-                    for fun in self.funs() {
-                        s.line(format!("{rpc_name} => ", rpc_name = quoted(fun.rpc_name())));
+                    self.for_each_fun(&mut |fun| {
+                        s.line(format!("{method} => ", method = quoted(fun.method())));
                         s.scope()
                             .write("Ok")
                             .in_list(Brackets::Round, |l| {
                                 l.item(format!(
-                                    "{name}::{variant}(__DS::<{root}{qfn}::{name}>(de)?)",
-                                    root = self.root(),
+                                    "{name}::{variant}(__DS::<{schema}::{module}::{name}>(de)?)",
+                                    schema = self.proto.body.stack.schema(),
                                     name = &self.name,
                                     variant = fun.variant(),
-                                    qfn = fun.qualified_name(),
+                                    module = fun.module(),
                                 ));
                             })
                             .write(",")
                             .lf();
-                    }
+                    });
                     s.write("_ =>").lf();
-                    s.scope().write("Err").in_parens(|s| {
-                        s.write(format!("{es}::Error::custom", es = Mods::es()))
-                            .in_parens(|s| {
-                                s.write("format!").in_parens_list(|l| {
-                                    l.item(quoted("unknown method: {}"));
-                                    l.item("method")
+                    s.scope()
+                        .write("Err")
+                        .in_parens(|s| {
+                            s.write(format!("{es}::Error::custom", es = Mods::es()))
+                                .in_parens(|s| {
+                                    s.write("format!").in_parens_list(|l| {
+                                        l.item(quoted("unknown method: {}"));
+                                        l.item("method")
+                                    });
                                 });
-                            });
-                    }).write(",").lf();
+                        })
+                        .write(",")
+                        .lf();
                 });
             })
             .write_to(s);
@@ -256,22 +264,25 @@ impl<'a> Display for Atom<'a> {
             s.write(derive().debug().serialize());
             s.write(allow().non_camel_case().unused());
             s.write(serde_untagged());
-            let mut e = _enum(self.name).kw_pub();
-            for fun in self.funs() {
-                e = e.variant(format!(
-                    "{variant}({root}{fqn}::{name})",
+            let mut e = _enum(self.name);
+            e.kw_pub();
+            self.for_each_fun(&mut |fun| {
+                e.variant(format!(
+                    "{variant}({schema}::{module}::{name})",
                     variant = fun.variant(),
-                    root = self.root(),
-                    fqn = fun.qualified_name(),
+                    schema = self.proto.body.stack.schema(),
+                    module = fun.module(),
                     name = &self.name
                 ));
-            }
+            });
             e.write_to(s);
 
-            _impl(Traits::Atom(), self.name).body(|s| {
-                self.implement_method(s);
-                self.implement_deserialize(s);
-            }).write_to(s);
+            _impl(Traits::Atom(), self.name)
+                .body(|s| {
+                    self.implement_method(s);
+                    self.implement_deserialize(s);
+                })
+                .write_to(s);
         })
     }
 }
@@ -314,8 +325,12 @@ impl<'a> Client<'a> {
     }
 
     fn define_slot(&self, s: &mut Scope) {
-        s.write(format!("pub type SlotReturn = Result<{protocol}::Results, {Error}>;", protocol = self.protocol(), Error = Structs::Error()))
-            .lf();
+        s.write(format!(
+            "pub type SlotReturn = Result<{protocol}::Results, {Error}>;",
+            protocol = self.protocol(),
+            Error = Structs::Error()
+        ))
+        .lf();
 
         writeln!(s, 
             "pub type SlotFn<T> = Fn({Arc}<T>, Client, {protocol}::Params) -> SlotReturn + 'static + Send + Sync;",
@@ -364,12 +379,12 @@ pub struct _Enum {
 }
 
 impl _Enum {
-    pub fn kw_pub(mut self) -> Self {
+    pub fn kw_pub(&mut self) -> &mut Self {
         self.kw_pub = true;
         self
     }
 
-    pub fn annotation<D>(mut self, d: D) -> Self
+    pub fn annotation<D>(&mut self, d: D) -> &mut Self
     where
         D: Display,
     {
@@ -377,7 +392,7 @@ impl _Enum {
         self
     }
 
-    pub fn variant<D>(mut self, d: D) -> Self
+    pub fn variant<D>(&mut self, d: D) -> &mut Self
     where
         D: Display,
     {
@@ -422,8 +437,7 @@ impl Display for _Enum {
 }
 
 pub struct Protocol<'a> {
-    pub funs: &'a [&'a Fun<'a>],
-    pub depth: usize,
+    pub body: Anchored<&'a ast::NamespaceBody>,
 }
 
 impl<'a> Display for Protocol<'a> {
@@ -431,25 +445,21 @@ impl<'a> Display for Protocol<'a> {
         Scope::fmt(f, |s| {
             s.write("pub mod protocol");
             s.in_block(|s| {
-                let depth = self.depth + 1;
                 for a in &[
                     Atom {
                         proto: &self,
                         kind: ast::Kind::Request,
                         name: "Params",
-                        depth,
                     },
                     Atom {
                         proto: &self,
                         kind: ast::Kind::Request,
                         name: "Results",
-                        depth,
                     },
                     Atom {
                         proto: &self,
                         kind: ast::Kind::Notification,
                         name: "NotificationParams",
-                        depth,
                     },
                 ] {
                     s.write(a).lf();
@@ -672,13 +682,19 @@ pub struct Frame {
 
 impl From<&ast::FunctionDecl> for Frame {
     fn from(fd: &ast::FunctionDecl) -> Frame {
-        Frame { name: fd.name.text.clone(), kind: FrameKind::Function }
+        Frame {
+            name: fd.name.text.clone(),
+            kind: FrameKind::Function,
+        }
     }
 }
 
 impl From<&ast::NamespaceDecl> for Frame {
     fn from(nd: &ast::NamespaceDecl) -> Frame {
-        Frame { name: nd.name.text.clone(), kind: FrameKind::Namespace }
+        Frame {
+            name: nd.name.text.clone(),
+            kind: FrameKind::Namespace,
+        }
     }
 }
 
@@ -692,14 +708,20 @@ impl Stack {
         Self { frames: Vec::new() }
     }
 
-    pub fn push<F>(&self, frame: F) -> Self where F: Into<Frame> {
+    pub fn push<F>(&self, frame: F) -> Self
+    where
+        F: Into<Frame>,
+    {
         let mut frames = self.frames.clone();
         frames.push(frame.into());
         Self { frames }
     }
 
     pub fn anchor<T>(&self, inner: T) -> Anchored<T> {
-        Anchored { stack: self.clone(), inner }
+        Anchored {
+            stack: self.clone(),
+            inner,
+        }
     }
 
     pub fn names(&self) -> Vec<String> {
@@ -710,8 +732,16 @@ impl Stack {
         self.names().join("::")
     }
 
+    pub fn root(&self) -> String {
+        "super::".repeat(self.frames.len() + 1)
+    }
+
     pub fn protocol(&self) -> String {
-        format!("{}protocol", "super::".repeat(self.frames.len()))
+        format!("{}protocol", self.root())
+    }
+
+    pub fn schema(&self) -> String {
+        format!("{}schema", self.root())
     }
 }
 
@@ -745,7 +775,11 @@ impl Anchored<&ast::NamespaceBody> {
     }
 
     pub fn local_namespaces(&self) -> Box<dyn Iterator<Item = Anchored<&ast::NamespaceBody>> + '_> {
-        Box::new(self.namespaces.iter().map(move |ns| self.stack.push(ns).anchor(&ns.body)))
+        Box::new(
+            self.namespaces
+                .iter()
+                .map(move |ns| self.stack.push(ns).anchor(&ns.body)),
+        )
     }
 
     pub fn walk_all_funs(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
@@ -760,14 +794,14 @@ impl Anchored<&ast::NamespaceBody> {
 impl Anchored<&ast::FunctionDecl> {
     pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
         if let Some(body) = self.body.as_ref() {
-            Box::new(body.functions.iter().map(move |f| self.stack.push(self.inner).anchor(f)))
+            Box::new(
+                body.functions
+                    .iter()
+                    .map(move |f| self.stack.push(self.inner).anchor(f)),
+            )
         } else {
             Box::new(std::iter::empty())
         }
-    }
-
-    pub fn all_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
-        unimplemented!()
     }
 
     pub fn walk_all_funs(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
@@ -783,7 +817,11 @@ impl Anchored<&ast::FunctionDecl> {
     }
 
     pub fn variant(&self) -> String {
-        self.names().iter().map(|x| x.to_camel_case()).collect::<Vec<_>>().join("_")
+        self.names()
+            .iter()
+            .map(|x| x.to_camel_case())
+            .collect::<Vec<_>>()
+            .join("_")
     }
 
     pub fn module(&self) -> String {

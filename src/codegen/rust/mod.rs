@@ -116,44 +116,7 @@ impl Generator {
         {
             let stack = Stack::new();
             let body = stack.anchor(&schema.body);
-
-            {
-                // let funs = all_funs(&body).collect::<Vec<_>>();
-                s.lf();
-                s.lf();
-                s.line("// ALL FUNS:");
-                // let funs: Vec<Anchored<&ast::FunctionDecl>> = Vec::new();
-                body.walk_all_funs(&mut |af| {
-                    s.line(format!("// {}", af.module()));
-                });
-
-        //         s.lf();
-        //         s.lf();
-        //         s.line("// LOCAL FUNS:");
-        //         let funs = body.local_funs().collect::<Vec<_>>();
-        //         for af in funs {
-        //             s.line(format!("// {}", af.module()));
-        //         }
-
-        //         s.lf();
-        //         s.lf();
-        //         s.line("// SERVER FUNS:");
-        //         let funs = body
-        //             .local_funs()
-        //             .filter(|f| f.side == ast::Side::Server)
-        //             .collect::<Vec<_>>();
-        //         for af in funs {
-        //             s.line(format!("// {}", af.module()));
-        //         }
-            }
-        }
-
-        {
-            let funs = root.funs().collect::<Vec<_>>();
-            s.write(Protocol {
-                funs: &funs[..],
-                depth: 0,
-            });
+            s.write(Protocol { body });
             s.lf();
         }
 
