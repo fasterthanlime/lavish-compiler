@@ -1,9 +1,8 @@
 use crate::ast::nodes::*;
-use heck::CamelCase;
 
 pub trait Frame {
     fn name(&self) -> String;
-    fn kind<'a>(&'a self) -> FrameKind<'a>;
+    fn kind(&self) -> FrameKind;
 }
 
 pub enum FrameKind<'a> {
@@ -16,7 +15,7 @@ impl Frame for FunctionDecl {
         self.name.text.clone()
     }
 
-    fn kind<'a>(&'a self) -> FrameKind<'a> {
+    fn kind(&self) -> FrameKind {
         FrameKind::Function(self)
     }
 }
@@ -26,7 +25,7 @@ impl Frame for NamespaceDecl {
         self.name.text.clone()
     }
 
-    fn kind<'a>(&'a self) -> FrameKind<'a> {
+    fn kind(&self) -> FrameKind {
         FrameKind::Namespace(self)
     }
 }

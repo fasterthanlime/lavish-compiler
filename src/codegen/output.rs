@@ -86,26 +86,15 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn def_struct<F>(&mut self, name: &str, f: F) -> Result
+    pub fn in_scope<F>(&mut self, f: F)
     where
-        F: Fn(&mut Scope) -> Result,
-    {
-        self.line("#[derive(Serialize, Deserialize, Debug)]");
-        self.line(format!("pub struct {} {{", name));
-        self.in_scope(f)?;
-        self.line("}");
-        Ok(())
-    }
-
-    pub fn in_scope<F>(&mut self, f: F) -> Result
-    where
-        F: Fn(&mut Scope) -> Result,
+        F: Fn(&mut Scope),
     {
         let mut s = self.scope();
         f(&mut s)
     }
 
-    pub fn in_block<F>(&mut self, f: F) -> &mut Self
+    pub fn in_block<F>(&mut self, f: F)
     where
         F: Fn(&mut Scope),
     {
@@ -115,7 +104,6 @@ impl<'a> Scope<'a> {
             f(&mut s);
         }
         self.line("}");
-        self
     }
 
     pub fn fmt<F>(writer: &'a mut fmt::Write, f: F) -> std::fmt::Result

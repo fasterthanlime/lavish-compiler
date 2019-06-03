@@ -67,6 +67,11 @@ impl Generator {
         let body = stack.anchor(&schema.body);
 
         {
+            s.line("pub use schema::*;");
+            s.lf();
+        }
+
+        {
             s.write(Protocol { body: body.clone() });
             s.lf();
         }
@@ -80,35 +85,35 @@ impl Generator {
         }
 
         {
-            {
-                write!(s, "pub mod client").unwrap();
-                s.in_block(|s| {
-                    s.write(Client {
-                        body: body.clone(),
-                        side: ast::Side::Server,
-                    });
-
-                    s.write(Handler {
-                        body: body.clone(),
-                        side: ast::Side::Client,
-                    });
+            write!(s, "pub mod client").unwrap();
+            s.in_block(|s| {
+                s.write(Client {
+                    body: body.clone(),
+                    side: ast::Side::Server,
                 });
-            }
+
+                s.write(Handler {
+                    body: body.clone(),
+                    side: ast::Side::Client,
+                });
+            });
             s.lf();
-            {
-                write!(s, "pub mod server").unwrap();
-                s.in_block(|s| {
-                    s.write(Client {
-                        body: body.clone(),
-                        side: ast::Side::Client,
-                    });
+        }
 
-                    s.write(Handler {
-                        body: body.clone(),
-                        side: ast::Side::Server,
-                    });
+        {
+            write!(s, "pub mod server").unwrap();
+            s.in_block(|s| {
+                s.write(Client {
+                    body: body.clone(),
+                    side: ast::Side::Client,
                 });
-            }
+
+                s.write(Handler {
+                    body: body.clone(),
+                    side: ast::Side::Server,
+                });
+            });
+            s.lf();
         }
 
         let end_instant = Instant::now();

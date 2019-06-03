@@ -15,7 +15,7 @@ impl AsRust for ast::Type {
 use std::fmt;
 impl<'a> fmt::Display for RustType<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use ast::{BaseType, TypeKind};
+        use ast::TypeKind;
 
         match &self.0.kind {
             TypeKind::Base(base) => base.write_rust_type(f),

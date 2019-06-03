@@ -31,12 +31,35 @@ impl<'a> Client<'a> {
                 _fn(f.name())
                     .kw_pub()
                     .self_param("&self")
-                    .param(format!(
-                        "params: {Params}",
-                        Params = f.Params(&self.body.stack),
+                    .param(format!("p: {Params}", Params = f.Params(&self.body.stack),))
+                    .returns(format!(
+                        "Result<{Results}, {Error}>",
+                        Results = f.Results(&self.body.stack),
+                        Error = Structs::Error()
                     ))
                     .body(|s| {
-                        s.line("// TODO");
+                        s.line("self.root.call(");
+                        s.in_scope(|s| {
+                            writeln!(
+                                s,
+                                "{protocol}::Params::{variant}(p),",
+                                protocol = self.body.stack.protocol(),
+                                variant = f.variant()
+                            )
+                            .unwrap();
+                            s.write("|r| match r");
+                            s.in_block(|s| {
+                                writeln!(
+                                    s,
+                                    "{protocol}::Results::{variant}(r) => Some(r),",
+                                    protocol = self.body.stack.protocol(),
+                                    variant = f.variant(),
+                                )
+                                .unwrap();
+                                writeln!(s, "_ => None,").unwrap();
+                            });
+                        });
+                        s.write(")").lf();
                     })
                     .write_to(s);
             });
