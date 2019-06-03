@@ -22,7 +22,6 @@ impl<'a> Client<'a> {
                 RootClient = self.body.stack.RootClient()
             )
             .unwrap();
-            s.line("// TODO");
         });
         s.lf();
 
@@ -31,6 +30,11 @@ impl<'a> Client<'a> {
             self.for_each_fun(&mut |f| {
                 _fn(f.name())
                     .kw_pub()
+                    .self_param("&self")
+                    .param(format!(
+                        "params: {Params}",
+                        Params = format!("{module}::Params", module = f.module()),
+                    ))
                     .body(|s| {
                         s.line("// TODO");
                     })

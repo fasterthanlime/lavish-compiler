@@ -40,7 +40,7 @@ pub fn serde_untagged() -> impl Display {
 
 pub struct _Fn<'a> {
     kw_pub: bool,
-    self_arg: Option<String>,
+    self_param: Option<String>,
     params: Vec<String>,
     type_params: Vec<TypeParam>,
     name: String,
@@ -70,11 +70,11 @@ impl<'a> _Fn<'a> {
         self
     }
 
-    pub fn self_param<D>(mut self, self_arg: D) -> Self
+    pub fn self_param<D>(mut self, self_param: D) -> Self
     where
         D: Display,
     {
-        self.self_arg = Some(format!("{}", self_arg));
+        self.self_param = Some(format!("{}", self_param));
         self
     }
 
@@ -114,7 +114,7 @@ impl<'a> Display for _Fn<'a> {
             });
 
             s.in_list(Brackets::Round, |l| {
-                if let Some(self_param) = self.self_arg.as_ref() {
+                if let Some(self_param) = self.self_param.as_ref() {
                     l.item(self_param);
                 }
                 for p in &self.params {
@@ -147,7 +147,7 @@ where
         name: name.into(),
         params: Vec::new(),
         type_params: Vec::new(),
-        self_arg: None,
+        self_param: None,
         body: None,
         ret: None,
     }
