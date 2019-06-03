@@ -40,7 +40,6 @@ pub fn serde_untagged() -> impl Display {
 
 pub struct _Fn<'a> {
     kw_pub: bool,
-    kw_async: bool,
     self_arg: Option<String>,
     params: Vec<String>,
     type_params: Vec<TypeParam>,
@@ -52,11 +51,6 @@ pub struct _Fn<'a> {
 impl<'a> _Fn<'a> {
     pub fn kw_pub(mut self) -> Self {
         self.kw_pub = true;
-        self
-    }
-
-    pub fn kw_async(mut self) -> Self {
-        self.kw_async = true;
         self
     }
 
@@ -110,9 +104,6 @@ impl<'a> Display for _Fn<'a> {
             if self.kw_pub {
                 s.write("pub ");
             }
-            if self.kw_async {
-                s.write("async ");
-            }
 
             s.write("fn ").write(&self.name);
             s.in_list(Brackets::Angle, |l| {
@@ -153,7 +144,6 @@ where
 {
     _Fn {
         kw_pub: false,
-        kw_async: false,
         name: name.into(),
         params: Vec::new(),
         type_params: Vec::new(),
@@ -261,21 +251,12 @@ where
 pub struct _Enum {
     kw_pub: bool,
     name: String,
-    annotations: Vec<String>,
     variants: Vec<String>,
 }
 
 impl _Enum {
     pub fn kw_pub(&mut self) -> &mut Self {
         self.kw_pub = true;
-        self
-    }
-
-    pub fn annotation<D>(&mut self, d: D) -> &mut Self
-    where
-        D: Display,
-    {
-        self.annotations.push(format!("{}", d));
         self
     }
 
@@ -295,7 +276,6 @@ where
     _Enum {
         name: name.into(),
         kw_pub: false,
-        annotations: Vec::new(),
         variants: Vec::new(),
     }
 }
@@ -303,9 +283,6 @@ where
 impl Display for _Enum {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
-            for annotation in &self.annotations {
-                s.write(annotation);
-            }
             if self.kw_pub {
                 s.write("pub ");
             }
