@@ -121,32 +121,6 @@ where
     filter_funs(move |f| f.side == side, cb)
 }
 
-pub trait Filterable<'a, Elem, F>
-where
-    F: FnMut(Elem),
-{
-    fn filter<Predicate>(self, predicate: Predicate) -> Box<FnMut(Elem) + 'a>
-    where
-        Predicate: Fn(&Elem) -> bool + 'a;
-}
-
-impl<'a, Elem, F, FM> Filterable<'a, Elem, F> for FM
-where
-    F: FnMut(Elem),
-    FM: FnMut(Elem) + 'a,
-{
-    fn filter<Predicate>(mut self, predicate: Predicate) -> Box<FnMut(Elem) + 'a>
-    where
-        Predicate: Fn(&Elem) -> bool + 'a,
-    {
-        Box::new(move |el| {
-            if predicate(&el) {
-                self(el)
-            }
-        })
-    }
-}
-
 impl<'a> Anchored<'a, &NamespaceBody> {
     pub fn for_each_fun(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
         for f in &self.functions {
