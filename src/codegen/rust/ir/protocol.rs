@@ -1,7 +1,4 @@
-use super::*;
-use crate::ast;
-use crate::codegen::output::*;
-use std::fmt::{self, Display, Write};
+use crate::codegen::rust::prelude::*;
 
 pub struct Protocol<'a> {
     pub body: ast::Anchored<'a, &'a ast::NamespaceBody>,

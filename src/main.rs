@@ -4,10 +4,10 @@ use clap::{App, Arg, SubCommand};
 use std::collections::HashMap;
 use std::path::Path;
 
-mod ast;
-mod checker;
-mod codegen;
-mod parser;
+pub(crate) mod ast;
+pub(crate) mod checker;
+pub(crate) mod codegen;
+pub(crate) mod parser;
 
 const VERSION: &str = "0.2.0";
 

@@ -1,6 +1,4 @@
-use super::common::*;
-use crate::codegen::output::*;
-use std::fmt::{self, Display, Write};
+use crate::codegen::rust::prelude::*;
 
 pub trait WriteTo: Display {
     fn write_to(&self, s: &mut Scope) {

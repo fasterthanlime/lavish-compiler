@@ -4,6 +4,8 @@ pub use output::*;
 mod rust;
 use super::ast;
 
+mod prelude;
+
 use std::fmt;
 
 #[derive(Debug)]

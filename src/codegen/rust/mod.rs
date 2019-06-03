@@ -6,6 +6,8 @@ use std::fmt::Write;
 use std::fs::File;
 use std::time::Instant;
 
+mod prelude;
+
 mod ir;
 use ir::*;
 

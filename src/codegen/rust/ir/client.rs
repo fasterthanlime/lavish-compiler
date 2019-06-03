@@ -1,7 +1,4 @@
-use super::*;
-use crate::ast;
-use crate::codegen::output::*;
-use std::fmt::{self, Display, Write};
+use crate::codegen::rust::prelude::*;
 
 pub struct Client<'a> {
     pub side: ast::Side,
