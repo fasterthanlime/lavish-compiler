@@ -42,7 +42,7 @@ pub struct Atom<'a> {
 impl<'a> Atom<'a> {
     fn for_each_fun(&self, cb: &mut FnMut(ast::Anchored<&ast::FunctionDecl>)) {
         let kind = self.kind;
-        self.proto.body.walk_all_funs(&mut |f| {
+        self.proto.body.for_each_fun_of_schema(&mut |f| {
             if f.kind == kind {
                 cb(f);
             }

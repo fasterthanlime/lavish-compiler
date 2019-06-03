@@ -99,37 +99,88 @@ impl<'a, T> Anchored<'a, T> {
     }
 }
 
+pub fn filter_funs<Predicate, I>(
+    predicate: Predicate,
+    mut cb: I,
+) -> impl FnMut(Anchored<&FunctionDecl>)
+where
+    Predicate: Fn(&Anchored<&FunctionDecl>) -> bool + 'static,
+    I: FnMut(Anchored<&FunctionDecl>),
+{
+    move |f| {
+        if predicate(&f) {
+            cb(f)
+        }
+    }
+}
+
+pub fn filter_fun_side<I>(side: Side, cb: I) -> impl FnMut(Anchored<&FunctionDecl>)
+where
+    I: FnMut(Anchored<&FunctionDecl>),
+{
+    filter_funs(move |f| f.side == side, cb)
+}
+
+pub trait Filterable<'a, Elem, F>
+where
+    F: FnMut(Elem),
+{
+    fn filter<Predicate>(self, predicate: Predicate) -> Box<FnMut(Elem) + 'a>
+    where
+        Predicate: Fn(&Elem) -> bool + 'a;
+}
+
+impl<'a, Elem, F, FM> Filterable<'a, Elem, F> for FM
+where
+    F: FnMut(Elem),
+    FM: FnMut(Elem) + 'a,
+{
+    fn filter<Predicate>(mut self, predicate: Predicate) -> Box<FnMut(Elem) + 'a>
+    where
+        Predicate: Fn(&Elem) -> bool + 'a,
+    {
+        Box::new(move |el| {
+            if predicate(&el) {
+                self(el)
+            }
+        })
+    }
+}
+
 impl<'a> Anchored<'a, &NamespaceBody> {
-    pub fn walk_local_funs(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
+    pub fn for_each_fun(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
         for f in &self.functions {
             cb(self.stack.anchor(f));
         }
     }
 
-    pub fn walk_local_namespaces(&self, cb: &mut FnMut(Anchored<&NamespaceBody>)) {
+    pub fn for_each_namespace(&self, cb: &mut FnMut(Anchored<&NamespaceBody>)) {
         for ns in &self.namespaces {
             cb(self.stack.push(ns).anchor(&ns.body));
         }
     }
 
-    pub fn walk_all_funs(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
-        self.walk_local_funs(&mut |f| {
-            f.walk_all_funs(cb);
+    pub fn for_each_fun_of_schema(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
+        self.for_each_fun(&mut |f| {
+            f.for_each_fun_of_schema(cb);
             cb(f);
         });
-        self.walk_local_namespaces(&mut |ns| ns.walk_all_funs(cb));
+        self.for_each_namespace(&mut |ns| ns.for_each_fun_of_schema(cb));
     }
 
-    pub fn walk_client_funs(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
-        self.walk_local_funs(cb);
-        self.walk_local_namespaces(&mut |ns| ns.walk_client_funs(cb));
+    pub fn for_each_fun_of_interface(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
+        self.for_each_fun(cb);
+        self.for_each_namespace(&mut |ns| ns.for_each_fun_of_interface(cb));
     }
 }
 
 impl<'a> Anchored<'a, &FunctionDecl> {
-    pub fn walk_all_funs(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
+    pub fn for_each_fun_of_schema(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
         if let Some(body) = self.body.as_ref() {
-            self.stack.push(self.inner).anchor(body).walk_all_funs(cb);
+            self.stack
+                .push(self.inner)
+                .anchor(body)
+                .for_each_fun_of_schema(cb);
         }
     }
 
