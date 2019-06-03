@@ -136,11 +136,10 @@ impl<'a> Atom<'a> {
                             .write("Ok")
                             .in_list(Brackets::Round, |l| {
                                 l.item(format!(
-                                    "{name}::{variant}(__DS::<{schema}::{module}::{name}>(de)?)",
-                                    schema = self.proto.body.stack.schema(),
+                                    "{name}::{variant}(__DS::<{module}::{name}>(de)?)",
                                     name = &self.name,
                                     variant = f.variant(),
-                                    module = f.module(),
+                                    module = f.module(&self.proto.body.stack),
                                 ));
                             })
                             .write(",")
@@ -176,10 +175,9 @@ impl<'a> Display for Atom<'a> {
             e.kw_pub();
             self.for_each_fun(&mut |f| {
                 e.variant(format!(
-                    "{variant}({schema}::{module}::{name})",
+                    "{variant}({module}::{name})",
                     variant = f.variant(),
-                    schema = self.proto.body.stack.schema(),
-                    module = f.module(),
+                    module = f.module(&self.proto.body.stack),
                     name = &self.name
                 ));
             });

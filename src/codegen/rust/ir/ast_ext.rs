@@ -29,16 +29,17 @@ impl<'a> RustStack for ast::Stack<'a> {
 }
 
 pub trait RustFn {
-    fn module(&self) -> String;
     fn qualified_name(&self) -> String;
     fn variant(&self) -> String;
+
+    fn module(&self, stack: &ast::Stack) -> String;
+    fn Params(&self, stack: &ast::Stack) -> String;
+    fn Results(&self, stack: &ast::Stack) -> String;
+    fn Client(&self, stack: &ast::Stack) -> String;
+    fn Handler(&self, stack: &ast::Stack) -> String;
 }
 
 impl<'a> RustFn for ast::Anchored<'a, &ast::FunctionDecl> {
-    fn module(&self) -> String {
-        self.names().join("::")
-    }
-
     fn variant(&self) -> String {
         self.names()
             .iter()
@@ -49,5 +50,26 @@ impl<'a> RustFn for ast::Anchored<'a, &ast::FunctionDecl> {
 
     fn qualified_name(&self) -> String {
         self.names().join("__")
+    }
+
+    fn module(&self, stack: &ast::Stack) -> String {
+        format!(
+            "{schema}::{path}",
+            schema = stack.schema(),
+            path = self.names().join("::")
+        )
+    }
+
+    fn Params(&self, stack: &ast::Stack) -> String {
+        format!("{module}::Params", module = self.module(stack))
+    }
+    fn Results(&self, stack: &ast::Stack) -> String {
+        format!("{module}::Results", module = self.module(stack))
+    }
+    fn Client(&self, stack: &ast::Stack) -> String {
+        format!("{module}::Client", module = self.module(stack))
+    }
+    fn Handler(&self, stack: &ast::Stack) -> String {
+        format!("{module}::Handler", module = self.module(stack))
     }
 }

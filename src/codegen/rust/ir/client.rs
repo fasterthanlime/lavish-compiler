@@ -33,7 +33,7 @@ impl<'a> Client<'a> {
                     .self_param("&self")
                     .param(format!(
                         "params: {Params}",
-                        Params = format!("{module}::Params", module = f.module()),
+                        Params = f.Params(&self.body.stack),
                     ))
                     .body(|s| {
                         s.line("// TODO");
