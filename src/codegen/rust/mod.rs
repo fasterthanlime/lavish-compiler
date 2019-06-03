@@ -85,6 +85,11 @@ impl Generator {
                 s.in_block(|s| {
                     s.write(Client {
                         body: body.clone(),
+                        side: ast::Side::Server,
+                    });
+
+                    s.write(Handler {
+                        body: body.clone(),
                         side: ast::Side::Client,
                     });
                 });
@@ -94,6 +99,11 @@ impl Generator {
                 write!(s, "pub mod server").unwrap();
                 s.in_block(|s| {
                     s.write(Client {
+                        body: body.clone(),
+                        side: ast::Side::Client,
+                    });
+
+                    s.write(Handler {
                         body: body.clone(),
                         side: ast::Side::Server,
                     });

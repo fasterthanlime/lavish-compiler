@@ -5,36 +5,12 @@ pub struct Handler<'a> {
     pub body: ast::Anchored<'a, &'a ast::NamespaceBody>,
 }
 
-impl<'a> Client<'a> {
+impl<'a> Handler<'a> {
     fn for_each_fun(&self, cb: &mut FnMut(ast::Anchored<&ast::FunctionDecl>)) {
-        self.body.walk_client_funs(cb);
-    }
-
-    fn for_each_handled_fun(&self, cb: &mut FnMut(ast::Anchored<&ast::FunctionDecl>)) {
-        self.for_each_fun(&mut |f| {
-            if f.side == self.side {
+        self.body
+            .for_each_fun_of_interface(&mut ast::filter_fun_side(self.side, |f| {
                 cb(f);
-            }
-        });
-    }
-
-    fn for_each_called_fun(&self, cb: &mut FnMut(ast::Anchored<&ast::FunctionDecl>)) {
-        self.for_each_fun(&mut |f| {
-            if f.side == self.side.other() {
-                cb(f);
-            }
-        });
-    }
-
-    fn define_client(&self, s: &mut Scope) {
-        s.write("pub struct Client");
-        s.in_block(|s| {
-            self.for_each_called_fun(&mut |f| {
-                writeln!(s, "{qfn}: (),", qfn = f.qualified_name()).unwrap();
-            });
-            s.line("// TODO");
-        });
-        s.lf();
+            }));
     }
 
     fn define_call(&self, s: &mut Scope) {
@@ -68,7 +44,7 @@ impl<'a> Client<'a> {
         s.write("pub struct Handler<T>");
         s.in_block(|s| {
             s.line("state: std::sync::Arc<T>,");
-            self.for_each_handled_fun(&mut |f| {
+            self.for_each_fun(&mut |f| {
                 writeln!(s, "on_{fqn}: Slot<T>,", fqn = f.qualified_name()).unwrap();
             });
         });
@@ -76,7 +52,7 @@ impl<'a> Client<'a> {
     }
 }
 
-impl<'a> Display for Client<'a> {
+impl<'a> Display for Handler<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
             self.define_call(s);

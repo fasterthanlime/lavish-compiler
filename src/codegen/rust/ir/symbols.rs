@@ -105,7 +105,12 @@ impl<'a> Display for Function<'a> {
                     }
 
                     s.write(super::client::Client {
-                        side: self.node.side,
+                        side: self.node.side.other(),
+                        body: stack.anchor(body),
+                    });
+
+                    s.write(super::handler::Handler {
+                        side: self.node.side.other(),
                         body: stack.anchor(body),
                     });
                 }

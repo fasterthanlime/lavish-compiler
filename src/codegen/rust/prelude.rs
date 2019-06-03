@@ -1,5 +1,29 @@
-pub(crate) use crate::codegen::prelude::*;
+pub(crate) use crate::codegen::{
+    prelude::*,
+    rust::ir::{common::*, lang::*, types::*},
+};
 
-pub(crate) use crate::codegen::rust::ir::common::*;
-pub(crate) use crate::codegen::rust::ir::lang::*;
-pub(crate) use crate::codegen::rust::ir::types::*;
+pub trait RustStack {
+    fn root(&self) -> String;
+    fn protocol(&self) -> String;
+    fn schema(&self) -> String;
+    fn RootClient(&self) -> String;
+}
+
+impl<'a> RustStack for ast::Stack<'a> {
+    fn root(&self) -> String {
+        "super::".repeat(self.frames.len() + 1)
+    }
+
+    fn protocol(&self) -> String {
+        format!("{}protocol", self.root())
+    }
+
+    fn schema(&self) -> String {
+        format!("{}schema", self.root())
+    }
+
+    fn RootClient(&self) -> String {
+        format!("{}::Client", self.protocol())
+    }
+}

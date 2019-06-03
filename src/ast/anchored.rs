@@ -33,9 +33,10 @@ impl Frame for NamespaceDecl {
 
 #[derive(Clone)]
 pub struct Stack<'a> {
-    frames: Vec<&'a Frame>,
+    pub(crate) frames: Vec<&'a Frame>,
 }
 
+#[allow(non_snake_case)]
 impl<'a> Stack<'a> {
     pub fn new() -> Self {
         Self { frames: Vec::new() }
@@ -61,24 +62,12 @@ impl<'a> Stack<'a> {
     pub fn trace(&self) -> String {
         self.names().join("::")
     }
-
-    pub fn root(&self) -> String {
-        "super::".repeat(self.frames.len() + 1)
-    }
-
-    pub fn protocol(&self) -> String {
-        format!("{}protocol", self.root())
-    }
-
-    pub fn schema(&self) -> String {
-        format!("{}schema", self.root())
-    }
 }
 
 #[derive(Clone)]
 pub struct Anchored<'a, T> {
-    pub inner: T,
-    pub stack: Stack<'a>,
+    pub(crate) inner: T,
+    pub(crate) stack: Stack<'a>,
 }
 
 impl<'a, T> std::ops::Deref for Anchored<'a, T> {

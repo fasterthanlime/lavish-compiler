@@ -9,27 +9,60 @@ impl<'a> Display for Protocol<'a> {
         Scope::fmt(f, |s| {
             s.write("pub mod protocol");
             s.in_block(|s| {
-                for a in &[
-                    Atom {
-                        proto: &self,
-                        kind: ast::Kind::Request,
-                        name: "Params",
-                    },
-                    Atom {
-                        proto: &self,
-                        kind: ast::Kind::Request,
-                        name: "Results",
-                    },
-                    Atom {
-                        proto: &self,
-                        kind: ast::Kind::Notification,
-                        name: "NotificationParams",
-                    },
-                ] {
-                    s.write(a).lf();
-                }
+                self.write_atoms(s);
+                self.write_specializations(s);
             });
         })
+    }
+}
+
+impl<'a> Protocol<'a> {
+    fn write_atoms(&self, s: &mut Scope) {
+        for a in &[
+            Atom {
+                proto: &self,
+                kind: ast::Kind::Request,
+                name: "Params",
+            },
+            Atom {
+                proto: &self,
+                kind: ast::Kind::Request,
+                name: "Results",
+            },
+            Atom {
+                proto: &self,
+                kind: ast::Kind::Notification,
+                name: "NotificationParams",
+            },
+        ] {
+            s.write(a).lf();
+        }
+    }
+
+    fn write_specializations(&self, s: &mut Scope) {
+        let triplet = {
+            let protocol = self.body.stack.protocol();
+            format!(
+                "{P}, {NP}, {R}",
+                P = format!("{}::Params", protocol),
+                NP = format!("{}::NotificationParams", protocol),
+                R = format!("{}::Results", protocol)
+            )
+        };
+
+        let mut specialize = |name: &str| {
+            writeln!(
+                s,
+                "pub type {name} = {lavish}::{name}<{triplet}>;",
+                lavish = Mods::lavish(),
+                triplet = triplet,
+                name = name,
+            )
+            .unwrap()
+        };
+
+        specialize("Client");
+        specialize("Handler");
     }
 }
 
