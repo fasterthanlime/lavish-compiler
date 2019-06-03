@@ -18,33 +18,43 @@ impl<'a> fmt::Display for RustType<'a> {
         use ast::{BaseType, TypeKind};
 
         match &self.0.kind {
-            TypeKind::Base(base) => {
-                let name = match base {
-                    BaseType::Bool => "bool",
-                    BaseType::Int32 => "i32",
-                    BaseType::Int64 => "i64",
-                    BaseType::UInt32 => "u32",
-                    BaseType::UInt64 => "u64",
-                    BaseType::Float32 => "f32",
-                    BaseType::Float64 => "f64",
-                    BaseType::String => "String",
-                    BaseType::Bytes => "Vec<u8>",
-                    BaseType::Timestamp => "::lavish_rpc::DateTime",
-                };
-                write!(f, "{}", name)
-            }
+            TypeKind::Base(base) => base.write_rust_type(f),
             TypeKind::Map(map) => write!(
                 f,
-                "::std::collections::HashMap<{}, {}>",
-                map.keys.as_rust(&self.0.stack),
-                map.values.as_rust(&self.0.stack)
+                "{collections}::HashMap<{K}, {V}>",
+                collections = Mods::collections(),
+                K = map.keys.as_rust(&self.0.stack),
+                V = map.values.as_rust(&self.0.stack)
             ),
-            TypeKind::Option(opt) => write!(f, "Option<{}>", opt.inner.as_rust(&self.0.stack)),
-            TypeKind::Array(arr) => write!(f, "Vec<{}>", arr.inner.as_rust(&self.0.stack)),
+            TypeKind::Option(opt) => write!(f, "Option<{T}>", T = opt.inner.as_rust(&self.0.stack)),
+            TypeKind::Array(arr) => write!(f, "Vec<{T}>", T = arr.inner.as_rust(&self.0.stack)),
             TypeKind::User => {
-                // TODO: actually resolve those
+                // TODO: actually resolve those, using our stack
                 write!(f, "super::{}", self.0.text())
             }
+        }
+    }
+}
+
+trait RustBaseType {
+    fn write_rust_type(&self, f: &mut fmt::Formatter) -> fmt::Result;
+}
+
+impl RustBaseType for ast::BaseType {
+    fn write_rust_type(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use ast::BaseType as T;
+
+        match self {
+            T::Bool => write!(f, "bool"),
+            T::Int32 => write!(f, "i32"),
+            T::Int64 => write!(f, "i64"),
+            T::UInt32 => write!(f, "u32"),
+            T::UInt64 => write!(f, "u64"),
+            T::Float32 => write!(f, "f32"),
+            T::Float64 => write!(f, "f64"),
+            T::String => write!(f, "String"),
+            T::Bytes => write!(f, "Vec<u8>"),
+            T::Timestamp => write!(f, "{chrono}::DateTime", chrono = Mods::chrono()),
         }
     }
 }

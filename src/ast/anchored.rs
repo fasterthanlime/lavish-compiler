@@ -147,30 +147,14 @@ impl<'a> Anchored<'a, &FunctionDecl> {
         }
     }
 
-    fn names(&self) -> Vec<String> {
+    pub fn names(&self) -> Vec<String> {
         let mut names = self.stack.names();
         names.push(self.name().into());
         names
     }
 
-    pub fn variant(&self) -> String {
-        self.names()
-            .iter()
-            .map(|x| x.to_camel_case())
-            .collect::<Vec<_>>()
-            .join("_")
-    }
-
-    pub fn module(&self) -> String {
-        self.names().join("::")
-    }
-
     pub fn method(&self) -> String {
         self.names().join(".")
-    }
-
-    pub fn qualified_name(&self) -> String {
-        self.names().join("__")
     }
 
     pub fn name(&self) -> &str {
