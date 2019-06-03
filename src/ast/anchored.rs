@@ -163,3 +163,15 @@ impl<'a> Anchored<'a, &FunctionDecl> {
         self.inner.name.text.as_ref()
     }
 }
+
+impl<'a> Anchored<'a, &StructDecl> {
+    pub fn name(&self) -> &str {
+        self.inner.name.text.as_ref()
+    }
+}
+
+impl<'a> Anchored<'a, &Field> {
+    pub fn name(&self) -> &str {
+        self.inner.name.text.as_ref()
+    }
+}

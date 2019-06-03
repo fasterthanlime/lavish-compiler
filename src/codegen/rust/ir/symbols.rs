@@ -1,6 +1,4 @@
-use crate::ast;
-use crate::codegen::output::*;
-use std::fmt::{self, Display, Write};
+use crate::codegen::rust::prelude::*;
 
 pub struct Symbols<'a> {
     body: ast::Anchored<'a, &'a ast::NamespaceBody>,
@@ -16,16 +14,90 @@ impl<'a> Display for Symbols<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
             let body = &self.body;
+            let stack = &body.stack;
 
-            s.line(format!("// trace = {}", body.stack.trace()));
+            for node in &body.structs {
+                s.write(Struct::new(stack.anchor(node)));
+            }
+            for node in &body.functions {
+                s.write(Function::new(stack.anchor(node)));
+            }
 
             for ns in &body.inner.namespaces {
-                let stack = body.stack.push(ns);
                 write!(s, "pub mod {}", ns.name.text).unwrap();
                 s.in_block(|s| {
-                    s.write(Symbols::new(stack.anchor(&ns.body)));
+                    s.write(Symbols::new(stack.push(ns).anchor(&ns.body)));
                 });
             }
+        })
+    }
+}
+
+pub struct Struct<'a> {
+    node: ast::Anchored<'a, &'a ast::StructDecl>,
+}
+
+impl<'a> Struct<'a> {
+    fn new(node: ast::Anchored<'a, &'a ast::StructDecl>) -> Self {
+        Self { node }
+    }
+}
+
+impl<'a> Display for Struct<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Scope::fmt(f, |s| {
+            s.write("pub struct ").write(self.node.name());
+            s.in_block(|s| {
+                for f in &self.node.fields {
+                    s.write(Field::new(self.node.stack.anchor(f)))
+                        .write(",")
+                        .lf();
+                }
+            });
+        })
+    }
+}
+
+pub struct Function<'a> {
+    node: ast::Anchored<'a, &'a ast::FunctionDecl>,
+}
+
+impl<'a> Function<'a> {
+    fn new(node: ast::Anchored<'a, &'a ast::FunctionDecl>) -> Self {
+        Self { node }
+    }
+}
+
+impl<'a> Display for Function<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Scope::fmt(f, |s| {
+            s.write("pub mod ").write(self.node.name());
+            s.in_block(|s| {
+                s.line("// function stuff goes here");
+            });
+        })
+    }
+}
+
+pub struct Field<'a> {
+    node: ast::Anchored<'a, &'a ast::Field>,
+}
+impl<'a> Field<'a> {
+    fn new(node: ast::Anchored<'a, &'a ast::Field>) -> Self {
+        Self { node }
+    }
+}
+
+impl<'a> Display for Field<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Scope::fmt(f, |s| {
+            write!(
+                s,
+                "{name}: {typ}",
+                name = self.node.name(),
+                typ = self.node.typ.as_rust(&self.node.stack)
+            )
+            .unwrap();
         })
     }
 }
