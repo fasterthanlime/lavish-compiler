@@ -110,7 +110,7 @@ impl Generator {
         self.write_prelude(&mut s);
 
         let schema = member.schema.as_ref().expect("schema to be parsed");
-        let stack = Stack::new();
+        let stack = ast::Stack::new();
         let body = stack.anchor(&schema.body);
 
         {

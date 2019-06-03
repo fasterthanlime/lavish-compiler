@@ -5,15 +5,15 @@ use std::fmt::{self, Display, Write};
 
 pub struct Client<'a> {
     pub side: ast::Side,
-    pub body: Anchored<'a, &'a ast::NamespaceBody>,
+    pub body: ast::Anchored<'a, &'a ast::NamespaceBody>,
 }
 
 impl<'a> Client<'a> {
-    fn for_each_fun(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+    fn for_each_fun(&self, cb: &mut FnMut(ast::Anchored<&ast::FunctionDecl>)) {
         self.body.walk_client_funs(cb);
     }
 
-    fn for_each_handled_fun(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+    fn for_each_handled_fun(&self, cb: &mut FnMut(ast::Anchored<&ast::FunctionDecl>)) {
         self.for_each_fun(&mut |f| {
             if f.side == self.side {
                 cb(f);
@@ -21,7 +21,7 @@ impl<'a> Client<'a> {
         });
     }
 
-    fn for_each_called_fun(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+    fn for_each_called_fun(&self, cb: &mut FnMut(ast::Anchored<&ast::FunctionDecl>)) {
         self.for_each_fun(&mut |f| {
             if f.side == self.side.other() {
                 cb(f);

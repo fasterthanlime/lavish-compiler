@@ -4,7 +4,7 @@ use crate::codegen::output::*;
 use std::fmt::{self, Display, Write};
 
 pub struct Protocol<'a> {
-    pub body: Anchored<'a, &'a ast::NamespaceBody>,
+    pub body: ast::Anchored<'a, &'a ast::NamespaceBody>,
 }
 
 impl<'a> Display for Protocol<'a> {
@@ -43,7 +43,7 @@ pub struct Atom<'a> {
 }
 
 impl<'a> Atom<'a> {
-    fn for_each_fun(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+    fn for_each_fun(&self, cb: &mut FnMut(ast::Anchored<&ast::FunctionDecl>)) {
         let kind = self.kind;
         self.proto.body.walk_all_funs(&mut |f| {
             if f.kind == kind {
