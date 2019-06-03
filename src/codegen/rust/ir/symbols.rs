@@ -46,6 +46,7 @@ impl<'a> Struct<'a> {
 impl<'a> Display for Struct<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
+            s.write(derive().debug().serialize().deserialize());
             s.write("pub struct ").write(self.node.name());
             s.in_block(|s| {
                 for f in &self.node.fields {
@@ -73,7 +74,27 @@ impl<'a> Display for Function<'a> {
         Scope::fmt(f, |s| {
             s.write("pub mod ").write(self.node.name());
             s.in_block(|s| {
-                s.line("// function stuff goes here");
+                s.write(derive().debug().serialize().deserialize());
+                s.write("pub struct Params");
+                s.in_block(|s| {
+                    for f in &self.node.params {
+                        s.write(Field::new(self.node.stack.anchor(f)))
+                            .write(",")
+                            .lf();
+                    }
+                });
+
+                s.lf();
+
+                s.write(derive().debug().serialize().deserialize());
+                s.write("pub struct Results");
+                s.in_block(|s| {
+                    for f in &self.node.results {
+                        s.write(Field::new(self.node.stack.anchor(f)))
+                            .write(",")
+                            .lf();
+                    }
+                });
             });
         })
     }
