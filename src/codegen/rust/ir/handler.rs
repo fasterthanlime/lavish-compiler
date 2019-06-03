@@ -45,7 +45,19 @@ impl<'a> Handler<'a> {
         s.in_block(|s| {
             s.line("state: std::sync::Arc<T>,");
             self.for_each_fun(&mut |f| {
-                writeln!(s, "on_{fqn}: Slot<T>,", fqn = f.qualified_name()).unwrap();
+                writeln!(s, "on_{qfn}: Slot<T>,", qfn = f.qualified_name()).unwrap();
+            });
+        });
+        s.lf();
+
+        s.write("impl<T> Handler<T>");
+        s.in_block(|s| {
+            self.for_each_fun(&mut |f| {
+                let qfn = f.qualified_name();
+
+                _fn(format!("on_{qfn}", qfn = qfn)).kw_pub().type_param("F", Some("Fn(Call)")).self_param("&mut self").param("f: F").body(|s| {
+                    writeln!(s, "self.on_{qfn} = f.into();", qfn = qfn).unwrap();
+                }).write_to(s);
             });
         });
         s.lf();

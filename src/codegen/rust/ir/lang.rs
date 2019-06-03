@@ -126,7 +126,17 @@ impl<'a> Display for _Fn<'a> {
                 s.write(" -> ").write(ret);
             }
 
-            // TODO: write where clauses
+            if self.type_params.iter().any(|tp| tp.constraint.is_some()) {
+                s.lf();
+                s.write("where").lf();
+                s.in_block(|s| {
+                    s.line("// TODO:");
+                    // for tp in self.type_params {
+
+                    // }
+                });
+            }
+
             if let Some(body) = self.body.as_ref() {
                 s.in_block(|s| {
                     body(s);
