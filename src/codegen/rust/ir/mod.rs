@@ -238,52 +238,49 @@ impl<'a> Stru<'a> {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
-pub enum FrameKind {
-    Namespace,
-    Function,
+pub trait Frame {
+    fn name(&self) -> String;
+    fn kind<'a>(&'a self) -> FrameKind<'a>;
 }
 
-#[derive(Clone)]
-pub struct Frame {
-    name: String,
-    kind: FrameKind,
+pub enum FrameKind<'a> {
+    Namespace(&'a ast::NamespaceDecl),
+    Function(&'a ast::FunctionDecl),
 }
 
-impl From<&ast::FunctionDecl> for Frame {
-    fn from(fd: &ast::FunctionDecl) -> Frame {
-        Frame {
-            name: fd.name.text.clone(),
-            kind: FrameKind::Function,
-        }
+impl Frame for ast::FunctionDecl {
+    fn name(&self) -> String {
+        self.name.text.clone()
+    }
+
+    fn kind<'a>(&'a self) -> FrameKind<'a> {
+        FrameKind::Function(self)
     }
 }
 
-impl From<&ast::NamespaceDecl> for Frame {
-    fn from(nd: &ast::NamespaceDecl) -> Frame {
-        Frame {
-            name: nd.name.text.clone(),
-            kind: FrameKind::Namespace,
-        }
+impl Frame for ast::NamespaceDecl {
+    fn name(&self) -> String {
+        self.name.text.clone()
+    }
+
+    fn kind<'a>(&'a self) -> FrameKind<'a> {
+        FrameKind::Namespace(self)
     }
 }
 
 #[derive(Clone)]
-pub struct Stack {
-    frames: Vec<Frame>,
+pub struct Stack<'a> {
+    frames: Vec<&'a Frame>,
 }
 
-impl Stack {
+impl<'a> Stack<'a> {
     pub fn new() -> Self {
         Self { frames: Vec::new() }
     }
 
-    pub fn push<F>(&self, frame: F) -> Self
-    where
-        F: Into<Frame>,
-    {
+    pub fn push(&self, frame: &'a Frame) -> Self {
         let mut frames = self.frames.clone();
-        frames.push(frame.into());
+        frames.push(frame);
         Self { frames }
     }
 
@@ -295,7 +292,7 @@ impl Stack {
     }
 
     pub fn names(&self) -> Vec<String> {
-        self.frames.iter().map(|x| x.name.clone()).collect()
+        self.frames.iter().map(|x| x.name()).collect()
     }
 
     pub fn trace(&self) -> String {
@@ -316,12 +313,12 @@ impl Stack {
 }
 
 #[derive(Clone)]
-pub struct Anchored<T> {
+pub struct Anchored<'a, T> {
     inner: T,
-    stack: Stack,
+    stack: Stack<'a>,
 }
 
-impl<T> std::ops::Deref for Anchored<T> {
+impl<'a, T> std::ops::Deref for Anchored<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -329,7 +326,7 @@ impl<T> std::ops::Deref for Anchored<T> {
     }
 }
 
-impl<T> Anchored<T> {
+impl<'a, T> Anchored<'a, T> {
     pub fn inner(&self) -> &T {
         &self.inner
     }
@@ -339,47 +336,34 @@ impl<T> Anchored<T> {
     }
 }
 
-impl Anchored<&ast::NamespaceBody> {
-    pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
-        Box::new(self.functions.iter().map(move |f| self.stack.anchor(f)))
-    }
-
-    pub fn local_namespaces(&self) -> Box<dyn Iterator<Item = Anchored<&ast::NamespaceBody>> + '_> {
-        Box::new(
-            self.namespaces
-                .iter()
-                .map(move |ns| self.stack.push(ns).anchor(&ns.body)),
-        )
-    }
-
-    pub fn walk_all_funs(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
-        self.local_funs().for_each(|f| {
-            cb(f.clone());
-            f.walk_all_funs(cb);
-        });
-        self.local_namespaces().for_each(|ns| ns.walk_all_funs(cb));
-    }
-
-    pub fn walk_client_funs(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
-        self.local_funs().for_each(|f| cb(f));
-        self.local_namespaces()
-            .for_each(|ns| ns.walk_client_funs(cb));
-    }
-}
-
-impl Anchored<&ast::FunctionDecl> {
-    pub fn local_funs(&self) -> Box<dyn Iterator<Item = Anchored<&ast::FunctionDecl>> + '_> {
-        if let Some(body) = self.body.as_ref() {
-            Box::new(
-                body.functions
-                    .iter()
-                    .map(move |f| self.stack.push(self.inner).anchor(f)),
-            )
-        } else {
-            Box::new(std::iter::empty())
+impl<'a> Anchored<'a, &ast::NamespaceBody> {
+    pub fn walk_local_funs(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+        for f in &self.functions {
+            cb(self.stack.anchor(f));
         }
     }
 
+    pub fn walk_local_namespaces(&self, cb: &mut FnMut(Anchored<&ast::NamespaceBody>)) {
+        for ns in &self.namespaces {
+            cb(self.stack.push(ns).anchor(&ns.body));
+        }
+    }
+
+    pub fn walk_all_funs(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+        self.walk_local_funs(&mut |f| {
+            f.walk_all_funs(cb);
+            cb(f);
+        });
+        self.walk_local_namespaces(&mut |ns| ns.walk_all_funs(cb));
+    }
+
+    pub fn walk_client_funs(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
+        self.walk_local_funs(cb);
+        self.walk_local_namespaces(&mut |ns| ns.walk_client_funs(cb));
+    }
+}
+
+impl<'a> Anchored<'a, &ast::FunctionDecl> {
     pub fn walk_all_funs(&self, cb: &mut FnMut(Anchored<&ast::FunctionDecl>)) {
         if let Some(body) = self.body.as_ref() {
             self.stack.push(self.inner).anchor(body).walk_all_funs(cb);

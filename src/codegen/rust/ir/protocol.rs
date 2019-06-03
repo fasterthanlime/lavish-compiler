@@ -4,7 +4,7 @@ use crate::codegen::output::*;
 use std::fmt::{self, Display, Write};
 
 pub struct Protocol<'a> {
-    pub body: Anchored<&'a ast::NamespaceBody>,
+    pub body: Anchored<'a, &'a ast::NamespaceBody>,
 }
 
 impl<'a> Display for Protocol<'a> {

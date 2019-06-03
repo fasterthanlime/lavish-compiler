@@ -5,7 +5,7 @@ use std::fmt::{self, Display, Write};
 
 pub struct Client<'a> {
     pub side: ast::Side,
-    pub body: Anchored<&'a ast::NamespaceBody>,
+    pub body: Anchored<'a, &'a ast::NamespaceBody>,
 }
 
 impl<'a> Client<'a> {

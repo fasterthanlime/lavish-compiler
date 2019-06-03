@@ -4,11 +4,11 @@ use crate::codegen::output::*;
 use std::fmt::{self, Display, Write};
 
 pub struct Symbols<'a> {
-    body: Anchored<&'a ast::NamespaceBody>,
+    body: Anchored<'a, &'a ast::NamespaceBody>,
 }
 
 impl<'a> Symbols<'a> {
-    pub fn new(body: Anchored<&'a ast::NamespaceBody>) -> Self {
+    pub fn new(body: Anchored<'a, &'a ast::NamespaceBody>) -> Self {
         Self { body }
     }
 }
