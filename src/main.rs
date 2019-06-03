@@ -8,7 +8,6 @@ mod ast;
 mod checker;
 mod codegen;
 mod parser;
-mod printer;
 
 const VERSION: &str = "0.2.0";
 
@@ -47,7 +46,7 @@ fn main() {
             let schema_path = Path::new(cmd.value_of("schema").unwrap());
             let source = parser::Source::from_path(&schema_path).unwrap();
             let schema = parser::parse_schema(source).unwrap();
-            printer::print(&schema);
+            checker::print(&schema);
         }
         _ => {
             println!("{}", matches.usage());

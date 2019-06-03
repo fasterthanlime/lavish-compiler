@@ -1,5 +1,5 @@
-use super::ast;
-use super::parser;
+use crate::ast;
+use crate::parser;
 use colored::*;
 
 struct Visitor {
