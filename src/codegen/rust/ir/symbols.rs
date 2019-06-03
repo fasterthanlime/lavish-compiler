@@ -95,6 +95,20 @@ impl<'a> Display for Function<'a> {
                             .lf();
                     }
                 });
+
+                if let Some(body) = self.node.body.as_ref() {
+                    s.lf();
+                    let stack = self.node.stack.push(self.node.inner);
+
+                    for node in &body.functions {
+                        s.write(Function::new(stack.anchor(node)));
+                    }
+
+                    s.write(super::client::Client {
+                        side: self.node.side,
+                        body: stack.anchor(body),
+                    });
+                }
             });
         })
     }
