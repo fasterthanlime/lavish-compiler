@@ -31,7 +31,7 @@ impl<'a> Handler<'a> {
             .type_param("T", None)
             .type_param("P", None)
             .body(|s| {
-                _fn("downgrade")
+                _fn("downcast")
                     .self_param("self")
                     .type_param("PP", None)
                     .type_param("F", Some(format!("Fn(P) -> Option<PP>")))
@@ -193,7 +193,7 @@ impl<'a> Handler<'a> {
         s.in_scope(|s| {
             write!(s, "|call|").unwrap();
             s.in_block(|s| {
-                write!(s, "let call = call.downgrade(|p| match p").unwrap();
+                write!(s, "let call = call.downcast(|p| match p").unwrap();
                 s.in_terminated_block(")?;", |s| {
                     writeln!(
                         s,
