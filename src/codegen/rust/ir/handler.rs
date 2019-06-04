@@ -122,6 +122,7 @@ impl<'a> Handler<'a> {
     }
 
     fn write_handle_body(&self, s: &mut Scope) {
+        writeln!(s, "use {Atom};", Atom = Traits::Atom()).unwrap();
         s.write("let call = Call");
         s.in_terminated_block(";", |s| {
             writeln!(s, "state: self.state.clone(),").unwrap();
@@ -130,7 +131,7 @@ impl<'a> Handler<'a> {
         });
         s.write("match params");
         let match_end = format!(
-            ".unwrap_or_else(|| {Error}::UnimplementedMethod)(call)",
+            ".ok_or_else(|| {Error}::MethodUnimplemented(params.method()))?(call)",
             Error = Structs::Error(),
         );
         s.in_terminated_block(match_end, |s| {
