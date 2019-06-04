@@ -31,8 +31,7 @@ impl<'a> Handler<'a> {
         ))
         .lf();
 
-        writeln!(s, 
-            "pub type SlotFn<T> = Fn({Arc}<T>, Client, {protocol}::Params) -> SlotReturn + 'static + Send + Sync;",
+        writeln!(s, "pub type SlotFn<T> = Fn({Arc}<T>, Client, {protocol}::Params) -> SlotReturn + 'static + Send + Sync;",
             Arc = Structs::Arc(),
             protocol = self.body.stack.protocol(),
         ).unwrap();
@@ -55,12 +54,62 @@ impl<'a> Handler<'a> {
             self.for_each_fun(&mut |f| {
                 let qfn = f.qualified_name();
 
-                _fn(format!("on_{qfn}", qfn = qfn)).kw_pub().type_param("F", Some("Fn(Call)")).self_param("&mut self").param("f: F").body(|s| {
-                    writeln!(s, "self.on_{qfn} = f.into();", qfn = qfn).unwrap();
-                }).write_to(s);
+                _fn(format!("on_{qfn}", qfn = qfn))
+                    .kw_pub()
+                    .type_param(
+                        "F",
+                        Some(format!(
+                            "Fn(Call<T, {PP}>) -> Result<{RR}, {Error}> + Send + Sync + 'static",
+                            PP = f.Params(&self.body.stack),
+                            RR = f.Results(&self.body.stack),
+                            Error = Structs::Error(),
+                        )),
+                    )
+                    .self_param("&mut self")
+                    .param("f: F")
+                    .body(|s| {
+                        self.write_on_body(s, &f);
+                    })
+                    .write_to(s);
             });
         });
         s.lf();
+    }
+
+    fn write_on_body(&self, s: &mut Scope, f: &ast::Anchored<&ast::FunctionDecl>) {
+        let qfn = f.qualified_name();
+
+        writeln!(s, "self.on_{qfn} = Some(Box::new(", qfn = qfn).unwrap();
+        s.in_scope(|s| {
+            write!(s, "|state, client, params|").unwrap();
+            s.in_block(|s| {
+                write!(s, "let params = match params").unwrap();
+                s.in_terminated_block(";", |s| {
+                    writeln!(
+                        s,
+                        "{protocol}::Params::{variant}(p) => p,",
+                        protocol = self.body.stack.protocol(),
+                        variant = f.variant()
+                    )
+                    .unwrap();
+                    writeln!(
+                        s,
+                        "_ => return Err({Error}::WrongParams),",
+                        Error = Structs::Error()
+                    )
+                    .unwrap();
+                });
+                writeln!(s, "let call = Call {{ state, client, params }};").unwrap();
+                writeln!(
+                    s,
+                    "f(call).map({protocol}::Results::{variant})",
+                    protocol = self.body.stack.protocol(),
+                    variant = f.variant()
+                )
+                .unwrap();
+            });
+        });
+        writeln!(s, "));").unwrap();
     }
 }
 

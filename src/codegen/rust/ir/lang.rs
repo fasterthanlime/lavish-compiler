@@ -78,13 +78,14 @@ impl<'a> _Fn<'a> {
         self
     }
 
-    pub fn type_param<N>(mut self, name: N, constraint: Option<&str>) -> Self
+    pub fn type_param<N, M>(mut self, name: N, bound: Option<M>) -> Self
     where
         N: Into<String>,
+        M: Into<String>,
     {
         self.type_params.push(TypeParam {
             name: name.into(),
-            constraint: constraint.map(|x| x.into()),
+            bound: bound.map(|x| x.into()),
         });
         self
     }
@@ -126,14 +127,15 @@ impl<'a> Display for _Fn<'a> {
                 s.write(" -> ").write(ret);
             }
 
-            if self.type_params.iter().any(|tp| tp.constraint.is_some()) {
+            if self.type_params.iter().any(|tp| tp.bound.is_some()) {
                 s.lf();
                 s.write("where").lf();
-                s.in_block(|s| {
-                    s.line("// TODO:");
-                    // for tp in self.type_params {
-
-                    // }
+                s.in_scope(|s| {
+                    for tp in &self.type_params {
+                        if let Some(bound) = tp.bound.as_ref() {
+                            writeln!(s, "{name}: {bound},", name = tp.name, bound = bound).unwrap();
+                        }
+                    }
                 });
             }
 
@@ -171,10 +173,10 @@ pub struct _Impl<'a> {
 }
 
 impl<'a> _Impl<'a> {
-    pub fn type_param(mut self, name: &str, constraint: Option<&str>) -> Self {
+    pub fn type_param(mut self, name: &str, bound: Option<&str>) -> Self {
         self.type_params.push(TypeParam {
             name: name.into(),
-            constraint: constraint.map(|x| x.into()),
+            bound: bound.map(|x| x.into()),
         });
         self
     }
@@ -225,12 +227,10 @@ impl<'a> Display for _Impl<'a> {
             s.in_list(Brackets::Angle, |l| {
                 l.omit_empty();
                 for tp in &self.type_params {
-                    match tp.constraint.as_ref() {
-                        Some(constraint) => l.item(format!(
-                            "{name}: {constraint}",
-                            name = tp.name,
-                            constraint = constraint
-                        )),
+                    match tp.bound.as_ref() {
+                        Some(bound) => {
+                            l.item(format!("{name}: {bound}", name = tp.name, bound = bound))
+                        }
                         None => l.item(&tp.name),
                     };
                 }
@@ -248,7 +248,7 @@ impl<'a> Display for _Impl<'a> {
 #[derive(Clone)]
 pub struct TypeParam {
     name: String,
-    constraint: Option<String>,
+    bound: Option<String>,
 }
 
 pub fn quoted<D>(d: D) -> String

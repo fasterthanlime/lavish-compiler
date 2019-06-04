@@ -98,12 +98,20 @@ impl<'a> Scope<'a> {
     where
         F: Fn(&mut Scope),
     {
+        self.in_terminated_block("", f);
+    }
+
+    pub fn in_terminated_block<F, D>(&mut self, terminator: D, f: F)
+    where
+        F: Fn(&mut Scope),
+        D: Display,
+    {
         self.line(" {");
         {
             let mut s = self.scope();
             f(&mut s);
         }
-        self.line("}");
+        self.write("}").write(terminator).lf();
     }
 
     pub fn fmt<F>(writer: &'a mut fmt::Write, f: F) -> std::fmt::Result
