@@ -181,16 +181,6 @@ impl<'a> _Impl<'a> {
         self
     }
 
-    pub fn type_params<P>(mut self, params: P) -> Self
-    where
-        P: AsRef<[TypeParam]>,
-    {
-        for param in params.as_ref() {
-            self.type_params.push(param.clone());
-        }
-        self
-    }
-
     pub fn body<F>(mut self, f: F) -> Self
     where
         F: Fn(&mut Scope) + 'a,
@@ -242,14 +232,21 @@ impl<'a> Display for _Impl<'a> {
             s.in_list(Brackets::Angle, |l| {
                 l.omit_empty();
                 for tp in &self.type_params {
-                    match tp.bound.as_ref() {
-                        Some(bound) => {
-                            l.item(format!("{name}: {bound}", name = tp.name, bound = bound))
-                        }
-                        None => l.item(&tp.name),
-                    };
+                    l.item(&tp.name);
                 }
             });
+
+            if self.type_params.iter().any(|tp| tp.bound.is_some()) {
+                s.lf();
+                s.write("where").lf();
+                s.in_scope(|s| {
+                    for tp in &self.type_params {
+                        if let Some(bound) = tp.bound.as_ref() {
+                            writeln!(s, "{name}: {bound},", name = tp.name, bound = bound).unwrap();
+                        }
+                    }
+                });
+            }
 
             s.in_block(|s| {
                 if let Some(body) = self.body.as_ref() {

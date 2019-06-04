@@ -56,6 +56,65 @@ impl<'a> Handler<'a> {
                 self.write_setters(s);
             })
             .write_to(s);
+
+        _impl_trait(
+            format!(
+                "{lavish}::Handler<{triplet}>",
+                lavish = Mods::lavish(),
+                triplet = self.body.stack.triplet()
+            ),
+            "Handler",
+        )
+        .type_param("T", Some("Send + Sync"))
+        .body(|s| {
+            _fn("handle")
+                .self_param("&self")
+                .param(format!(
+                    "root: {RootClient}, params: {P}",
+                    RootClient = self.body.stack.RootClient(),
+                    P = self.body.stack.Params(),
+                ))
+                .returns(format!(
+                    "Result<{R}, {Error}>",
+                    R = self.body.stack.Results(),
+                    Error = Structs::Error()
+                ))
+                .body(|s| {
+                    self.write_handle_body(s);
+                })
+                .write_to(s);
+        })
+        .write_to(s);
+    }
+
+    fn write_handle_body(&self, s: &mut Scope) {
+        writeln!(
+            s,
+            "let call = Call {{ state: self.state.clone(), client: {Client} {{ root }}, params }};",
+            Client = format!(
+                "super::{other_side}::Client",
+                other_side = self.side.other()
+            ),
+        )
+        .unwrap();
+        s.write("match params");
+        let match_end = format!(
+            ".unwrap_or_else(|| {Error}::UnimplementedMethod)(call)",
+            Error = Structs::Error(),
+        );
+        s.in_terminated_block(match_end, |s| {
+            self.for_each_fun(&mut |f| {
+                writeln!(
+                    s,
+                    "{Params}::{variant}(p) => self.{slot},",
+                    Params = self.body.stack.Params(),
+                    variant = f.variant(),
+                    slot = f.slot(),
+                )
+                .unwrap();
+            });
+            writeln!(s, "_ => None,").unwrap();
+        });
     }
 
     fn write_constructor(&self, s: &mut Scope) {

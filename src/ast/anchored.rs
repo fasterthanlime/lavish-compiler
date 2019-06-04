@@ -57,10 +57,6 @@ impl<'a> Stack<'a> {
     pub fn names(&self) -> Vec<String> {
         self.frames.iter().map(|x| x.name()).collect()
     }
-
-    pub fn trace(&self) -> String {
-        self.names().join("::")
-    }
 }
 
 #[derive(Clone)]
@@ -74,16 +70,6 @@ impl<'a, T> std::ops::Deref for Anchored<'a, T> {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
-    }
-}
-
-impl<'a, T> Anchored<'a, T> {
-    pub fn inner(&self) -> &T {
-        &self.inner
-    }
-
-    pub fn stack(&self) -> &Stack {
-        &self.stack
     }
 }
 

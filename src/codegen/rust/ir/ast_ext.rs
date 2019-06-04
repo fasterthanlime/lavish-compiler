@@ -8,6 +8,11 @@ pub trait RustStack {
     fn protocol(&self) -> String;
     fn schema(&self) -> String;
     fn RootClient(&self) -> String;
+    fn SideClient(&self, side: ast::Side) -> String;
+    fn Params(&self) -> String;
+    fn NotificationParams(&self) -> String;
+    fn Results(&self) -> String;
+    fn triplet(&self) -> String;
 }
 
 impl<'a> RustStack for ast::Stack<'a> {
@@ -25,6 +30,31 @@ impl<'a> RustStack for ast::Stack<'a> {
 
     fn RootClient(&self) -> String {
         format!("{}::Client", self.protocol())
+    }
+
+    fn SideClient(&self, side: ast::Side) -> String {
+        format!("super::{}::Client", side)
+    }
+
+    fn Params(&self) -> String {
+        format!("{}::Params", self.protocol())
+    }
+
+    fn NotificationParams(&self) -> String {
+        format!("{}::NotificationParams", self.protocol())
+    }
+
+    fn Results(&self) -> String {
+        format!("{}::Results", self.protocol())
+    }
+
+    fn triplet(&self) -> String {
+        format!(
+            "{P}, {NP}, {R}",
+            P = self.Params(),
+            NP = self.NotificationParams(),
+            R = self.Results(),
+        )
     }
 }
 

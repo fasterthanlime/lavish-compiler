@@ -1,5 +1,4 @@
 use crate::ast;
-use crate::codegen::Result;
 use std::fmt::{self, Display, Write};
 use std::io::{self, BufWriter};
 

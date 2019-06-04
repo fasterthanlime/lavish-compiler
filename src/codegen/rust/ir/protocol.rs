@@ -40,22 +40,12 @@ impl<'a> Protocol<'a> {
     }
 
     fn write_specializations(&self, s: &mut Scope) {
-        let triplet = {
-            let protocol = self.body.stack.protocol();
-            format!(
-                "{P}, {NP}, {R}",
-                P = format!("{}::Params", protocol),
-                NP = format!("{}::NotificationParams", protocol),
-                R = format!("{}::Results", protocol)
-            )
-        };
-
         let mut specialize = |name: &str| {
             writeln!(
                 s,
                 "pub type {name} = {lavish}::{name}<{triplet}>;",
                 lavish = Mods::lavish(),
-                triplet = triplet,
+                triplet = self.body.stack.triplet(),
                 name = name,
             )
             .unwrap()
