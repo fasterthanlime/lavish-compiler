@@ -78,14 +78,13 @@ impl<'a> _Fn<'a> {
         self
     }
 
-    pub fn type_param<N, M>(mut self, name: N, bound: Option<M>) -> Self
+    pub fn type_param<N>(mut self, name: N, bound: Option<String>) -> Self
     where
         N: Into<String>,
-        M: Into<String>,
     {
         self.type_params.push(TypeParam {
             name: name.into(),
-            bound: bound.map(|x| x.into()),
+            bound: bound,
         });
         self
     }

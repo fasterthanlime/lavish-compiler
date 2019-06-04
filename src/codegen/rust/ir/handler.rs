@@ -6,6 +6,11 @@ pub struct Handler<'a> {
 }
 
 impl<'a> Handler<'a> {
+    #[allow(non_snake_case)]
+    fn Client(&self) -> String {
+        self.body.stack.SideClient(self.side.other())
+    }
+
     fn for_each_fun(&self, cb: &mut FnMut(ast::Anchored<&ast::FunctionDecl>)) {
         self.body
             .for_each_fun_of_interface(&mut ast::filter_fun_side(self.side, |f| {
@@ -14,13 +19,43 @@ impl<'a> Handler<'a> {
     }
 
     fn define_call(&self, s: &mut Scope) {
-        s.write("pub struct Call<T, PP>");
+        s.write("pub struct Call<T, P>");
         s.in_block(|s| {
-            s.line(format!("pub state: {Arc}<T>,", Arc = Structs::Arc()));
-            s.line("pub client: Client,");
-            s.line("pub params: PP,");
+            writeln!(s, "pub state: {Arc}<T>,", Arc = Structs::Arc()).unwrap();
+            writeln!(s, "pub client: {Client},", Client = self.Client()).unwrap();
+            s.line("pub params: P,");
         });
         s.lf();
+
+        _impl("Call")
+            .type_param("T", None)
+            .type_param("P", None)
+            .body(|s| {
+                _fn("downgrade")
+                    .self_param("self")
+                    .type_param("PP", None)
+                    .type_param("F", Some(format!("Fn(P) -> Option<PP>")))
+                    .param("f: F")
+                    .returns(format!(
+                        "Result<Call<T, PP>, {Error}>",
+                        Error = Structs::Error()
+                    ))
+                    .body(|s| {
+                        write!(s, "Ok(Call").unwrap();
+                        s.in_terminated_block(")", |s| {
+                            writeln!(s, "state: self.state,").unwrap();
+                            writeln!(s, "client: self.client,").unwrap();
+                            writeln!(
+                                s,
+                                "params: f(self.params).ok_or_else(|| {Error}::WrongParams)?,",
+                                Error = Structs::Error()
+                            )
+                            .unwrap();
+                        });
+                    })
+                    .write_to(s);
+            })
+            .write_to(s);
     }
 
     fn define_slot(&self, s: &mut Scope) {
@@ -31,8 +66,7 @@ impl<'a> Handler<'a> {
         ))
         .lf();
 
-        writeln!(s, "pub type SlotFn<T> = Fn({Arc}<T>, Client, {protocol}::Params) -> SlotReturn + 'static + Send + Sync;",
-            Arc = Structs::Arc(),
+        writeln!(s, "pub type SlotFn<T> = Fn(Call<T, {protocol}::Params>) -> SlotReturn + 'static + Send + Sync;",
             protocol = self.body.stack.protocol(),
         ).unwrap();
 
@@ -88,15 +122,12 @@ impl<'a> Handler<'a> {
     }
 
     fn write_handle_body(&self, s: &mut Scope) {
-        writeln!(
-            s,
-            "let call = Call {{ state: self.state.clone(), client: {Client} {{ root }}, params }};",
-            Client = format!(
-                "super::{other_side}::Client",
-                other_side = self.side.other()
-            ),
-        )
-        .unwrap();
+        s.write("let call = Call");
+        s.in_terminated_block(";", |s| {
+            writeln!(s, "state: self.state.clone(),").unwrap();
+            writeln!(s, "client: {Client} {{ root }},", Client = self.Client()).unwrap();
+            writeln!(s, "params,").unwrap();
+        });
         s.write("match params");
         let match_end = format!(
             ".unwrap_or_else(|| {Error}::UnimplementedMethod)(call)",
@@ -159,25 +190,19 @@ impl<'a> Handler<'a> {
     fn write_setter_body(&self, s: &mut Scope, f: &ast::Anchored<&ast::FunctionDecl>) {
         writeln!(s, "self.{slot} = Some(Box::new(", slot = f.slot()).unwrap();
         s.in_scope(|s| {
-            write!(s, "|state, client, params|").unwrap();
+            write!(s, "|call|").unwrap();
             s.in_block(|s| {
-                write!(s, "let params = match params").unwrap();
-                s.in_terminated_block(";", |s| {
+                write!(s, "let call = call.downgrade(|p| match p").unwrap();
+                s.in_terminated_block(")?;", |s| {
                     writeln!(
                         s,
-                        "{protocol}::Params::{variant}(p) => p,",
+                        "{protocol}::Params::{variant}(p) => Some(p),",
                         protocol = self.body.stack.protocol(),
                         variant = f.variant()
                     )
                     .unwrap();
-                    writeln!(
-                        s,
-                        "_ => return Err({Error}::WrongParams),",
-                        Error = Structs::Error()
-                    )
-                    .unwrap();
+                    writeln!(s, "_ => None,").unwrap();
                 });
-                writeln!(s, "let call = Call {{ state, client, params }};").unwrap();
                 writeln!(
                     s,
                     "f(call).map({protocol}::Results::{variant})",

@@ -37,6 +37,7 @@ pub struct Scope<'a> {
     state: ScopeState,
 }
 
+#[derive(PartialEq, Eq)]
 enum ScopeState {
     NeedIndent,
     Indented,
@@ -105,7 +106,10 @@ impl<'a> Scope<'a> {
         F: Fn(&mut Scope),
         D: Display,
     {
-        self.line(" {");
+        if !self.fresh_line() {
+            self.write(" ");
+        }
+        self.line("{");
         {
             let mut s = self.scope();
             f(&mut s);
@@ -165,6 +169,10 @@ impl<'a> Scope<'a> {
         F: Fn(&mut Scope),
     {
         self.in_brackets(Brackets::Round, f)
+    }
+
+    pub fn fresh_line(&self) -> bool {
+        self.state == ScopeState::NeedIndent
     }
 }
 
