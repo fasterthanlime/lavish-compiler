@@ -29,7 +29,7 @@ impl<'a> RustStack for ast::Stack<'a> {
 }
 
 pub trait RustFn {
-    fn qualified_name(&self) -> String;
+    fn slot(&self) -> String;
     fn variant(&self) -> String;
 
     fn module(&self, stack: &ast::Stack) -> String;
@@ -48,8 +48,10 @@ impl<'a> RustFn for ast::Anchored<'a, &ast::FunctionDecl> {
             .join("_")
     }
 
-    fn qualified_name(&self) -> String {
-        self.names().join("__")
+    // Name of the slot in a Handler, for example `session.attempt_login`
+    // will have slot name `on_session__attempt_login`
+    fn slot(&self) -> String {
+        format!("on_{}", self.names().join("__"))
     }
 
     fn module(&self, stack: &ast::Stack) -> String {

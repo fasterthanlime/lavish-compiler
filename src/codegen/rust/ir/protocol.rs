@@ -183,7 +183,7 @@ impl<'a> Display for Atom<'a> {
             });
             e.write_to(s);
 
-            _impl(Traits::Atom(), self.name)
+            _impl_trait(Traits::Atom(), self.name)
                 .body(|s| {
                     self.implement_method(s);
                     self.implement_deserialize(s);

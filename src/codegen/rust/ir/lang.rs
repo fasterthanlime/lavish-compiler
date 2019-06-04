@@ -166,7 +166,7 @@ where
 }
 
 pub struct _Impl<'a> {
-    trt: String,
+    trt: Option<String>,
     name: String,
     type_params: Vec<TypeParam>,
     body: Option<Box<Fn(&mut Scope) + 'a>>,
@@ -200,13 +200,25 @@ impl<'a> _Impl<'a> {
     }
 }
 
-pub fn _impl<'a, T, N>(trt: T, name: N) -> _Impl<'a>
+pub fn _impl_trait<'a, T, N>(trt: T, name: N) -> _Impl<'a>
 where
     T: Into<String>,
     N: Into<String>,
 {
     _Impl {
-        trt: trt.into(),
+        trt: Some(trt.into()),
+        name: name.into(),
+        type_params: Vec::new(),
+        body: None,
+    }
+}
+
+pub fn _impl<'a, N>(name: N) -> _Impl<'a>
+where
+    N: Into<String>,
+{
+    _Impl {
+        trt: None,
         name: name.into(),
         type_params: Vec::new(),
         body: None,
@@ -223,7 +235,10 @@ impl<'a> Display for _Impl<'a> {
                     l.item(&tp.name);
                 }
             });
-            write!(s, " {trt} for {name}", trt = &self.trt, name = &self.name).unwrap();
+            if let Some(trt) = self.trt.as_ref() {
+                write!(s, " {trt} for", trt = trt).unwrap();
+            }
+            write!(s, " {name}", name = &self.name).unwrap();
             s.in_list(Brackets::Angle, |l| {
                 l.omit_empty();
                 for tp in &self.type_params {

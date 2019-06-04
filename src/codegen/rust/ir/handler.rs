@@ -44,42 +44,61 @@ impl<'a> Handler<'a> {
         s.in_block(|s| {
             s.line("state: std::sync::Arc<T>,");
             self.for_each_fun(&mut |f| {
-                writeln!(s, "on_{qfn}: Slot<T>,", qfn = f.qualified_name()).unwrap();
+                writeln!(s, "{slot}: Slot<T>,", slot = f.slot()).unwrap();
             });
         });
         s.lf();
 
-        s.write("impl<T> Handler<T>");
-        s.in_block(|s| {
-            self.for_each_fun(&mut |f| {
-                let qfn = f.qualified_name();
-
-                _fn(format!("on_{qfn}", qfn = qfn))
-                    .kw_pub()
-                    .type_param(
-                        "F",
-                        Some(format!(
-                            "Fn(Call<T, {PP}>) -> Result<{RR}, {Error}> + Send + Sync + 'static",
-                            PP = f.Params(&self.body.stack),
-                            RR = f.Results(&self.body.stack),
-                            Error = Structs::Error(),
-                        )),
-                    )
-                    .self_param("&mut self")
-                    .param("f: F")
-                    .body(|s| {
-                        self.write_on_body(s, &f);
-                    })
-                    .write_to(s);
-            });
-        });
-        s.lf();
+        _impl("Handler")
+            .type_param("T", None)
+            .body(|s| {
+                self.write_constructor(s);
+                self.write_setters(s);
+            })
+            .write_to(s);
     }
 
-    fn write_on_body(&self, s: &mut Scope, f: &ast::Anchored<&ast::FunctionDecl>) {
-        let qfn = f.qualified_name();
+    fn write_constructor(&self, s: &mut Scope) {
+        _fn("new")
+            .kw_pub()
+            .param(format!("state: {Arc}<T>", Arc = Structs::Arc()))
+            .returns("Self")
+            .body(|s| {
+                s.write("Self");
+                s.in_block(|s| {
+                    s.line("state,");
+                    self.for_each_fun(&mut |f| {
+                        s.write(f.slot()).write(": None,").lf();
+                    });
+                });
+            })
+            .write_to(s);
+    }
 
-        writeln!(s, "self.on_{qfn} = Some(Box::new(", qfn = qfn).unwrap();
+    fn write_setters(&self, s: &mut Scope) {
+        self.for_each_fun(&mut |f| {
+            _fn(f.slot())
+                .kw_pub()
+                .type_param(
+                    "F",
+                    Some(format!(
+                        "Fn(Call<T, {PP}>) -> Result<{RR}, {Error}> + Send + Sync + 'static",
+                        PP = f.Params(&self.body.stack),
+                        RR = f.Results(&self.body.stack),
+                        Error = Structs::Error(),
+                    )),
+                )
+                .self_param("&mut self")
+                .param("f: F")
+                .body(|s| {
+                    self.write_setter_body(s, &f);
+                })
+                .write_to(s);
+        });
+    }
+
+    fn write_setter_body(&self, s: &mut Scope, f: &ast::Anchored<&ast::FunctionDecl>) {
+        writeln!(s, "self.{slot} = Some(Box::new(", slot = f.slot()).unwrap();
         s.in_scope(|s| {
             write!(s, "|state, client, params|").unwrap();
             s.in_block(|s| {
