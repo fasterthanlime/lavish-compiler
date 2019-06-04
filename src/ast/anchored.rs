@@ -8,6 +8,30 @@ pub trait Frame {
 pub enum FrameKind<'a> {
     Namespace(&'a NamespaceDecl),
     Function(&'a FunctionDecl),
+    Synthetic(&'a SyntheticFrame),
+}
+
+pub struct SyntheticFrame {
+    name: String,
+}
+
+impl SyntheticFrame {
+    pub fn new<N>(name: N) -> Self
+    where
+        N: Into<String>,
+    {
+        Self { name: name.into() }
+    }
+}
+
+impl Frame for SyntheticFrame {
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    fn kind(&self) -> FrameKind {
+        FrameKind::Synthetic(self)
+    }
 }
 
 impl Frame for FunctionDecl {
@@ -55,7 +79,14 @@ impl<'a> Stack<'a> {
     }
 
     pub fn names(&self) -> Vec<String> {
-        self.frames.iter().map(|x| x.name()).collect()
+        self.frames
+            .iter()
+            .map(|f| match f.kind() {
+                FrameKind::Synthetic(_) => None,
+                _ => Some(f.name()),
+            })
+            .filter_map(|x| x)
+            .collect()
     }
 }
 

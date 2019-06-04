@@ -121,32 +121,46 @@ impl<'a> Handler<'a> {
         .write_to(s);
     }
 
+    fn has_variants(&self) -> bool {
+        let mut has_variants = false;
+        self.for_each_fun(&mut |_| has_variants = true);
+        has_variants
+    }
+
     fn write_handle_body(&self, s: &mut Scope) {
         writeln!(s, "use {Atom};", Atom = Traits::Atom()).unwrap();
-        s.write("let call = Call");
-        s.in_terminated_block(";", |s| {
-            writeln!(s, "state: self.state.clone(),").unwrap();
-            writeln!(s, "client: {Client} {{ root }},", Client = self.Client()).unwrap();
-            writeln!(s, "params,").unwrap();
-        });
-        s.write("match params");
-        let match_end = format!(
-            ".ok_or_else(|| {Error}::MethodUnimplemented(params.method()))?(call)",
-            Error = Structs::Error(),
-        );
-        s.in_terminated_block(match_end, |s| {
-            self.for_each_fun(&mut |f| {
-                writeln!(
-                    s,
-                    "{Params}::{variant}(p) => self.{slot},",
-                    Params = self.body.stack.Params(),
-                    variant = f.variant(),
-                    slot = f.slot(),
-                )
-                .unwrap();
+        if self.has_variants() {
+            s.write("let call = Call");
+            s.in_terminated_block(";", |s| {
+                writeln!(s, "state: self.state.clone(),").unwrap();
+                writeln!(s, "client: {Client} {{ root }},", Client = self.Client()).unwrap();
+                writeln!(s, "params,").unwrap();
             });
-            writeln!(s, "_ => None,").unwrap();
-        });
+            s.write("match params");
+            let match_end = format!(
+                ".ok_or_else(|| {Error}::MethodUnimplemented(params.method()))?(call)",
+                Error = Structs::Error(),
+            );
+            s.in_terminated_block(match_end, |s| {
+                self.for_each_fun(&mut |f| {
+                    writeln!(
+                        s,
+                        "{Params}::{variant}(p) => self.{slot},",
+                        Params = self.body.stack.Params(),
+                        variant = f.variant(),
+                        slot = f.slot(),
+                    )
+                    .unwrap();
+                });
+                writeln!(s, "_ => None,").unwrap();
+            });
+        } else {
+            writeln!(
+                s,
+                "Err({Error}::MethodUnimplemented(params.method()))",
+                Error = Structs::Error()
+            );
+        }
     }
 
     fn write_constructor(&self, s: &mut Scope) {

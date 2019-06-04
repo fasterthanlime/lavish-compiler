@@ -29,6 +29,8 @@ impl<'a> Display for Symbols<'a> {
                     s.write(Symbols::new(stack.push(ns).anchor(&ns.body)));
                 });
             }
+
+            super::pair::write_pair(s, stack.anchor(body));
         })
     }
 }
@@ -104,15 +106,7 @@ impl<'a> Display for Function<'a> {
                         s.write(Function::new(stack.anchor(node)));
                     }
 
-                    s.write(super::client::Client {
-                        side: self.node.side.other(),
-                        body: stack.anchor(body),
-                    });
-
-                    s.write(super::handler::Handler {
-                        side: self.node.side.other(),
-                        body: stack.anchor(body),
-                    });
+                    super::pair::write_pair(s, stack.anchor(body));
                 }
             });
         })

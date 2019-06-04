@@ -59,8 +59,9 @@ impl Generator {
         let output_path = workspace.dir.join(&member.name).join("mod.rs");
         std::fs::create_dir_all(output_path.parent().unwrap())?;
         let mut output = Scope::writer(File::create(&output_path)?);
-        let mut s = Scope::new(&mut output);
-        self.write_prelude(&mut s);
+        let mut scope = Scope::new(&mut output);
+        let s = &mut scope;
+        self.write_prelude(s);
 
         let schema = member.schema.as_ref().expect("schema to be parsed");
         let stack = ast::Stack::new();
@@ -80,38 +81,6 @@ impl Generator {
             write!(s, "pub mod schema").unwrap();
             s.in_block(|s| {
                 s.write(Symbols::new(body.clone()));
-            });
-            s.lf();
-        }
-
-        {
-            write!(s, "pub mod client").unwrap();
-            s.in_block(|s| {
-                s.write(Client {
-                    body: body.clone(),
-                    side: ast::Side::Server,
-                });
-
-                s.write(Handler {
-                    body: body.clone(),
-                    side: ast::Side::Client,
-                });
-            });
-            s.lf();
-        }
-
-        {
-            write!(s, "pub mod server").unwrap();
-            s.in_block(|s| {
-                s.write(Client {
-                    body: body.clone(),
-                    side: ast::Side::Client,
-                });
-
-                s.write(Handler {
-                    body: body.clone(),
-                    side: ast::Side::Server,
-                });
             });
             s.lf();
         }
