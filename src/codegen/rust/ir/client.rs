@@ -27,6 +27,18 @@ impl<'a> Client<'a> {
 
         s.write("impl Client");
         s.in_block(|s| {
+            _fn("new")
+                .kw_pub()
+                .param(format!(
+                    "root: {RootClient}",
+                    RootClient = self.body.stack.RootClient()
+                ))
+                .returns("Self")
+                .body(|s| {
+                    s.write("Self { root }").lf();
+                })
+                .write_to(s);
+
             self.for_each_fun(&mut |f| {
                 _fn(f.name())
                     .kw_pub()
