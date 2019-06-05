@@ -177,6 +177,7 @@ impl<'a> Scope<'a> {
 }
 
 #[derive(Clone, Copy)]
+#[allow(unused)]
 pub enum Brackets {
     Round,
     Squares,

@@ -74,7 +74,11 @@ impl<'a> Handler<'a> {
     }
 
     fn define_handler(&self, s: &mut Scope) {
-        s.write("pub struct Handler<T>");
+        let t_bound = "Send + Sync + 'static";
+
+        s.write("pub struct Handler<T>").lf();
+        s.write("where").lf();
+        s.scope().write("T: ").write(t_bound).lf();
         s.in_block(|s| {
             s.line("state: std::sync::Arc<T>,");
             self.for_each_fun(&mut |f| {
@@ -84,9 +88,10 @@ impl<'a> Handler<'a> {
         s.lf();
 
         _impl("Handler")
-            .type_param("T", None)
+            .type_param("T", Some(t_bound))
             .body(|s| {
                 self.write_constructor(s);
+                self.write_connect(s);
                 self.write_setters(s);
             })
             .write_to(s);
@@ -99,7 +104,7 @@ impl<'a> Handler<'a> {
             ),
             "Handler",
         )
-        .type_param("T", Some("Send + Sync"))
+        .type_param("T", Some(t_bound))
         .body(|s| {
             _fn("handle")
                 .self_param("&self")
@@ -160,7 +165,8 @@ impl<'a> Handler<'a> {
                 s,
                 "Err({Error}::MethodUnimplemented(params.method()))",
                 Error = Structs::Error()
-            );
+            )
+            .unwrap();
         }
     }
 
@@ -177,6 +183,31 @@ impl<'a> Handler<'a> {
                         s.write(f.slot()).write(": None,").lf();
                     });
                 });
+            })
+            .write_to(s);
+    }
+
+    fn write_connect(&self, s: &mut Scope) {
+        _fn("connect")
+            .kw_pub()
+            .self_param("self")
+            .param("conn: Conn")
+            .type_param("Conn", Some(Traits::Conn()))
+            .returns(format!("Result<Client, {Error}>", Error = Structs::Error()))
+            .body(|s| {
+                writeln!(
+                    s,
+                    "let proto = {protocol}::protocol();",
+                    protocol = self.body.stack.protocol()
+                )
+                .unwrap();
+                writeln!(
+                    s,
+                    "let root = {lavish}::connect(proto, self, conn)?;",
+                    lavish = Mods::lavish()
+                )
+                .unwrap();
+                writeln!(s, "Ok(Client::new(root))").unwrap();
             })
             .write_to(s);
     }

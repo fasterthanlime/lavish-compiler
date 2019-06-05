@@ -14,7 +14,7 @@ impl<'a> Display for Protocol<'a> {
                     "pub fn protocol() -> {lavish}::Protocol<{triplet}> {{ {lavish}::Protocol::new() }}",
                     lavish = Mods::lavish(),
                     triplet = self.body.stack.triplet()
-                );
+                ).unwrap();
                 self.write_atoms(s);
                 self.write_specializations(s);
             });
