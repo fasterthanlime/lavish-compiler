@@ -8,7 +8,7 @@ pub struct Handler<'a> {
 impl<'a> Handler<'a> {
     #[allow(non_snake_case)]
     fn Client(&self) -> String {
-        self.body.stack.SideClient(self.side.other())
+        self.body.stack.SideClient(self.side)
     }
 
     fn for_each_fun(&self, cb: &mut FnMut(ast::Anchored<&ast::FunctionDecl>)) {
@@ -130,22 +130,16 @@ impl<'a> Handler<'a> {
     fn write_handle_body(&self, s: &mut Scope) {
         writeln!(s, "use {Atom};", Atom = Traits::Atom()).unwrap();
         if self.has_variants() {
-            s.write("let call = Call");
-            s.in_terminated_block(";", |s| {
-                writeln!(s, "state: self.state.clone(),").unwrap();
-                writeln!(s, "client: {Client} {{ root }},", Client = self.Client()).unwrap();
-                writeln!(s, "params,").unwrap();
-            });
-            s.write("match params");
+            s.write("let slot = match params");
             let match_end = format!(
-                ".ok_or_else(|| {Error}::MethodUnimplemented(params.method()))?(call)",
+                ".ok_or_else(|| {Error}::MethodUnimplemented(params.method()))?;",
                 Error = Structs::Error(),
             );
             s.in_terminated_block(match_end, |s| {
                 self.for_each_fun(&mut |f| {
                     writeln!(
                         s,
-                        "{Params}::{variant}(p) => self.{slot},",
+                        "{Params}::{variant}(_) => self.{slot}.as_ref(),",
                         Params = self.body.stack.Params(),
                         variant = f.variant(),
                         slot = f.slot(),
@@ -154,6 +148,13 @@ impl<'a> Handler<'a> {
                 });
                 writeln!(s, "_ => None,").unwrap();
             });
+            s.write("let call = Call");
+            s.in_terminated_block(";", |s| {
+                writeln!(s, "state: self.state.clone(),").unwrap();
+                writeln!(s, "client: {Client} {{ root }},", Client = self.Client()).unwrap();
+                writeln!(s, "params,").unwrap();
+            });
+            s.write("slot(call)").lf();
         } else {
             writeln!(
                 s,
@@ -205,7 +206,7 @@ impl<'a> Handler<'a> {
     fn write_setter_body(&self, s: &mut Scope, f: &ast::Anchored<&ast::FunctionDecl>) {
         writeln!(s, "self.{slot} = Some(Box::new(", slot = f.slot()).unwrap();
         s.in_scope(|s| {
-            write!(s, "|call|").unwrap();
+            write!(s, "move |call|").unwrap();
             s.in_block(|s| {
                 write!(s, "let call = call.downcast(|p| match p").unwrap();
                 s.in_terminated_block(")?;", |s| {

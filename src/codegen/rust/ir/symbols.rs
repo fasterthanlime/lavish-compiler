@@ -125,9 +125,10 @@ impl<'a> Field<'a> {
 impl<'a> Display for Field<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
+            s.comment(&self.node.comment);
             write!(
                 s,
-                "{name}: {typ}",
+                "pub {name}: {typ}",
                 name = self.node.name(),
                 typ = self.node.typ.as_rust(&self.node.stack)
             )
