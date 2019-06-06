@@ -16,17 +16,30 @@ func main() {
 }
 
 func TestCodegen() error {
+	cwd, err := os.Getwd()
+	must(err)
+	testsDir := filepath.Join(cwd, "codegen-tests")
+	_, err = os.Stat(testsDir)
+	must(err)
+
 	fmt.Println("Building lavish compiler")
 	must(sh.RunV("cargo", "build", "--manifest-path", "../Cargo.toml"))
 
 	fmt.Println("Running codegen tests...")
+
+	tmpDir := filepath.Join(cwd, "tmp")
+
+	cargoTargetDir := filepath.Join(tmpDir, "target")
+	os.Setenv("CARGO_TARGET_DIR", cargoTargetDir)
+
+	harnessDir := filepath.Join(tmpDir, "harness")
+
 	tests := []string{"double"}
 	for _, testName := range tests {
 		fmt.Printf("Running test %s\n", testName)
 
-		harnessDir := filepath.Join("tmp", "harness")
-		sourceDir := filepath.Join("codegen-tests", testName)
-		// must(os.RemoveAll(harnessDir))
+		sourceDir := filepath.Join(testsDir, testName)
+		must(os.RemoveAll(harnessDir))
 		must(os.MkdirAll(harnessDir, 0755))
 
 		must(sh.RunV("echo", "Hello world"))
