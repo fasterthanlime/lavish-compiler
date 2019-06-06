@@ -1,4 +1,10 @@
-language: rust
+language: generic
 rust:
     - stable
+
+script:
+    - cargo build --verbose
+    - cargo test --verbose
+    - cd tests
+    - go run main.go
 

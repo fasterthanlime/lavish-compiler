@@ -1,0 +1,3 @@
+
+// Doubles an integer.
+server fn double(value: int64) -> (value: int64)

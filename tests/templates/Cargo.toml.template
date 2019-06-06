@@ -1,0 +1,11 @@
+[package]
+name = "{{.TestName}}"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+serde = "1.0.92"
+
+[dependencies.lavish]
+git = "https://github.com/lavish-lang/lavish-rs"
+rev = "{{.LavishRevision}}"
