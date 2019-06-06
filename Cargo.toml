@@ -4,7 +4,16 @@ version = "0.1.0"
 authors = ["Amos Wenger <amoswenger@gmail.com>"]
 edition = "2018"
 description = "Compiler for the Lavish IDL"
+repository = "https://github.com/lavish-lang/lavish-compiler"
+readme = "README.md"
 license = "MIT"
+
+keywords = ["rpc", "msgpack", "ipc"]
+categories = ["network-programming", "encoding", "command-line-utilities"]
+
+[badges]
+travis-ci = { repository = "lavish-lang/lavish-compiler" }
+maintenance = { status = "experimental" }
 
 [[bin]]
 name = "lavish"
