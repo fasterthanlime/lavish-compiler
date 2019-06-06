@@ -1,6 +1,9 @@
-language: generic
+language: rust
 rust:
     - stable
+
+before_install:
+    - gimme stable
 
 script:
     - cargo build --verbose
