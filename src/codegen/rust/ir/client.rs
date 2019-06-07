@@ -14,14 +14,10 @@ impl<'a> Client<'a> {
     }
 
     fn define_client(&self, s: &mut Scope) {
+        s.line("#[derive(Clone)]");
         s.write("pub struct Client");
         s.in_block(|s| {
-            writeln!(
-                s,
-                "root: {RootClient},",
-                RootClient = self.body.stack.RootClient()
-            )
-            .unwrap();
+            writeln!(s, "caller: {Caller},", Caller = self.body.stack.Caller()).unwrap();
         });
         s.lf();
 
@@ -30,12 +26,12 @@ impl<'a> Client<'a> {
             _fn("new")
                 .kw_pub()
                 .param(format!(
-                    "root: {RootClient}",
-                    RootClient = self.body.stack.RootClient()
+                    "caller: {Caller}",
+                    Caller = self.body.stack.Caller()
                 ))
                 .returns("Self")
                 .body(|s| {
-                    s.write("Self { root }").lf();
+                    s.write("Self { caller }").lf();
                 })
                 .write_to(s);
 
@@ -50,7 +46,7 @@ impl<'a> Client<'a> {
                         Error = Structs::Error()
                     ))
                     .body(|s| {
-                        s.line("self.root.call(");
+                        s.line("self.caller.call(");
                         s.in_scope(|s| {
                             writeln!(
                                 s,

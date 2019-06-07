@@ -61,9 +61,8 @@ impl<'a> Handler<'a> {
     fn define_runtime(&self, s: &mut Scope) {
         writeln!(
             s,
-            "pub type Runtime<C> = {lavish}::Runtime<C, {triplet}>;",
+            "pub type Runtime<C> = {lavish}::Runtime<C, Client>;",
             lavish = Mods::lavish(),
-            triplet = self.body.stack.triplet()
         )
         .unwrap();
     }
@@ -108,7 +107,7 @@ impl<'a> Handler<'a> {
 
         _impl_trait(
             format!(
-                "{lavish}::Handler<{triplet}>",
+                "{lavish}::Handler<Client, {triplet}>",
                 lavish = Mods::lavish(),
                 triplet = self.body.stack.triplet()
             ),
@@ -119,8 +118,8 @@ impl<'a> Handler<'a> {
             _fn("handle")
                 .self_param("&self")
                 .param(format!(
-                    "root: {RootClient}, params: {P}",
-                    RootClient = self.body.stack.RootClient(),
+                    "caller: {Caller}, params: {P}",
+                    Caller = self.body.stack.Caller(),
                     P = self.body.stack.Params(),
                 ))
                 .returns(format!(
@@ -130,6 +129,17 @@ impl<'a> Handler<'a> {
                 ))
                 .body(|s| {
                     self.write_handle_body(s);
+                })
+                .write_to(s);
+
+            _fn("make_client")
+                .param(format!(
+                    "caller: {Caller}",
+                    Caller = self.body.stack.Caller()
+                ))
+                .returns("Client")
+                .body(|s| {
+                    s.line("Client { caller }");
                 })
                 .write_to(s);
         })
@@ -166,7 +176,7 @@ impl<'a> Handler<'a> {
             s.write("let call = Call");
             s.in_terminated_block(";", |s| {
                 writeln!(s, "state: self.state.clone(),").unwrap();
-                writeln!(s, "client: {Client} {{ root }},", Client = self.Client()).unwrap();
+                writeln!(s, "client: {Client} {{ caller }},", Client = self.Client()).unwrap();
                 writeln!(s, "params,").unwrap();
             });
             s.write("slot(call)").lf();
@@ -204,18 +214,11 @@ impl<'a> Handler<'a> {
             .param("conn: Conn")
             .type_param("Conn", Some(Traits::Conn()))
             .returns(format!(
-                "Result<(Runtime<Conn>, Client), {Error}>",
+                "Result<Runtime<Conn>, {Error}>",
                 Error = Structs::Error()
             ))
             .body(|s| {
-                writeln!(
-                    s,
-                    "let runtime = {lavish}::spawn(self, conn)?;",
-                    lavish = Mods::lavish()
-                )
-                .unwrap();
-                writeln!(s, "let client = Client::new(runtime.client());").unwrap();
-                writeln!(s, "Ok((runtime, client))").unwrap();
+                writeln!(s, "{lavish}::spawn(self, conn)", lavish = Mods::lavish()).unwrap();
             })
             .write_to(s);
     }

@@ -40,19 +40,23 @@ impl<'a> Protocol<'a> {
     }
 
     fn write_specializations(&self, s: &mut Scope) {
-        let mut specialize = |name: &str| {
-            writeln!(
-                s,
-                "pub type {name} = {lavish}::{name}<{triplet}>;",
-                lavish = Mods::lavish(),
-                triplet = self.body.stack.triplet(),
-                name = name,
-            )
-            .unwrap()
-        };
+        writeln!(
+            s,
+            "pub type {name} = {lavish}::{name}<{triplet}>;",
+            lavish = Mods::lavish(),
+            triplet = self.body.stack.triplet(),
+            name = "Caller",
+        )
+        .unwrap();
 
-        specialize("Client");
-        specialize("Handler");
+        writeln!(
+            s,
+            "pub type {name}<CL> = {lavish}::{name}<CL, {triplet}>;",
+            lavish = Mods::lavish(),
+            triplet = self.body.stack.triplet(),
+            name = "Handler",
+        )
+        .unwrap();
     }
 }
 
