@@ -58,6 +58,16 @@ impl<'a> Handler<'a> {
             .write_to(s);
     }
 
+    fn define_runtime(&self, s: &mut Scope) {
+        writeln!(
+            s,
+            "pub type Runtime<C> = {lavish}::Runtime<C, {triplet}>;",
+            lavish = Mods::lavish(),
+            triplet = self.body.stack.triplet()
+        )
+        .unwrap();
+    }
+
     fn define_slot(&self, s: &mut Scope) {
         s.write(format!(
             "pub type SlotReturn = Result<{protocol}::Results, {Error}>;",
@@ -91,7 +101,7 @@ impl<'a> Handler<'a> {
             .type_param("T", Some(t_bound))
             .body(|s| {
                 self.write_constructor(s);
-                self.write_connect(s);
+                self.write_spawn(s);
                 self.write_setters(s);
             })
             .write_to(s);
@@ -187,27 +197,25 @@ impl<'a> Handler<'a> {
             .write_to(s);
     }
 
-    fn write_connect(&self, s: &mut Scope) {
-        _fn("connect")
+    fn write_spawn(&self, s: &mut Scope) {
+        _fn("spawn")
             .kw_pub()
             .self_param("self")
             .param("conn: Conn")
             .type_param("Conn", Some(Traits::Conn()))
-            .returns(format!("Result<Client, {Error}>", Error = Structs::Error()))
+            .returns(format!(
+                "Result<(Runtime<Conn>, Client), {Error}>",
+                Error = Structs::Error()
+            ))
             .body(|s| {
                 writeln!(
                     s,
-                    "let proto = {protocol}::protocol();",
-                    protocol = self.body.stack.protocol()
-                )
-                .unwrap();
-                writeln!(
-                    s,
-                    "let root = {lavish}::connect(proto, self, conn)?;",
+                    "let runtime = {lavish}::spawn(self, conn)?;",
                     lavish = Mods::lavish()
                 )
                 .unwrap();
-                writeln!(s, "Ok(Client::new(root))").unwrap();
+                writeln!(s, "let client = Client::new(runtime.client());").unwrap();
+                writeln!(s, "Ok((runtime, client))").unwrap();
             })
             .write_to(s);
     }
@@ -266,6 +274,7 @@ impl<'a> Handler<'a> {
 impl<'a> Display for Handler<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
+            self.define_runtime(s);
             self.define_call(s);
             self.define_slot(s);
             self.define_handler(s);

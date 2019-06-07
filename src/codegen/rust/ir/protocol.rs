@@ -9,12 +9,6 @@ impl<'a> Display for Protocol<'a> {
         Scope::fmt(f, |s| {
             s.write("pub mod protocol");
             s.in_block(|s| {
-                writeln!(
-                    s,
-                    "pub fn protocol() -> {lavish}::Protocol<{triplet}> {{ {lavish}::Protocol::new() }}",
-                    lavish = Mods::lavish(),
-                    triplet = self.body.stack.triplet()
-                ).unwrap();
                 self.write_atoms(s);
                 self.write_specializations(s);
             });
