@@ -46,10 +46,6 @@ impl Traits {
     pub fn Atom() -> String {
         format!("{}::Atom", Mods::lavish())
     }
-
-    pub fn Conn() -> String {
-        format!("{}::Conn", Mods::lavish())
-    }
 }
 
 pub struct Structs {}
