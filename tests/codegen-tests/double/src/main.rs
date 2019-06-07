@@ -20,13 +20,14 @@ mod tests {
                     value: call.params.value * 2,
                 })
             });
-            h.connect(conn).unwrap();
+            let (mut runtime, _client) = h.spawn(conn).unwrap();
+            runtime.join().unwrap();
         });
 
         let client = std::thread::spawn(move || {
             let conn = TcpStream::connect(addr).unwrap();
             let h = double::client::Handler::new(Arc::new(()));
-            let client = h.connect(conn).unwrap();
+            let (_runtime, client) = h.spawn(conn).unwrap();
 
             let value = client
                 .double(double::double::Params { value: 16 })

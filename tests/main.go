@@ -57,7 +57,7 @@ func TestCodegen() error {
 			LavishRevision string
 		}{
 			TestName:       testName,
-			LavishRevision: "f89d94bf519bcf91ea31912277640d41e1e6013b",
+			LavishRevision: "c3921282ae9c5d602d1f79633bb97686d4b87a12",
 		}
 
 		executeTemplate("Cargo.toml", cargoPath, cargoVars)
