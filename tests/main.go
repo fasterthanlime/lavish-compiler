@@ -18,9 +18,16 @@ func main() {
 func TestCodegen() error {
 	cwd, err := os.Getwd()
 	must(err)
+
 	testsDir := filepath.Join(cwd, "codegen-tests")
 	_, err = os.Stat(testsDir)
 	must(err)
+
+	testsDirHandle, err := os.Open(testsDir)
+	must(err)
+	testNames, err := testsDirHandle.Readdirnames(-1)
+	must(err)
+	must(testsDirHandle.Close())
 
 	fmt.Println("Building lavish compiler")
 	must(sh.RunV("cargo", "build", "--manifest-path", "../Cargo.toml"))
@@ -34,15 +41,12 @@ func TestCodegen() error {
 
 	harnessDir := filepath.Join(tmpDir, "harness")
 
-	tests := []string{"double"}
-	for _, testName := range tests {
+	for _, testName := range testNames {
 		fmt.Printf("Running test %s\n", testName)
 
 		sourceDir := filepath.Join(testsDir, testName)
 		must(os.RemoveAll(harnessDir))
 		must(os.MkdirAll(harnessDir, 0755))
-
-		must(sh.RunV("echo", "Hello world"))
 
 		targetDir := filepath.Join(harnessDir, testName)
 		must(copy.Copy(sourceDir, targetDir))
