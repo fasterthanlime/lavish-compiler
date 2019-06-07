@@ -54,6 +54,14 @@ impl<'a> Handler<'a> {
                         });
                     })
                     .write_to(s);
+
+                _fn("shutdown_runtime")
+                    .self_param("&self")
+                    .kw_pub()
+                    .body(|s| {
+                        s.line("self.client.caller.shutdown_runtime();");
+                    })
+                    .write_to(s);
             })
             .write_to(s);
     }
@@ -61,7 +69,7 @@ impl<'a> Handler<'a> {
     fn define_runtime(&self, s: &mut Scope) {
         writeln!(
             s,
-            "pub type Runtime<C> = {lavish}::Runtime<C, Client>;",
+            "pub type Runtime = {lavish}::Runtime<Client>;",
             lavish = Mods::lavish(),
         )
         .unwrap();
@@ -100,7 +108,6 @@ impl<'a> Handler<'a> {
             .type_param("T", Some(t_bound))
             .body(|s| {
                 self.write_constructor(s);
-                self.write_spawn(s);
                 self.write_setters(s);
             })
             .write_to(s);
@@ -203,22 +210,6 @@ impl<'a> Handler<'a> {
                         s.write(f.slot()).write(": None,").lf();
                     });
                 });
-            })
-            .write_to(s);
-    }
-
-    fn write_spawn(&self, s: &mut Scope) {
-        _fn("spawn")
-            .kw_pub()
-            .self_param("self")
-            .param("conn: Conn")
-            .type_param("Conn", Some(Traits::Conn()))
-            .returns(format!(
-                "Result<Runtime<Conn>, {Error}>",
-                Error = Structs::Error()
-            ))
-            .body(|s| {
-                writeln!(s, "{lavish}::spawn(self, conn)", lavish = Mods::lavish()).unwrap();
             })
             .write_to(s);
     }
