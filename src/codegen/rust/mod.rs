@@ -64,7 +64,7 @@ impl Generator {
         self.write_prelude(s);
 
         let schema = member.schema.as_ref().expect("schema to be parsed");
-        let stack = ast::Stack::new();
+        let stack = ast::Stack::new(schema);
         let body = stack.anchor(&schema.body);
 
         {

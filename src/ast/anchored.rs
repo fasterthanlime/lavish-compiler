@@ -1,16 +1,19 @@
 use crate::ast::nodes::*;
 
-pub trait Frame {
+pub trait Frame: std::fmt::Debug {
     fn name(&self) -> String;
     fn kind(&self) -> FrameKind;
+    fn body(&self) -> Option<&NamespaceBody>;
 }
 
 pub enum FrameKind<'a> {
+    Schema(&'a Schema),
     Namespace(&'a NamespaceDecl),
     Function(&'a FunctionDecl),
     Synthetic(&'a SyntheticFrame),
 }
 
+#[derive(Debug)]
 pub struct SyntheticFrame {
     name: String,
 }
@@ -32,6 +35,24 @@ impl Frame for SyntheticFrame {
     fn kind(&self) -> FrameKind {
         FrameKind::Synthetic(self)
     }
+
+    fn body(&self) -> Option<&NamespaceBody> {
+        None
+    }
+}
+
+impl Frame for Schema {
+    fn name(&self) -> String {
+        "<schema>".into()
+    }
+
+    fn kind(&self) -> FrameKind {
+        FrameKind::Schema(self)
+    }
+
+    fn body(&self) -> Option<&NamespaceBody> {
+        Some(&self.body)
+    }
 }
 
 impl Frame for FunctionDecl {
@@ -41,6 +62,10 @@ impl Frame for FunctionDecl {
 
     fn kind(&self) -> FrameKind {
         FrameKind::Function(self)
+    }
+
+    fn body(&self) -> Option<&NamespaceBody> {
+        self.body.as_ref()
     }
 }
 
@@ -52,6 +77,10 @@ impl Frame for NamespaceDecl {
     fn kind(&self) -> FrameKind {
         FrameKind::Namespace(self)
     }
+
+    fn body(&self) -> Option<&NamespaceBody> {
+        Some(&self.body)
+    }
 }
 
 #[derive(Clone)]
@@ -61,14 +90,20 @@ pub struct Stack<'a> {
 
 #[allow(non_snake_case)]
 impl<'a> Stack<'a> {
-    pub fn new() -> Self {
-        Self { frames: Vec::new() }
+    pub fn new(frame: &'a Frame) -> Self {
+        Self {
+            frames: vec![frame],
+        }
     }
 
     pub fn push(&self, frame: &'a Frame) -> Self {
         let mut frames = self.frames.clone();
         frames.push(frame);
         Self { frames }
+    }
+
+    pub fn len(&self) -> usize {
+        self.frames.len()
     }
 
     pub fn anchor<T>(&self, inner: T) -> Anchored<T> {
@@ -82,12 +117,37 @@ impl<'a> Stack<'a> {
         self.frames
             .iter()
             .map(|f| match f.kind() {
+                FrameKind::Schema(_) => None,
                 FrameKind::Synthetic(_) => None,
                 _ => Some(f.name()),
             })
             .filter_map(|x| x)
             .collect()
     }
+
+    pub fn lookup_struct(&self, name: &str) -> Option<RelativePath> {
+        for (i, frame) in self.frames.iter().rev().enumerate() {
+            if let Some(body) = frame.body() {
+                for s in &body.structs {
+                    if s.name.text == name {
+                        return Some(RelativePath {
+                            up: i,
+                            down: vec![name.into()],
+                        });
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug)]
+pub struct RelativePath {
+    // number of 'supers'
+    pub up: usize,
+    // namespaces to travel down
+    pub down: Vec<String>,
 }
 
 #[derive(Clone)]

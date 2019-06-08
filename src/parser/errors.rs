@@ -145,6 +145,7 @@ where
     }
 }
 
+// FIXME: this surely doesn't belong in errors.rs
 pub fn parse_schema(source: Rc<Source>) -> Result<ast::Schema, Error> {
     let schema = parse(source, parser::schema::<VerboseError<parser::Span>>)?;
     checker::check(&schema)?;

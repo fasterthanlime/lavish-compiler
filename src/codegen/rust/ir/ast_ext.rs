@@ -17,7 +17,7 @@ pub trait RustStack {
 
 impl<'a> RustStack for ast::Stack<'a> {
     fn root(&self) -> String {
-        "super::".repeat(self.frames.len() + 1)
+        "super::".repeat(self.frames.len())
     }
 
     fn protocol(&self) -> String {

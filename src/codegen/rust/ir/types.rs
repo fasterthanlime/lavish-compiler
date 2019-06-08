@@ -18,7 +18,7 @@ impl<'a> fmt::Display for RustType<'a> {
         use ast::TypeKind;
 
         match &self.0.kind {
-            TypeKind::Base(base) => base.write_rust_type(f),
+            TypeKind::Base(base) => base.generate_rust(f),
             TypeKind::Map(map) => write!(
                 f,
                 "{collections}::HashMap<{K}, {V}>",
@@ -29,19 +29,23 @@ impl<'a> fmt::Display for RustType<'a> {
             TypeKind::Option(opt) => write!(f, "Option<{T}>", T = opt.inner.as_rust(&self.0.stack)),
             TypeKind::Array(arr) => write!(f, "Vec<{T}>", T = arr.inner.as_rust(&self.0.stack)),
             TypeKind::User => {
-                // TODO: actually resolve those, using our stack
-                write!(f, "super::{}", self.0.text())
+                let t = &self.0;
+
+                match t.stack.lookup_struct(t.text()) {
+                    Some(path) => path.generate_rust(f),
+                    None => panic!("Could not resolve {:#?}", t.text()),
+                }
             }
         }
     }
 }
 
-trait RustBaseType {
-    fn write_rust_type(&self, f: &mut fmt::Formatter) -> fmt::Result;
+trait GeneratesRust {
+    fn generate_rust(&self, f: &mut fmt::Formatter) -> fmt::Result;
 }
 
-impl RustBaseType for ast::BaseType {
-    fn write_rust_type(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl GeneratesRust for ast::BaseType {
+    fn generate_rust(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use ast::BaseType as T;
 
         match self {
@@ -56,5 +60,19 @@ impl RustBaseType for ast::BaseType {
             T::Bytes => write!(f, "Vec<u8>"),
             T::Timestamp => write!(f, "{chrono}::DateTime", chrono = Mods::chrono()),
         }
+    }
+}
+
+impl GeneratesRust for ast::RelativePath {
+    fn generate_rust(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Scope::fmt(f, |s| {
+            let mut list = List::new(s, "::", Brackets::None);
+            for _ in 0..self.up {
+                list.item("super");
+            }
+            for item in &self.down {
+                list.item(item);
+            }
+        })
     }
 }

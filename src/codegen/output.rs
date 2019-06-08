@@ -136,10 +136,10 @@ impl<'a> Scope<'a> {
 
     pub fn in_list<F>(&mut self, brackets: Brackets, f: F) -> &mut Self
     where
-        F: Fn(&mut CommaList),
+        F: Fn(&mut List),
     {
         {
-            let mut list = CommaList::new(self, brackets);
+            let mut list = List::new(self, ", ", brackets);
             f(&mut list);
         }
         self
@@ -147,7 +147,7 @@ impl<'a> Scope<'a> {
 
     pub fn in_parens_list<F>(&mut self, f: F) -> &mut Self
     where
-        F: Fn(&mut CommaList),
+        F: Fn(&mut List),
     {
         self.in_list(Brackets::Round, f)
     }
@@ -183,42 +183,49 @@ pub enum Brackets {
     Squares,
     Curly,
     Angle,
+    None,
 }
 
 impl Brackets {
-    pub fn pair(self) -> (char, char) {
+    pub fn pair<'a>(self) -> (&'a str, &'a str) {
         match self {
-            Brackets::Round => ('(', ')'),
-            Brackets::Squares => ('[', ']'),
-            Brackets::Curly => ('{', '}'),
-            Brackets::Angle => ('<', '>'),
+            Brackets::Round => ("(", ")"),
+            Brackets::Squares => ("[", "]"),
+            Brackets::Curly => ("{", "}"),
+            Brackets::Angle => ("<", ">"),
+            Brackets::None => ("", ""),
         }
     }
 
-    pub fn open(self) -> char {
+    pub fn open<'a>(self) -> &'a str {
         self.pair().0
     }
 
-    pub fn close(self) -> char {
+    pub fn close<'a>(self) -> &'a str {
         self.pair().1
     }
 }
 
-pub struct CommaList<'a: 'b, 'b> {
+pub struct List<'a: 'b, 'b> {
     scope: &'b mut Scope<'a>,
     brackets: Brackets,
 
     empty_list: bool,
     omit_empty: bool,
+    separator: String,
 }
 
-impl<'a: 'b, 'b> CommaList<'a, 'b> {
-    pub fn new(scope: &'b mut Scope<'a>, brackets: Brackets) -> Self {
+impl<'a: 'b, 'b> List<'a, 'b> {
+    pub fn new<S>(scope: &'b mut Scope<'a>, separator: S, brackets: Brackets) -> Self
+    where
+        S: Into<String>,
+    {
         Self {
             scope,
             brackets,
             empty_list: true,
             omit_empty: false,
+            separator: separator.into(),
         }
     }
 
@@ -235,13 +242,13 @@ impl<'a: 'b, 'b> CommaList<'a, 'b> {
             s.write(self.brackets.open());
             self.empty_list = false
         } else {
-            s.write(", ");
+            s.write(&self.separator);
         }
         s.write(item);
     }
 }
 
-impl<'a, 'b> Drop for CommaList<'a, 'b> {
+impl<'a, 'b> Drop for List<'a, 'b> {
     fn drop(&mut self) {
         if self.empty_list {
             if self.omit_empty {

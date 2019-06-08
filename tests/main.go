@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"html/template"
 	"os"
 	"path/filepath"
@@ -16,6 +17,13 @@ func main() {
 }
 
 func TestCodegen() error {
+	args := os.Args[1:]
+	singleTest := ""
+	if len(args) > 0 {
+		singleTest = args[0]
+		log.Printf("Will run single test '%s'\n", singleTest)
+	}
+
 	cwd, err := os.Getwd()
 	must(err)
 
@@ -29,10 +37,10 @@ func TestCodegen() error {
 	must(err)
 	must(testsDirHandle.Close())
 
-	fmt.Println("Building lavish compiler")
+	log.Println("Building lavish compiler")
 	must(sh.RunV("cargo", "build", "--manifest-path", "../Cargo.toml"))
 
-	fmt.Println("Running codegen tests...")
+	log.Println("Running codegen tests...")
 
 	tmpDir := filepath.Join(cwd, "tmp")
 
@@ -41,8 +49,12 @@ func TestCodegen() error {
 
 	harnessDir := filepath.Join(tmpDir, "harness")
 
+	if singleTest != "" {
+		testNames = []string{singleTest}
+	}
+
 	for _, testName := range testNames {
-		fmt.Printf("Running test %s\n", testName)
+		log.Printf("Running test %s", testName)
 
 		sourceDir := filepath.Join(testsDir, testName)
 		must(os.RemoveAll(harnessDir))
