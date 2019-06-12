@@ -6,13 +6,6 @@ pub struct Client<'a> {
 }
 
 impl<'a> Client<'a> {
-    fn for_each_fun(&self, cb: &mut FnMut(ast::Anchored<&ast::FunctionDecl>)) {
-        self.body
-            .for_each_fun_of_interface(&mut ast::filter_fun_side(self.side, |f| {
-                cb(f);
-            }));
-    }
-
     fn define_client(&self, s: &mut Scope) {
         s.line("#[derive(Clone)]");
         s.write("pub struct Client");
@@ -57,43 +50,6 @@ impl<'a> Client<'a> {
                     s.line(")");
                 })
                 .write_to(s);
-
-            self.for_each_fun(&mut |f| {
-                _fn(f.rust_name())
-                    .kw_pub()
-                    .self_param("&self")
-                    .param(format!("p: {Params}", Params = f.Params(&self.body.stack),))
-                    .returns(format!(
-                        "Result<{Results}, {Error}>",
-                        Results = f.Results(&self.body.stack),
-                        Error = Structs::Error()
-                    ))
-                    .body(|s| {
-                        s.line("self.caller.call(");
-                        s.in_scope(|s| {
-                            writeln!(
-                                s,
-                                "{protocol}::Params::{variant}(p),",
-                                protocol = self.body.stack.protocol(),
-                                variant = f.variant()
-                            )
-                            .unwrap();
-                            s.write("|r| match r");
-                            s.in_block(|s| {
-                                writeln!(
-                                    s,
-                                    "{protocol}::Results::{variant}(r) => Some(r),",
-                                    protocol = self.body.stack.protocol(),
-                                    variant = f.variant(),
-                                )
-                                .unwrap();
-                                writeln!(s, "_ => None,").unwrap();
-                            });
-                        });
-                        s.write(")").lf();
-                    })
-                    .write_to(s);
-            });
         });
     }
 }

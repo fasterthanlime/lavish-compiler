@@ -11,13 +11,6 @@ impl<'a> Router<'a> {
         self.body.stack.SideClient(self.side)
     }
 
-    fn for_each_fun(&self, cb: &mut FnMut(ast::Anchored<&ast::FunctionDecl>)) {
-        self.body
-            .for_each_fun_of_interface(&mut ast::filter_fun_side(self.side, |f| {
-                cb(f);
-            }));
-    }
-
     fn define_call(&self, s: &mut Scope) {
         s.write("pub struct Call<T, P>");
         s.in_block(|s| {
@@ -86,8 +79,6 @@ impl<'a> Router<'a> {
         writeln!(s, "pub type SlotFn<T> = Fn(Call<T, {protocol}::Params>) -> SlotReturn + 'static + Send + Sync;",
             protocol = self.body.stack.protocol(),
         ).unwrap();
-
-        s.write("pub type Slot<T> = Option<Box<SlotFn<T>>>;").lf();
     }
 
     fn define_router(&self, s: &mut Scope) {
@@ -104,9 +95,6 @@ impl<'a> Router<'a> {
                 HashMap = Structs::HashMap(),
             )
             .unwrap();
-            self.for_each_fun(&mut |f| {
-                writeln!(s, "{slot}: Slot<T>,", slot = f.slot()).unwrap();
-            });
         });
         s.lf();
 
@@ -115,7 +103,6 @@ impl<'a> Router<'a> {
             .body(|s| {
                 self.write_constructor(s);
                 self.write_handle(s);
-                self.write_setters(s);
             })
             .write_to(s);
 
@@ -160,39 +147,24 @@ impl<'a> Router<'a> {
         .write_to(s);
     }
 
-    fn has_variants(&self) -> bool {
-        let mut has_variants = false;
-        self.for_each_fun(&mut |_| has_variants = true);
-        has_variants
-    }
-
     fn write_handle_body(&self, s: &mut Scope) {
         writeln!(s, "use {Atom};", Atom = Traits::Atom()).unwrap();
-        if self.has_variants() {
-            writeln!(s, "let slot = self.slots.get(params.method())").unwrap();
-            s.in_scope(|s| {
-                writeln!(
-                    s,
-                    ".ok_or_else(|| {Error}::MethodUnimplemented(params.method()))?;",
-                    Error = Structs::Error(),
-                )
-                .unwrap();
-            });
-            s.write("let call = Call");
-            s.in_terminated_block(";", |s| {
-                writeln!(s, "state: self.state.clone(),").unwrap();
-                writeln!(s, "client: {Client} {{ caller }},", Client = self.Client()).unwrap();
-                writeln!(s, "params,").unwrap();
-            });
-            s.write("slot(call)").lf();
-        } else {
+        writeln!(s, "let slot = self.slots.get(params.method())").unwrap();
+        s.in_scope(|s| {
             writeln!(
                 s,
-                "Err({Error}::MethodUnimplemented(params.method()))",
-                Error = Structs::Error()
+                ".ok_or_else(|| {Error}::MethodUnimplemented(params.method()))?;",
+                Error = Structs::Error(),
             )
             .unwrap();
-        }
+        });
+        s.write("let call = Call");
+        s.in_terminated_block(";", |s| {
+            writeln!(s, "state: self.state.clone(),").unwrap();
+            writeln!(s, "client: {Client} {{ caller }},", Client = self.Client()).unwrap();
+            writeln!(s, "params,").unwrap();
+        });
+        s.write("slot(call)").lf();
     }
 
     fn write_constructor(&self, s: &mut Scope) {
@@ -205,9 +177,6 @@ impl<'a> Router<'a> {
                 s.in_block(|s| {
                     s.line("state,");
                     writeln!(s, "slots: {HashMap}::new(),", HashMap = Structs::HashMap()).unwrap();
-                    self.for_each_fun(&mut |f| {
-                        s.write(f.slot()).write(": None,").lf();
-                    });
                 });
             })
             .write_to(s);
@@ -251,56 +220,6 @@ impl<'a> Router<'a> {
                 });
             })
             .write_to(s);
-    }
-
-    fn write_setters(&self, s: &mut Scope) {
-        self.for_each_fun(&mut |f| {
-            _fn(f.slot())
-                .kw_pub()
-                .type_param(
-                    "F",
-                    Some(format!(
-                        "Fn(Call<T, {PP}>) -> Result<{RR}, {Error}> + Send + Sync + 'static",
-                        PP = f.Params(&self.body.stack),
-                        RR = f.Results(&self.body.stack),
-                        Error = Structs::Error(),
-                    )),
-                )
-                .self_param("&mut self")
-                .param("f: F")
-                .body(|s| {
-                    self.write_setter_body(s, &f);
-                })
-                .write_to(s);
-        });
-    }
-
-    fn write_setter_body(&self, s: &mut Scope, f: &ast::Anchored<&ast::FunctionDecl>) {
-        writeln!(s, "self.{slot} = Some(Box::new(", slot = f.slot()).unwrap();
-        s.in_scope(|s| {
-            write!(s, "move |call|").unwrap();
-            s.in_block(|s| {
-                write!(s, "let call = call.downcast(|p| match p").unwrap();
-                s.in_terminated_block(")?;", |s| {
-                    writeln!(
-                        s,
-                        "{protocol}::Params::{variant}(p) => Some(p),",
-                        protocol = self.body.stack.protocol(),
-                        variant = f.variant()
-                    )
-                    .unwrap();
-                    writeln!(s, "_ => None,").unwrap();
-                });
-                writeln!(
-                    s,
-                    "f(call).map({protocol}::Results::{variant})",
-                    protocol = self.body.stack.protocol(),
-                    variant = f.variant()
-                )
-                .unwrap();
-            });
-        });
-        writeln!(s, "));").unwrap();
     }
 }
 
