@@ -30,8 +30,8 @@ impl<'a> fmt::Display for RustType<'a> {
             TypeKind::Array(arr) => write!(f, "Vec<{T}>", T = arr.inner.as_rust(&self.0.stack)),
             TypeKind::User => {
                 let t = &self.0;
-
-                match t.stack.lookup_struct(t.text()) {
+                let down: Vec<_> = t.text().split(".").collect();
+                match t.stack.lookup_struct(ast::LookupMode::Relaxed, &down[..]) {
                     Some(path) => path.generate_rust(f),
                     None => panic!("Could not resolve {:#?}", t.text()),
                 }
@@ -63,7 +63,7 @@ impl GeneratesRust for ast::BaseType {
     }
 }
 
-impl GeneratesRust for ast::RelativePath {
+impl<'a> GeneratesRust for ast::RelativePath<'a> {
     fn generate_rust(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
             let mut list = List::new(s, "::", Brackets::None);

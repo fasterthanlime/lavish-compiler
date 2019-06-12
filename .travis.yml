@@ -8,6 +8,5 @@ before_install:
 script:
     - cargo build --verbose
     - cargo test --verbose
-    - cd tests
-    - go run main.go
+    - scripts/run-tests.sh
 

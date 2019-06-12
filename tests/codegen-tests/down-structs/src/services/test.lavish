@@ -1,0 +1,12 @@
+
+namespace session {
+    struct Session {
+        username: string,
+        display_name: string,
+    }
+
+    server fn login(username: string, password: string) -> (session: Session)
+}
+
+server fn anon_session() -> (session: session.Session)
+

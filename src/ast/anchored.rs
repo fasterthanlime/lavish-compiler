@@ -1,4 +1,5 @@
 use crate::ast::nodes::*;
+use std::fmt;
 
 pub trait Frame: std::fmt::Debug {
     fn name(&self) -> String;
@@ -125,15 +126,77 @@ impl<'a> Stack<'a> {
             .collect()
     }
 
-    pub fn lookup_struct(&self, name: &str) -> Option<RelativePath> {
-        for (i, frame) in self.frames.iter().rev().enumerate() {
+    pub fn lookup_struct(&self, mode: LookupMode, down: &[&'a str]) -> Option<RelativePath<'a>> {
+        use log::*;
+        debug!(
+            "lookup_struct({} frames, down = {:?})",
+            self.frames.len(),
+            down
+        );
+
+        if down.is_empty() {
+            return None;
+        }
+        let name = down[0];
+        let rest = &down[1..];
+        debug!("name = {}, rest = {:?}", name, rest);
+
+        let frames = match mode {
+            LookupMode::Strict => &self.frames[self.len() - 1..],
+            LookupMode::Relaxed => &self.frames[..],
+        };
+
+        for (i, frame) in frames.iter().rev().enumerate() {
             if let Some(body) = frame.body() {
-                for s in &body.structs {
-                    if s.name.text == name {
+                let mut symbol = None;
+
+                if symbol.is_none() {
+                    for s in &body.structs {
+                        if s.name.text == name {
+                            symbol = Some(Symbol::Struct(&s))
+                        }
+                    }
+                }
+
+                if symbol.is_none() {
+                    for ns in &body.namespaces {
+                        if ns.name.text == name {
+                            symbol = Some(Symbol::Namespace(&ns))
+                        }
+                    }
+                }
+
+                if let Some(symbol) = symbol {
+                    debug!("Found match, rest = {:?}", rest);
+                    if rest.is_empty() {
                         return Some(RelativePath {
                             up: i,
-                            down: vec![name.into()],
+                            down: vec![name],
+                            symbol,
                         });
+                    } else {
+                        match symbol {
+                            Symbol::Namespace(ns) => {
+                                debug!("First part of the path resolved to a namespace ({:?}), looking up rest in it", ns.name.text);
+                                let stack = self.push(ns);
+                                if let Some(mut path) =
+                                    stack.lookup_struct(LookupMode::Strict, rest)
+                                {
+                                    debug!("Sub-lookup did resolve with symbol {:?}", path.symbol);
+                                    let mut down = vec![name];
+                                    down.append(&mut path.down);
+                                    return Some(RelativePath {
+                                        up: i,
+                                        down,
+                                        symbol: path.symbol,
+                                    });
+                                }
+                            }
+                            _ => {
+                                debug!("Expected first part of a path to resolve to a namespace but found {:?} instead", symbol);
+                                return None;
+                            }
+                        }
                     }
                 }
             }
@@ -142,12 +205,38 @@ impl<'a> Stack<'a> {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum LookupMode {
+    // Allow looking up in grandparent scopes and higher
+    Relaxed,
+    // Looks up only in current scope
+    Strict,
+}
+
 #[derive(Debug)]
-pub struct RelativePath {
+pub struct RelativePath<'a> {
     // number of 'supers'
     pub up: usize,
+
     // namespaces to travel down
-    pub down: Vec<String>,
+    pub down: Vec<&'a str>,
+
+    // symbol that was resolved
+    pub symbol: Symbol<'a>,
+}
+
+pub enum Symbol<'a> {
+    Namespace(&'a NamespaceDecl),
+    Struct(&'a StructDecl),
+}
+
+impl<'a> fmt::Debug for Symbol<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Symbol::Namespace(node) => write!(f, "Namespace({:?})", node.name.text),
+            Symbol::Struct(node) => write!(f, "Struct({:?})", node.name.text),
+        }
+    }
 }
 
 #[derive(Clone)]

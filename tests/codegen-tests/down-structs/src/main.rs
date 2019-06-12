@@ -11,7 +11,7 @@ mod tests {
             let mut h = server::Handler::new(Arc::new(()));
             h.on_session__login(|call| {
                 Ok(session::login::Results {
-                    session: Session {
+                    session: session::Session {
                         username: call.params.username.clone(),
                         display_name: "John Doe".into(),
                     },
