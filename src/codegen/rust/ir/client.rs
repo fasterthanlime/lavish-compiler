@@ -36,7 +36,7 @@ impl<'a> Client<'a> {
                 .write_to(s);
 
             self.for_each_fun(&mut |f| {
-                _fn(f.name())
+                _fn(f.rust_name())
                     .kw_pub()
                     .self_param("&self")
                     .param(format!("p: {Params}", Params = f.Params(&self.body.stack),))

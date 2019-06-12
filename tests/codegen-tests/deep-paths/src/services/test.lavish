@@ -1,0 +1,37 @@
+
+namespace foo {
+    struct Foo {}
+
+    namespace bar {
+        struct Bar {}
+
+        namespace baz {
+            struct Baz {
+                x: int32
+            }
+
+            namespace deepest {
+                server fn get_baz() -> (baz: Baz)
+                server fn get_bar() -> (bar: Bar)
+                server fn get_foo() -> (foo: Foo)
+            }
+
+            server fn get_baz() -> (baz: Baz)
+            server fn get_bar() -> (bar: Bar)
+            server fn get_foo() -> (foo: Foo)
+        }
+
+        server fn get_baz() -> (baz: baz.Baz)
+        server fn get_bar() -> (bar: Bar)
+        server fn get_foo() -> (foo: Foo)
+    }
+
+    server fn get_baz() -> (baz: bar.baz.Baz)
+    server fn get_bar() -> (bar: bar.Bar)
+    server fn get_foo() -> (foo: Foo)
+}
+
+server fn get_baz() -> (baz: foo.bar.baz.Baz)
+server fn get_bar() -> (bar: foo.bar.Bar)
+server fn get_foo() -> (foo: foo.Foo)
+

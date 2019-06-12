@@ -60,6 +60,7 @@ impl<'a> RustStack for ast::Stack<'a> {
 
 pub trait RustFn {
     fn slot(&self) -> String;
+    fn rust_name(&self) -> String;
     fn variant(&self) -> String;
 
     fn module(&self, stack: &ast::Stack) -> String;
@@ -81,7 +82,13 @@ impl<'a> RustFn for ast::Anchored<'a, &ast::FunctionDecl> {
     // Name of the slot in a Handler, for example `session.attempt_login`
     // will have slot name `on_session__attempt_login`
     fn slot(&self) -> String {
-        format!("on_{}", self.names().join("__"))
+        format!("on_{}", self.rust_name())
+    }
+
+    // Rust name of a function, for example `session.attempt_login`
+    // will have name `session__attempt_login`
+    fn rust_name(&self) -> String {
+        format!("{}", self.names().join("__"))
     }
 
     fn module(&self, stack: &ast::Stack) -> String {

@@ -102,8 +102,6 @@ impl<'a> Display for Function<'a> {
                     for node in &body.functions {
                         s.write(Function::new(stack.anchor(node)));
                     }
-
-                    super::pair::write_pair(s, stack.anchor(body));
                 }
             });
         })

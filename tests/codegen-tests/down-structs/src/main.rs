@@ -23,7 +23,7 @@ mod tests {
         let h = client::Handler::new(Arc::new(()));
         let client = lavish::connect(h, addr)?.client();
         let session = client
-            .login(session::login::Params {
+            .session__login(session::login::Params {
                 username: "john".into(),
                 password: "hunter2".into(),
             })?
