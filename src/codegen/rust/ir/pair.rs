@@ -1,7 +1,7 @@
 use crate::codegen::rust::prelude::*;
 
 use super::client::Client;
-use super::handler::Handler;
+use super::router::Router;
 
 pub fn write_pair(s: &mut Scope, body: ast::Anchored<&ast::NamespaceBody>) {
     {
@@ -15,7 +15,7 @@ pub fn write_pair(s: &mut Scope, body: ast::Anchored<&ast::NamespaceBody>) {
                 side: ast::Side::Server,
             });
 
-            s.write(Handler {
+            s.write(Router {
                 body: stack.anchor(body.inner),
                 side: ast::Side::Client,
             });
@@ -34,7 +34,7 @@ pub fn write_pair(s: &mut Scope, body: ast::Anchored<&ast::NamespaceBody>) {
                 side: ast::Side::Client,
             });
 
-            s.write(Handler {
+            s.write(Router {
                 body: stack.anchor(body.inner),
                 side: ast::Side::Server,
             });

@@ -1,11 +1,11 @@
 use crate::codegen::rust::prelude::*;
 
-pub struct Handler<'a> {
+pub struct Router<'a> {
     pub side: ast::Side,
     pub body: ast::Anchored<'a, &'a ast::NamespaceBody>,
 }
 
-impl<'a> Handler<'a> {
+impl<'a> Router<'a> {
     #[allow(non_snake_case)]
     fn Client(&self) -> String {
         self.body.stack.SideClient(self.side)
@@ -90,24 +90,31 @@ impl<'a> Handler<'a> {
         s.write("pub type Slot<T> = Option<Box<SlotFn<T>>>;").lf();
     }
 
-    fn define_handler(&self, s: &mut Scope) {
+    fn define_router(&self, s: &mut Scope) {
         let t_bound = "Send + Sync + 'static";
 
-        s.write("pub struct Handler<T>").lf();
+        s.write("pub struct Router<T>").lf();
         s.write("where").lf();
         s.scope().write("T: ").write(t_bound).lf();
         s.in_block(|s| {
             s.line("state: std::sync::Arc<T>,");
+            writeln!(
+                s,
+                "slots: {HashMap}<&'static str, Box<SlotFn<T>>>,",
+                HashMap = Structs::HashMap(),
+            )
+            .unwrap();
             self.for_each_fun(&mut |f| {
                 writeln!(s, "{slot}: Slot<T>,", slot = f.slot()).unwrap();
             });
         });
         s.lf();
 
-        _impl("Handler")
+        _impl("Router")
             .type_param("T", Some(t_bound))
             .body(|s| {
                 self.write_constructor(s);
+                self.write_handle(s);
                 self.write_setters(s);
             })
             .write_to(s);
@@ -118,7 +125,7 @@ impl<'a> Handler<'a> {
                 lavish = Mods::lavish(),
                 triplet = self.body.stack.triplet()
             ),
-            "Handler",
+            "Router",
         )
         .type_param("T", Some(t_bound))
         .body(|s| {
@@ -206,9 +213,50 @@ impl<'a> Handler<'a> {
                 s.write("Self");
                 s.in_block(|s| {
                     s.line("state,");
+                    writeln!(s, "slots: {HashMap}::new(),", HashMap = Structs::HashMap()).unwrap();
                     self.for_each_fun(&mut |f| {
                         s.write(f.slot()).write(": None,").lf();
                     });
+                });
+            })
+            .write_to(s);
+    }
+
+    fn write_handle(&self, s: &mut Scope) {
+        let stack = &self.body.stack;
+
+        _fn("handle")
+            .kw_pub()
+            .type_param(
+                "S",
+                Some(format!(
+                    "Fn() -> {Slottable}<P, R>",
+                    Slottable = stack.Slottable()
+                )),
+            )
+            .type_param("P", None)
+            .type_param(
+                "R",
+                Some(format!(
+                    "{Implementable}<P>",
+                    Implementable = stack.Implementable()
+                )),
+            )
+            .type_param(
+                "F",
+                Some(format!(
+                    "Fn(Call<T, P>) -> Result<R, {Error}> + 'static + Send + Sync",
+                    Error = Structs::Error()
+                )),
+            )
+            .self_param("&mut self")
+            .param("s: S")
+            .param("f: F")
+            .body(|s| {
+                s.write("self.slots.insert(R::method(), Box::new(move |call|");
+                s.in_terminated_block("));", |s| {
+                    s.line("let call = call.downcast(R::downcast_params)?;");
+                    s.line("f(call).map(|r| r.upcast_results())");
                 });
             })
             .write_to(s);
@@ -265,13 +313,13 @@ impl<'a> Handler<'a> {
     }
 }
 
-impl<'a> Display for Handler<'a> {
+impl<'a> Display for Router<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
             self.define_runtime(s);
             self.define_call(s);
             self.define_slot(s);
-            self.define_handler(s);
+            self.define_router(s);
         })
     }
 }

@@ -21,8 +21,8 @@ impl<'a> fmt::Display for RustType<'a> {
             TypeKind::Base(base) => base.generate_rust(f),
             TypeKind::Map(map) => write!(
                 f,
-                "{collections}::HashMap<{K}, {V}>",
-                collections = Mods::collections(),
+                "{HashMap}<{K}, {V}>",
+                HashMap = Structs::HashMap(),
                 K = map.keys.as_rust(&self.0.stack),
                 V = map.values.as_rust(&self.0.stack)
             ),

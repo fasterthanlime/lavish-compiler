@@ -63,4 +63,8 @@ impl Structs {
     pub fn Arc() -> String {
         format!("{}::Arc", Mods::sync())
     }
+
+    pub fn HashMap() -> String {
+        format!("{}::HashMap", Mods::collections())
+    }
 }
