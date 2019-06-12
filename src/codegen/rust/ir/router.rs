@@ -169,23 +169,14 @@ impl<'a> Router<'a> {
     fn write_handle_body(&self, s: &mut Scope) {
         writeln!(s, "use {Atom};", Atom = Traits::Atom()).unwrap();
         if self.has_variants() {
-            s.write("let slot = match params");
-            let match_end = format!(
-                ".ok_or_else(|| {Error}::MethodUnimplemented(params.method()))?;",
-                Error = Structs::Error(),
-            );
-            s.in_terminated_block(match_end, |s| {
-                self.for_each_fun(&mut |f| {
-                    writeln!(
-                        s,
-                        "{Params}::{variant}(_) => self.{slot}.as_ref(),",
-                        Params = self.body.stack.Params(),
-                        variant = f.variant(),
-                        slot = f.slot(),
-                    )
-                    .unwrap();
-                });
-                writeln!(s, "_ => None,").unwrap();
+            writeln!(s, "let slot = self.slots.get(params.method())").unwrap();
+            s.in_scope(|s| {
+                writeln!(
+                    s,
+                    ".ok_or_else(|| {Error}::MethodUnimplemented(params.method()))?;",
+                    Error = Structs::Error(),
+                )
+                .unwrap();
             });
             s.write("let call = Call");
             s.in_terminated_block(";", |s| {
