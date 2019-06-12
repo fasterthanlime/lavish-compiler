@@ -81,6 +81,7 @@ impl Generator {
             write!(s, "pub mod schema").unwrap();
             s.in_block(|s| {
                 s.write(Symbols::new(body.clone()));
+                write_pair(s, body.clone());
             });
             s.lf();
         }

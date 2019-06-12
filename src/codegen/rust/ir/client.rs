@@ -35,6 +35,29 @@ impl<'a> Client<'a> {
                 })
                 .write_to(s);
 
+            _fn("call")
+                .kw_pub()
+                .type_param(
+                    "P",
+                    Some(format!(
+                        "{Callable}<R>",
+                        Callable = self.body.stack.Callable()
+                    )),
+                )
+                .type_param("R", None)
+                .self_param("&self")
+                .param("p: P")
+                .returns(format!("Result<R, {Error}>", Error = Structs::Error()))
+                .body(|s| {
+                    s.line("self.caller.call(");
+                    s.in_scope(|s| {
+                        s.line("p.upcast_params(),");
+                        s.line("P::downcast_results,");
+                    });
+                    s.line(")");
+                })
+                .write_to(s);
+
             self.for_each_fun(&mut |f| {
                 _fn(f.rust_name())
                     .kw_pub()

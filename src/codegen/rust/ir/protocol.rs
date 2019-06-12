@@ -57,6 +57,32 @@ impl<'a> Protocol<'a> {
             name = "Handler",
         )
         .unwrap();
+
+        s.line("pub trait Callable<R>");
+        s.in_block(|s| {
+            s.line("fn upcast_params(self) -> Params;");
+            s.line("fn downcast_results(results: Results) -> Option<R>;");
+        });
+        s.lf();
+
+        s.line("pub trait Implementable<P>");
+        s.in_block(|s| {
+            s.line("fn method() -> &'static str;");
+            s.line("fn downcast_params(params: Params) -> Option<P>;");
+            s.line("fn upcast_results(self) -> Results;");
+        });
+        s.lf();
+
+        s.line("#[derive(Clone, Copy)]");
+        s.line("pub struct Slottable<P, R>");
+        s.line("where");
+        s.in_scope(|s| {
+            s.line("R: Implementable<P>,");
+        });
+        s.in_block(|s| {
+            s.line("pub phantom: std::marker::PhantomData<(P, R)>,");
+        });
+        s.lf();
     }
 }
 

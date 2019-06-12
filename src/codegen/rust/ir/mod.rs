@@ -8,4 +8,4 @@ pub(crate) mod protocol;
 pub(crate) mod symbols;
 pub(crate) mod types;
 
-pub(crate) use {protocol::*, symbols::*};
+pub(crate) use {pair::*, protocol::*, symbols::*};

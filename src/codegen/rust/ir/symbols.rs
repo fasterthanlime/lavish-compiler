@@ -29,8 +29,6 @@ impl<'a> Display for Symbols<'a> {
                     s.write(Symbols::new(stack.push(ns).anchor(&ns.body)));
                 });
             }
-
-            super::pair::write_pair(s, stack.anchor(body));
         })
     }
 }
@@ -74,10 +72,27 @@ impl<'a> Function<'a> {
 impl<'a> Display for Function<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
-            let stack = self.node.stack.push(self.node.inner);
+            let stack = &self.node.stack;
+            _fn(self.node.name())
+                .kw_pub()
+                .returns(format!(
+                    "{Slottable}<{name}::Params, {name}::Results>",
+                    Slottable = stack.Slottable(),
+                    name = self.node.name(),
+                ))
+                .body(|s| {
+                    writeln!(
+                        s,
+                        "{Slottable} {{ phantom: std::marker::PhantomData }}",
+                        Slottable = stack.Slottable()
+                    )
+                    .unwrap();
+                })
+                .write_to(s);
 
             s.write("pub mod ").write(self.node.name());
             s.in_block(|s| {
+                let stack = stack.push(self.node.inner);
                 s.write(derive().debug().serialize().deserialize());
                 s.write("pub struct Params");
                 s.in_block(|s| {
@@ -95,6 +110,96 @@ impl<'a> Display for Function<'a> {
                         s.write(Field::new(stack.anchor(f))).write(",").lf();
                     }
                 });
+
+                s.lf();
+
+                _impl_trait(
+                    format!("{Callable}<Results>", Callable = stack.Callable()),
+                    "Params",
+                )
+                .body(|s| {
+                    _fn("upcast_params")
+                        .self_param("self")
+                        .returns(stack.Params())
+                        .body(|s| {
+                            writeln!(
+                                s,
+                                "{Params}::{variant}(self)",
+                                Params = stack.Params(),
+                                variant = self.node.variant()
+                            )
+                            .unwrap();
+                        })
+                        .write_to(s);
+
+                    _fn("downcast_results")
+                        .param(format!("results: {Results}", Results = stack.Results()))
+                        .returns("Option<Results>")
+                        .body(|s| {
+                            s.write("match results");
+                            s.in_block(|s| {
+                                writeln!(
+                                    s,
+                                    "{Results}::{variant}(r) => Some(r),",
+                                    Results = stack.Results(),
+                                    variant = self.node.variant()
+                                )
+                                .unwrap();
+                                s.line("_ => None,");
+                            });
+                        })
+                        .write_to(s);
+                })
+                .write_to(s);
+
+                s.lf();
+
+                _impl_trait(
+                    format!(
+                        "{Implementable}<Params>",
+                        Implementable = stack.Implementable()
+                    ),
+                    "Results",
+                )
+                .body(|s| {
+                    _fn("method")
+                        .returns("&'static str")
+                        .body(|s| {
+                            writeln!(s, "{:?}", self.node.method()).unwrap();
+                        })
+                        .write_to(s);
+                    _fn("upcast_results")
+                        .self_param("self")
+                        .returns(stack.Results())
+                        .body(|s| {
+                            writeln!(
+                                s,
+                                "{Results}::{variant}(self)",
+                                Results = stack.Results(),
+                                variant = self.node.variant(),
+                            )
+                            .unwrap();
+                        })
+                        .write_to(s);
+                    _fn("downcast_params")
+                        .param(format!("params: {Params}", Params = stack.Params()))
+                        .returns("Option<Params>")
+                        .body(|s| {
+                            s.write("match params");
+                            s.in_block(|s| {
+                                writeln!(
+                                    s,
+                                    "{Params}::{variant}(p) => Some(p),",
+                                    Params = stack.Params(),
+                                    variant = self.node.variant()
+                                )
+                                .unwrap();
+                                s.line("_ => None,");
+                            });
+                        })
+                        .write_to(s);
+                })
+                .write_to(s);
 
                 if let Some(body) = self.node.body.as_ref() {
                     s.lf();

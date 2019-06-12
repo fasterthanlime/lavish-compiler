@@ -8,6 +8,9 @@ pub trait RustStack {
     fn protocol(&self) -> String;
     fn schema(&self) -> String;
     fn Caller(&self) -> String;
+    fn Callable(&self) -> String;
+    fn Implementable(&self) -> String;
+    fn Slottable(&self) -> String;
     fn SideClient(&self, side: ast::Side) -> String;
     fn Params(&self) -> String;
     fn NotificationParams(&self) -> String;
@@ -30,6 +33,18 @@ impl<'a> RustStack for ast::Stack<'a> {
 
     fn Caller(&self) -> String {
         format!("{}::Caller", self.protocol())
+    }
+
+    fn Callable(&self) -> String {
+        format!("{}::Callable", self.protocol())
+    }
+
+    fn Implementable(&self) -> String {
+        format!("{}::Implementable", self.protocol())
+    }
+
+    fn Slottable(&self) -> String {
+        format!("{}::Slottable", self.protocol())
     }
 
     fn SideClient(&self, side: ast::Side) -> String {
