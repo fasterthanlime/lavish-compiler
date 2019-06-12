@@ -73,26 +73,34 @@ impl<'a> Display for Function<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
             let stack = &self.node.stack;
-            _fn(self.node.name())
-                .kw_pub()
-                .returns(format!(
-                    "{Slottable}<{name}::Params, {name}::Results>",
-                    Slottable = stack.Slottable(),
-                    name = self.node.name(),
-                ))
-                .body(|s| {
-                    writeln!(
-                        s,
-                        "{Slottable} {{ phantom: std::marker::PhantomData }}",
-                        Slottable = stack.Slottable()
-                    )
-                    .unwrap();
-                })
-                .write_to(s);
+
+            writeln!(
+                s,
+                "pub use {name}::method as {name};",
+                name = self.node.name()
+            )
+            .unwrap();
 
             s.write("pub mod ").write(self.node.name());
             s.in_block(|s| {
                 let stack = stack.push(self.node.inner);
+
+                _fn("method")
+                    .kw_pub()
+                    .returns(format!(
+                        "{Slottable}<Params, Results>",
+                        Slottable = stack.Slottable(),
+                    ))
+                    .body(|s| {
+                        writeln!(
+                            s,
+                            "{Slottable} {{ phantom: std::marker::PhantomData }}",
+                            Slottable = stack.Slottable()
+                        )
+                        .unwrap();
+                    })
+                    .write_to(s);
+
                 s.write(derive().debug().serialize().deserialize());
                 s.write("pub struct Params");
                 s.in_block(|s| {

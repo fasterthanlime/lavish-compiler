@@ -253,28 +253,6 @@ impl<'a, T> std::ops::Deref for Anchored<'a, T> {
     }
 }
 
-pub fn filter_funs<Predicate, I>(
-    predicate: Predicate,
-    mut cb: I,
-) -> impl FnMut(Anchored<&FunctionDecl>)
-where
-    Predicate: Fn(&Anchored<&FunctionDecl>) -> bool + 'static,
-    I: FnMut(Anchored<&FunctionDecl>),
-{
-    move |f| {
-        if predicate(&f) {
-            cb(f)
-        }
-    }
-}
-
-pub fn filter_fun_side<I>(side: Side, cb: I) -> impl FnMut(Anchored<&FunctionDecl>)
-where
-    I: FnMut(Anchored<&FunctionDecl>),
-{
-    filter_funs(move |f| f.side == side, cb)
-}
-
 impl<'a> Anchored<'a, &NamespaceBody> {
     pub fn for_each_fun(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
         for f in &self.functions {
@@ -294,11 +272,6 @@ impl<'a> Anchored<'a, &NamespaceBody> {
             cb(f);
         });
         self.for_each_namespace(&mut |ns| ns.for_each_fun_of_schema(cb));
-    }
-
-    pub fn for_each_fun_of_interface(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
-        self.for_each_fun(cb);
-        self.for_each_namespace(&mut |ns| ns.for_each_fun_of_interface(cb));
     }
 }
 
