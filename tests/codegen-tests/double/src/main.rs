@@ -8,18 +8,18 @@ mod tests {
     #[test]
     fn test() -> Result<(), Box<dyn std::error::Error + 'static>> {
         let addr = {
-            let mut h = server::Handler::new(Arc::new(()));
-            h.on_double(|call| {
+            let mut r = server::Router::new(Arc::new(()));
+            r.handle(double, |call| {
                 Ok(double::Results {
                     value: call.params.value * 2,
                 })
             });
-            lavish::serve(h, "localhost:0")?.local_addr()
+            lavish::serve(r, "localhost:0")?.local_addr()
         };
 
-        let h = client::Handler::new(Arc::new(()));
-        let client = lavish::connect(h, addr)?.client();
-        let value = client.double(double::Params { value: 16 })?.value;
+        let r = client::Router::new(Arc::new(()));
+        let client = lavish::connect(r, addr)?.client();
+        let value = client.call(double::Params { value: 16 })?.value;
         assert_eq!(value, 32);
 
         Ok(())

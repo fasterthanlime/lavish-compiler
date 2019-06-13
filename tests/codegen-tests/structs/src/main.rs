@@ -8,9 +8,8 @@ mod tests {
     #[test]
     fn test() -> Result<(), Box<dyn std::error::Error + 'static>> {
         let addr = {
-            let mut h = server::Handler::new(Arc::new(()));
-            h.on_login(|call| {
-                // TODO: check credentials
+            let mut r = server::Router::new(Arc::new(()));
+            r.handle(login, |call| {
                 Ok(login::Results {
                     session: Session {
                         username: call.params.username.clone(),
@@ -18,13 +17,13 @@ mod tests {
                     },
                 })
             });
-            lavish::serve(h, "localhost:0")?.local_addr()
+            lavish::serve(r, "localhost:0")?.local_addr()
         };
 
-        let h = client::Handler::new(Arc::new(()));
-        let client = lavish::connect(h, addr)?.client();
+        let r = client::Router::new(Arc::new(()));
+        let client = lavish::connect(r, addr)?.client();
         let session = client
-            .login(login::Params {
+            .call(login::Params {
                 username: "john".into(),
                 password: "hunter2".into(),
             })?

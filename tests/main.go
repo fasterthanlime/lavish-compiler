@@ -42,7 +42,7 @@ func TestCodegen() error {
 
 	log.Println("Running codegen tests...")
 
-	tmpDir := filepath.Join(cwd, "tmp")
+	tmpDir := filepath.Join(cwd, ".tmp")
 
 	cargoTargetDir := filepath.Join(tmpDir, "target")
 	os.Setenv("CARGO_TARGET_DIR", cargoTargetDir)
