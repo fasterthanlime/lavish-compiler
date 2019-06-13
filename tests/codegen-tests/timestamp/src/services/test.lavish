@@ -1,0 +1,3 @@
+
+server fn get_timestamp() -> (value: timestamp)
+server fn subtract_week(value: timestamp) -> (value: timestamp)

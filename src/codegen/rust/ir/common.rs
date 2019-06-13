@@ -7,7 +7,7 @@ impl Mods {
     }
 
     pub fn chrono() -> String {
-        "::chrono".into()
+        format!("{lavish}::chrono", lavish = Self::lavish())
     }
 
     pub fn collections() -> String {

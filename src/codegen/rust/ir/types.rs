@@ -58,7 +58,11 @@ impl GeneratesRust for ast::BaseType {
             T::Float64 => write!(f, "f64"),
             T::String => write!(f, "String"),
             T::Bytes => write!(f, "Vec<u8>"),
-            T::Timestamp => write!(f, "{chrono}::DateTime", chrono = Mods::chrono()),
+            T::Timestamp => write!(
+                f,
+                "{chrono}::DateTime<{chrono}::offset::Utc>",
+                chrono = Mods::chrono()
+            ),
         }
     }
 }
