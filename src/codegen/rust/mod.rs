@@ -29,13 +29,21 @@ impl super::Generator for Generator {
         }
 
         {
-            let mod_path = workspace.dir.join("mod.rs");
-            let mut output = Scope::writer(File::create(&mod_path)?);
-            let mut s = Scope::new(&mut output);
-            self.write_prelude(&mut s);
+            let wrapper_name = match self.target.wrapper {
+                ast::RustTargetWrapper::None => None,
+                ast::RustTargetWrapper::Mod => Some("mod.rs"),
+                ast::RustTargetWrapper::Lib => Some("lib.rs"),
+            };
 
-            for member in workspace.members.values() {
-                writeln!(s, "pub mod {};", member.name)?;
+            if let Some(wrapper_name) = wrapper_name {
+                let wrapper_path = workspace.dir.join(wrapper_name);
+                let mut output = Scope::writer(File::create(&wrapper_path)?);
+                let mut s = Scope::new(&mut output);
+                self.write_prelude(&mut s);
+
+                for member in workspace.members.values() {
+                    writeln!(s, "pub mod {};", member.name)?;
+                }
             }
         }
 

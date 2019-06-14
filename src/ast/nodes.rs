@@ -50,7 +50,36 @@ pub enum Target {
 }
 
 #[derive(Debug, Clone)]
-pub struct RustTarget {}
+pub struct RustTarget {
+    pub wrapper: RustTargetWrapper,
+}
+
+impl RustTarget {
+    pub fn new(items: Vec<RustTargetItem>) -> Self {
+        let mut s = Self {
+            wrapper: RustTargetWrapper::Mod,
+        };
+        for item in items {
+            match item {
+                RustTargetItem::Wrapper(wrapper) => {
+                    s.wrapper = wrapper;
+                }
+            }
+        }
+        s
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum RustTargetWrapper {
+    None,
+    Mod,
+    Lib,
+}
+
+pub enum RustTargetItem {
+    Wrapper(RustTargetWrapper),
+}
 
 #[derive(Debug, Clone)]
 pub struct GoTarget {}

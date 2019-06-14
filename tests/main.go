@@ -74,8 +74,19 @@ func TestCodegen() error {
 
 		executeTemplate("Cargo.toml", cargoPath, cargoVars)
 
-		workspacePath := filepath.Join(targetDir, "src", "services")
-		must(sh.RunV("../target/debug/lavish", "build", workspacePath))
+		srcPath := filepath.Join(targetDir, "src")
+		must(filepath.Walk(srcPath, func (path string, info os.FileInfo, err error) error {
+			must(err)
+
+			if filepath.Base(path) == "lavish-rules" {
+				workspacePath := filepath.Dir(path)
+				log.Printf("Compiling lavish workspace %q", workspacePath)
+				must(sh.RunV("../target/debug/lavish", "build", workspacePath))
+			}
+
+			return nil
+		}))
+
 		must(sh.RunV("cargo", "test", "--manifest-path", cargoPath))
 	}
 	return nil

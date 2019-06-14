@@ -58,7 +58,41 @@ pub fn target<E: ParseError<Span>>(i: Span) -> IResult<Span, Target, E> {
 pub fn rust_target<E: ParseError<Span>>(i: Span) -> IResult<Span, RustTarget, E> {
     let (i, _) = spaced(tag("rust"))(i)?;
 
-    Ok((i, RustTarget {}))
+    context(
+        "rust target",
+        cut(map(
+            opt(delimited(
+                spaced(char('{')),
+                rust_target_body,
+                spaced(char('}')),
+            )),
+            move |items| RustTarget::new(items.unwrap_or_default()),
+        )),
+    )(i)
+}
+
+pub fn rust_target_body<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<RustTargetItem>, E> {
+    many0(spaced(rust_target_item))(i)
+}
+
+pub fn rust_target_item<E: ParseError<Span>>(i: Span) -> IResult<Span, RustTargetItem, E> {
+    map(rust_target_wrapper, RustTargetItem::Wrapper)(i)
+}
+
+pub fn rust_target_wrapper<E: ParseError<Span>>(i: Span) -> IResult<Span, RustTargetWrapper, E> {
+    let (i, _) = spaced(tag("wrapper"))(i)?;
+
+    context(
+        "rust target wrapper",
+        cut(preceded(
+            spaced(char('=')),
+            alt((
+                map(tag("none"), |_| RustTargetWrapper::None),
+                map(tag("mod"), |_| RustTargetWrapper::Mod),
+                map(tag("lib"), |_| RustTargetWrapper::Lib),
+            )),
+        )),
+    )(i)
 }
 
 /// In rules: `target go`
