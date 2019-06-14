@@ -21,6 +21,9 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 pub fn check(schema: &ast::Schema) -> Result<(), Error> {
+    // TODO: check that `data` is not nested inside another complex type,
+    // as long as we use serde_repr(bytes)
+    // TODO: check name collisions in namespaces
     // TODO: check hash collisions
     noredef::check(schema)?;
     convos::check(schema)?;
