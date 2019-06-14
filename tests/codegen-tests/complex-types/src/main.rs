@@ -1,8 +1,8 @@
-mod services;
+mod test;
 
 #[cfg(test)]
 mod tests {
-    use super::services::test::*;
+    use super::test::*;
     use std::collections::HashMap;
     use std::sync::Arc;
 
