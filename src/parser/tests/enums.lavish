@@ -1,0 +1,15 @@
+
+// This is an empty enum
+enum Empty {}
+
+// Ice cream flavors
+enum Flavors { Chocolate, Vanilla }
+
+// This one has many variants and a trailing comma
+enum BuildFileType {
+    Patch,
+    Archive,
+    Signature,
+    Manifest,
+    Unpacked,
+}

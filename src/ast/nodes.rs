@@ -1,4 +1,5 @@
 use crate::parser::Span;
+use crc::crc32::checksum_castagnoli;
 use log::*;
 use simple_error::SimpleError;
 use std::collections::HashMap;
@@ -147,7 +148,12 @@ pub struct Import {
 #[derive(Debug, Clone)]
 pub struct Identifier {
     pub span: Span,
-    pub text: String,
+}
+
+impl Identifier {
+    pub fn text(&self) -> &str {
+        self.span.slice()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -162,6 +168,7 @@ pub struct NamespaceDecl {
 pub struct NamespaceBody {
     pub functions: Vec<FunctionDecl>,
     pub structs: Vec<StructDecl>,
+    pub enums: Vec<EnumDecl>,
     pub namespaces: Vec<NamespaceDecl>,
 }
 
@@ -181,6 +188,7 @@ impl NamespaceBody {
         let mut bod = Self {
             functions: Vec::new(),
             structs: Vec::new(),
+            enums: Vec::new(),
             namespaces: Vec::new(),
         };
         for item in items {
@@ -197,6 +205,9 @@ impl NamespaceBody {
             NamespaceItem::Struct(i) => {
                 self.structs.push(i);
             }
+            NamespaceItem::Enum(i) => {
+                self.enums.push(i);
+            }
             NamespaceItem::Namespace(i) => {
                 self.namespaces.push(i);
             }
@@ -208,6 +219,7 @@ impl NamespaceBody {
 pub enum NamespaceItem {
     Function(FunctionDecl),
     Struct(StructDecl),
+    Enum(EnumDecl),
     Namespace(NamespaceDecl),
 }
 
@@ -324,6 +336,26 @@ pub struct StructDecl {
     pub comment: Option<Comment>,
     pub name: Identifier,
     pub fields: Vec<Field>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumDecl {
+    pub loc: Span,
+    pub comment: Option<Comment>,
+    pub name: Identifier,
+    pub variants: Vec<EnumVariant>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumVariant {
+    pub loc: Span,
+    pub name: Identifier,
+}
+
+impl EnumVariant {
+    pub fn hash(&self) -> u32 {
+        checksum_castagnoli(self.name.text().as_bytes())
+    }
 }
 
 #[derive(Debug, Clone)]

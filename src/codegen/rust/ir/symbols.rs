@@ -19,12 +19,15 @@ impl<'a> Display for Symbols<'a> {
             for node in &body.structs {
                 s.write(Struct::new(stack.anchor(node)));
             }
+            for node in &body.enums {
+                s.write(Enum::new(stack.anchor(node)));
+            }
             for node in &body.functions {
                 s.write(Function::new(stack.anchor(node)));
             }
 
             for ns in &body.inner.namespaces {
-                write!(s, "pub mod {}", ns.name.text).unwrap();
+                write!(s, "pub mod {}", ns.name.text()).unwrap();
                 s.in_block(|s| {
                     s.write(Symbols::new(stack.push(ns).anchor(&ns.body)));
                 });
@@ -254,6 +257,32 @@ impl<'a> Display for Field<'a> {
                 typ = self.node.typ.as_rust(&self.node.stack)
             )
             .unwrap();
+        })
+    }
+}
+
+pub struct Enum<'a> {
+    node: ast::Anchored<'a, &'a ast::EnumDecl>,
+}
+
+impl<'a> Enum<'a> {
+    fn new(node: ast::Anchored<'a, &'a ast::EnumDecl>) -> Self {
+        Self { node }
+    }
+}
+
+impl<'a> Display for Enum<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Scope::fmt(f, |s| {
+            s.comment(&self.node.comment);
+            s.write(derive().debug().serialize().deserialize());
+            s.write("#[repr(u32)]").lf();
+            s.write("pub enum ").write(self.node.name.text());
+            s.in_block(|s| {
+                for v in &self.node.variants {
+                    writeln!(s, "{name} = 0x{hash:x},", name = v.name.text(), hash = v.hash()).unwrap();
+                }
+            });
         })
     }
 }

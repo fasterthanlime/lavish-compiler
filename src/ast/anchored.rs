@@ -2,7 +2,7 @@ use crate::ast::nodes::*;
 use std::fmt;
 
 pub trait Frame: std::fmt::Debug {
-    fn name(&self) -> String;
+    fn name(&self) -> &str;
     fn kind(&self) -> FrameKind;
     fn body(&self) -> Option<&NamespaceBody>;
 }
@@ -29,8 +29,8 @@ impl SyntheticFrame {
 }
 
 impl Frame for SyntheticFrame {
-    fn name(&self) -> String {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     fn kind(&self) -> FrameKind {
@@ -43,8 +43,8 @@ impl Frame for SyntheticFrame {
 }
 
 impl Frame for Schema {
-    fn name(&self) -> String {
-        "<schema>".into()
+    fn name(&self) -> &str {
+        "<schema>"
     }
 
     fn kind(&self) -> FrameKind {
@@ -57,8 +57,8 @@ impl Frame for Schema {
 }
 
 impl Frame for FunctionDecl {
-    fn name(&self) -> String {
-        self.name.text.clone()
+    fn name(&self) -> &str {
+        self.name.text()
     }
 
     fn kind(&self) -> FrameKind {
@@ -71,8 +71,8 @@ impl Frame for FunctionDecl {
 }
 
 impl Frame for NamespaceDecl {
-    fn name(&self) -> String {
-        self.name.text.clone()
+    fn name(&self) -> &str {
+        self.name.text()
     }
 
     fn kind(&self) -> FrameKind {
@@ -114,7 +114,7 @@ impl<'a> Stack<'a> {
         }
     }
 
-    pub fn names(&self) -> Vec<String> {
+    pub fn names(&self) -> Vec<&str> {
         self.frames
             .iter()
             .map(|f| match f.kind() {
@@ -152,15 +152,23 @@ impl<'a> Stack<'a> {
 
                 if symbol.is_none() {
                     for s in &body.structs {
-                        if s.name.text == name {
+                        if s.name.text() == name {
                             symbol = Some(Symbol::Struct(&s))
                         }
                     }
                 }
 
                 if symbol.is_none() {
+                    for s in &body.enums {
+                        if s.name.text() == name {
+                            symbol = Some(Symbol::Enum(&s))
+                        }
+                    }
+                }
+
+                if symbol.is_none() {
                     for ns in &body.namespaces {
-                        if ns.name.text == name {
+                        if ns.name.text() == name {
                             symbol = Some(Symbol::Namespace(&ns))
                         }
                     }
@@ -177,7 +185,7 @@ impl<'a> Stack<'a> {
                     } else {
                         match symbol {
                             Symbol::Namespace(ns) => {
-                                debug!("First part of the path resolved to a namespace ({:?}), looking up rest in it", ns.name.text);
+                                debug!("First part of the path resolved to a namespace ({:?}), looking up rest in it", ns.name.text());
                                 let stack = self.push(ns);
                                 if let Some(mut path) =
                                     stack.lookup_struct(LookupMode::Strict, rest)
@@ -228,13 +236,15 @@ pub struct RelativePath<'a> {
 pub enum Symbol<'a> {
     Namespace(&'a NamespaceDecl),
     Struct(&'a StructDecl),
+    Enum(&'a EnumDecl),
 }
 
 impl<'a> fmt::Debug for Symbol<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Symbol::Namespace(node) => write!(f, "Namespace({:?})", node.name.text),
-            Symbol::Struct(node) => write!(f, "Struct({:?})", node.name.text),
+            Symbol::Namespace(node) => write!(f, "Namespace({:?})", node.name.text()),
+            Symbol::Struct(node) => write!(f, "Struct({:?})", node.name.text()),
+            Symbol::Enum(node) => write!(f, "Enum({:?})", node.name.text()),
         }
     }
 }
@@ -285,7 +295,7 @@ impl<'a> Anchored<'a, &FunctionDecl> {
         }
     }
 
-    pub fn names(&self) -> Vec<String> {
+    pub fn names(&self) -> Vec<&str> {
         let mut names = self.stack.names();
         names.push(self.name().into());
         names
@@ -296,18 +306,18 @@ impl<'a> Anchored<'a, &FunctionDecl> {
     }
 
     pub fn name(&self) -> &str {
-        self.inner.name.text.as_ref()
+        self.inner.name.text()
     }
 }
 
 impl<'a> Anchored<'a, &StructDecl> {
     pub fn name(&self) -> &str {
-        self.inner.name.text.as_ref()
+        self.inner.name.text()
     }
 }
 
 impl<'a> Anchored<'a, &Field> {
     pub fn name(&self) -> &str {
-        self.inner.name.text.as_ref()
+        self.inner.name.text()
     }
 }

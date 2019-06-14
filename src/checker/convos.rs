@@ -57,7 +57,7 @@ impl Visitable for &ast::FunctionDecl {
                         .diag_err(format!(
                             "{} {} should be {}",
                             "error:".red().bold(),
-                            f.name.text,
+                            f.name.text(),
                             expected_side
                         ))
                         .print();
@@ -66,7 +66,8 @@ impl Visitable for &ast::FunctionDecl {
                         .position()
                         .diag_info(format!(
                             "because its parent, {}, is {}",
-                            self.name.text, self.side
+                            self.name.text(),
+                            self.side
                         ))
                         .print();
                 }

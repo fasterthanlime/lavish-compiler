@@ -1,4 +1,4 @@
 
 // Returns some cookies
-server fn get_cookies() -> (cookies: Map<string, string>)
+server fn get_cookies() -> (cookies: map<string, string>)
 

@@ -22,7 +22,7 @@ impl Visitor {
         let mut set: HashMap<&str, &T> = HashMap::new();
         for item in items {
             let name = item.name();
-            if let Some(old) = set.insert(&name.text, item) {
+            if let Some(old) = set.insert(&name.text(), item) {
                 self.num_errors += 1;
                 name.span
                     .position()
@@ -30,7 +30,7 @@ impl Visitor {
                         "{} {} {} redefined",
                         "error:".red().bold(),
                         kind,
-                        name.text
+                        name.text()
                     ))
                     .print();
                 old.name()

@@ -184,8 +184,7 @@ fn id<E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
     let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
     map(take_while1(move |c| chars.contains(c)), |span: Span| {
-        let text = span.clone().into();
-        Identifier { span, text }
+        Identifier { span }
     })(i)
 }
 
@@ -336,6 +335,23 @@ fn fields<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
     )(i)
 }
 
+fn enum_variant<E: ParseError<Span>>(i: Span) -> IResult<Span, EnumVariant, E> {
+    let (i, loc) = spaced(loc)(i)?;
+
+    map(spaced(id), move |name| EnumVariant {
+        loc: loc.clone(),
+        name,
+    })(i)
+}
+
+// Field list: field declarations separated by commas
+fn enum_variants<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<EnumVariant>, E> {
+    terminated(
+        separated_list(spaced(char(',')), enum_variant),
+        opt(spaced(char(','))),
+    )(i)
+}
+
 // Function modifiers (server, client)
 fn side<E: ParseError<Span>>(i: Span) -> IResult<Span, Side, E> {
     alt((
@@ -454,6 +470,32 @@ fn structdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, StructDecl, E> {
     )(i)
 }
 
+// Enum declaration
+fn enumdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, EnumDecl, E> {
+    let (i, comment) = opt(comment)(i)?;
+    let (i, _) = preceded(sp, tag("enum"))(i)?;
+    let (i, loc) = spaced(loc)(i)?;
+
+    context(
+        "enum declaration",
+        cut(map(
+            tuple((
+                preceded(sp, id),
+                preceded(
+                    sp,
+                    delimited(char('{'), enum_variants, preceded(sp, char('}'))),
+                ),
+            )),
+            move |(name, variants)| EnumDecl {
+                loc: loc.clone(),
+                comment: comment.clone(),
+                name: name.clone(),
+                variants,
+            },
+        )),
+    )(i)
+}
+
 // A single comment-line
 fn comment_line<E: ParseError<Span>>(i: Span) -> IResult<Span, Span, E> {
     preceded(sp, preceded(tag("//"), preceded(linesp, take_until("\n"))))(i)
@@ -475,6 +517,7 @@ fn nsitem<E: ParseError<Span>>(i: Span) -> IResult<Span, Option<NamespaceItem>, 
                 map(fndecl, NamespaceItem::Function),
                 map(notifdecl, NamespaceItem::Function),
                 map(structdecl, NamespaceItem::Struct),
+                map(enumdecl, NamespaceItem::Enum),
                 map(nsdecl, NamespaceItem::Namespace),
             )),
             Some,
@@ -600,4 +643,6 @@ mod tests {
     schema_passing!(fn_namespaced);
     schema_passing!(fn_nested);
     schema_passing!(nf_simple);
+
+    schema_passing!(enums);
 }

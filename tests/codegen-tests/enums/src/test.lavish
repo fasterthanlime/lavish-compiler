@@ -1,0 +1,7 @@
+
+enum Flavor {
+    Vanilla,
+    Chocolate,
+}
+
+server fn get_flavor_name(flavor: Flavor) -> (name: string)

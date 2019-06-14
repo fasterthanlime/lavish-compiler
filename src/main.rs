@@ -79,7 +79,7 @@ fn parse_workspace(workspace_path: &Path) -> Result<ast::Workspace, Box<dyn std:
 
     println!("{} builds", workspace.rules.builds.len());
     for build in &workspace.rules.builds {
-        let name = build.name.text.to_string();
+        let name = build.name.text().to_string();
         let source_path = workspace.resolve(&name)?;
         println!("Parsing {} from {:?}", name, source_path);
         let source = parser::Source::from_path(&source_path)?;

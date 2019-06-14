@@ -21,6 +21,7 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 pub fn check(schema: &ast::Schema) -> Result<(), Error> {
+    // TODO: check hash collisions
     noredef::check(schema)?;
     convos::check(schema)?;
     Ok(())
