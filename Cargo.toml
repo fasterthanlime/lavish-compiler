@@ -8,7 +8,7 @@ repository = "https://github.com/lavish-lang/lavish-compiler"
 readme = "README.md"
 license = "MIT"
 
-keywords = ["rpc", "msgpack", "ipc"]
+keywords = ["rpc", "msgpack", "ipc", "lavish"]
 categories = ["network-programming", "encoding", "command-line-utilities"]
 
 [badges]
