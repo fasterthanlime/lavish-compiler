@@ -1,6 +1,6 @@
 [package]
 name = "lavish-compiler"
-version = "0.3.2"
+version = "0.3.3"
 authors = ["Amos Wenger <amoswenger@gmail.com>"]
 edition = "2018"
 description = "Compiler for the Lavish IDL"
