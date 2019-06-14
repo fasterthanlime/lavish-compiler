@@ -234,6 +234,19 @@ impl<'a> Display for Field<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
             s.comment(&self.node.comment);
+
+            {
+                use ast::BaseType as T;
+                match &self.node.typ.kind {
+                    ast::TypeKind::Base(typ) => match typ {
+                        T::Bytes => {
+                            writeln!(s, "#[serde(with = {:?})]", "::lavish::serde_bytes").unwrap()
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                }
+            }
             write!(
                 s,
                 "pub {name}: {typ}",
