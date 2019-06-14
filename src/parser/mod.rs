@@ -336,10 +336,12 @@ fn fields<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
 }
 
 fn enum_variant<E: ParseError<Span>>(i: Span) -> IResult<Span, EnumVariant, E> {
+    let (i, comment) = opt(comment)(i)?;
     let (i, loc) = spaced(loc)(i)?;
 
     map(spaced(id), move |name| EnumVariant {
         loc: loc.clone(),
+        comment: comment.clone(),
         name,
     })(i)
 }

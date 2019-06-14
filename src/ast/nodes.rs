@@ -349,6 +349,7 @@ pub struct EnumDecl {
 #[derive(Debug, Clone)]
 pub struct EnumVariant {
     pub loc: Span,
+    pub comment: Option<Comment>,
     pub name: Identifier,
 }
 

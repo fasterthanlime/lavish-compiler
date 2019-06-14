@@ -10,6 +10,7 @@ enum BuildFileType {
     Patch,
     Archive,
     Signature,
+    // This one is experimental
     Manifest,
     Unpacked,
 }

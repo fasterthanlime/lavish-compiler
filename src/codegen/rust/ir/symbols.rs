@@ -280,7 +280,14 @@ impl<'a> Display for Enum<'a> {
             s.write("pub enum ").write(self.node.name.text());
             s.in_block(|s| {
                 for v in &self.node.variants {
-                    writeln!(s, "{name} = 0x{hash:x},", name = v.name.text(), hash = v.hash()).unwrap();
+                    s.comment(&v.comment);
+                    writeln!(
+                        s,
+                        "{name} = 0x{hash:x},",
+                        name = v.name.text(),
+                        hash = v.hash()
+                    )
+                    .unwrap();
                 }
             });
         })
