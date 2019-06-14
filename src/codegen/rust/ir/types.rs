@@ -1,4 +1,5 @@
 use crate::codegen::rust::prelude::*;
+use colored::*;
 
 pub trait AsRust {
     fn as_rust<'a>(&'a self, stack: &'a ast::Stack<'a>) -> Box<fmt::Display + 'a>;
@@ -33,7 +34,17 @@ impl<'a> fmt::Display for RustType<'a> {
                 let down: Vec<_> = t.text().split(".").collect();
                 match t.stack.lookup_struct(ast::LookupMode::Relaxed, &down[..]) {
                     Some(path) => path.generate_rust(f),
-                    None => panic!("Could not resolve {:#?}", t.text()),
+                    None => {
+                        t.span
+                            .position()
+                            .diag_err(format!(
+                                "{} unknown type {:?}: not a built-in, and not in scope either",
+                                "error:".red().bold(),
+                                t.text(),
+                            ))
+                            .print();
+                        panic!("Failed to resolve type");
+                    }
                 }
             }
         }
@@ -50,14 +61,18 @@ impl GeneratesRust for ast::BaseType {
 
         match self {
             T::Bool => write!(f, "bool"),
-            T::Int32 => write!(f, "i32"),
-            T::Int64 => write!(f, "i64"),
-            T::UInt32 => write!(f, "u32"),
-            T::UInt64 => write!(f, "u64"),
-            T::Float32 => write!(f, "f32"),
-            T::Float64 => write!(f, "f64"),
+            T::I8 => write!(f, "i8"),
+            T::I16 => write!(f, "i16"),
+            T::I32 => write!(f, "i32"),
+            T::I64 => write!(f, "i64"),
+            T::U8 => write!(f, "u8"),
+            T::U16 => write!(f, "u16"),
+            T::U32 => write!(f, "u32"),
+            T::U64 => write!(f, "u64"),
+            T::F32 => write!(f, "f32"),
+            T::F64 => write!(f, "f64"),
             T::String => write!(f, "String"),
-            T::Bytes => write!(f, "Vec<u8>"),
+            T::Data => write!(f, "Vec<u8>"),
             T::Timestamp => write!(
                 f,
                 "{chrono}::DateTime<{chrono}::offset::Utc>",

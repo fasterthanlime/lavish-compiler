@@ -17,11 +17,11 @@ It is opinionated:
 
 lavish is still under development, it is not usable yet:
 
-  * Nearly done: rules language, schema language
-  * Nearly done: [parser](/src/parser), [checker](/src/checker)
+  * Prerelease: rules language, schema language
+  * Prerelease: [parser](/src/parser), [checker](/src/checker)
   * Rust
-    * Nearly done: [codegen](src/codegen/rust)
-    * Nearly done: [runtime](https://github.com/lavish-lang/lavish-rs)
+    * Prerelease: [codegen](src/codegen/rust)
+    * Prerelease: [runtime](https://github.com/lavish-lang/lavish-rs)
   * Go
     * Researched only: runtime
     * Not started: codegen
@@ -35,7 +35,7 @@ Schemas can define "functions", that take arguments and return results.
 
 ```lavish
 server fn log(message: string)
-server fn get_version() -> (major: int64, minor: int64, patch: int64)
+server fn get_version() -> (major: i64, minor: i64, patch: i64)
 server fn shutdown()
 ```
 
@@ -68,15 +68,18 @@ namespace session {
 }
 ```
 
-Built-in types are:
+Built-in types (lowercase) are:
 
-  * `uint32`, `uint64`, `int32`, `int64`: Integers
-  * `float32`, `float64`: Floating-point numbers
-  * `bool`: Booleans
-  * `bytes`: A raw byte array
-  * `timestamp`: A date+time
+  * `i8`, `u16`, `u32`, `u64`: Unsigned integer
+  * `i8`, `i16`, `i32`, `i64`: Signed integer
+    * Note that JavaScript only has 53-bit precision.
+  * `f32`, `f64`: Floating-point number
+  * `bool`: Boolean
+  * `string`: UTF-8 string
+  * `data`: Raw byte array
+  * `timestamp`: UTC date + time
 
-Custom types can be declared:
+Custom types can be declared, those should be `CamelCase`:
 
 ```lavish
 enum LoginType {
@@ -95,23 +98,30 @@ namespace session {
 }
 ```
 
-Types can be made optional with `Option<T>`:
+By default, all fields *must* be specified - there are no default
+values. However, fields can be made optional with `option<T>`:
 
 ```
 // password can be None in Rust, nil in Go, undefined in TypeScript
-server fn login(password: Option<string>)
+server fn login(password: option<string>)
 ```
 
-Arrays are declared with `Array<T>`:
+Arrays are declared with `array<T>`:
 
 ```
-server fn login(ciphers: Array<Cipher>)
+server fn login(ciphers: array<Cipher>)
 ```
 
-Maps are declared with `Map<K, V>`:
+Maps are declared with `map<K, V>`:
 
 ```
-server fn login(options: Map<string, string>)
+server fn login(options: map<string, string>)
+```
+
+`option`, `map`, and `array` can be nested:
+
+```
+server fn login(options: option<map<string, string>>)
 ```
 
 Third-party schemas can be imported:
@@ -120,7 +130,7 @@ Third-party schemas can be imported:
 import itchio from "github.com/itchio/go-itchio"
 
 namespace fetch {
-    server fn game(id: int64) -> (game: Option<itchio.Game>)
+    server fn game(id: i64) -> (game: option<itchio.Game>)
 }
 ```
 
@@ -278,22 +288,19 @@ Now, the `clock` module can be imported from Rust and used
 to consume the service, with something like:
 
 ```rust
-use futures::executor;
-use romio::tcp::TcpStream;
 mod clock;
 
 type Error = Box<dyn std::error::Error + 'static>;
 
-async fn example(pool: executor::ThreadPool) -> Result<(), Error> {
-    // establish TCP connection (could have a helper for that)
-    let conn = TcpStream::connect("localhost:5959".parse()?).await?;
+async fn example() -> Result<(), Error> {
+    // Create router - don't implement any functions from our side.
+    let r = clock::client::Router::new();
 
-    // create peer via TCP conn, don't implement any functions
-    // from our side, pass async runtime
-    let client = clock::Client::new(conn, None, pool.clone())?;
+    // Connect to server over TCP, with default timeout.
+    let client = lavish::connect(r, "localhost:5959")?.client();
 
     {
-        let time = clock::current_time::call(&client, ()).await?.time;
+        let time = client.call(clock::current_time::Params {})?.time;
         println!("Server time: {:#?}", time);
     }
 

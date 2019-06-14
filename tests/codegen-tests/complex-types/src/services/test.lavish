@@ -1,0 +1,13 @@
+
+struct KitchenSink {
+    numbers: array<i16>,
+    scores: map<string, i32>,
+    set: option<string>,
+    unset: option<string>,
+
+    optional_array: array<option<string>>,
+    optional_map: map<i32, option<data>>,
+}
+
+server fn get_kitchen_sink() -> (sink: KitchenSink)
+

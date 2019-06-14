@@ -239,7 +239,7 @@ impl<'a> Display for Field<'a> {
                 use ast::BaseType as T;
                 match &self.node.typ.kind {
                     ast::TypeKind::Base(typ) => match typ {
-                        T::Bytes => {
+                        T::Data => {
                             writeln!(s, "#[serde(with = {:?})]", "::lavish::serde_bytes").unwrap()
                         }
                         _ => {}

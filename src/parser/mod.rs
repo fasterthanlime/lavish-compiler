@@ -183,14 +183,18 @@ fn basetyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     map(
         spaced(alt((
             map(tag("bool"), |span| (span, BaseType::Bool)),
-            map(tag("int32"), |span| (span, BaseType::Int32)),
-            map(tag("int64"), |span| (span, BaseType::Int64)),
-            map(tag("uint32"), |span| (span, BaseType::UInt32)),
-            map(tag("uint64"), |span| (span, BaseType::UInt64)),
-            map(tag("float32"), |span| (span, BaseType::Float32)),
-            map(tag("float64"), |span| (span, BaseType::Float64)),
+            map(tag("i8"), |span| (span, BaseType::I8)),
+            map(tag("i16"), |span| (span, BaseType::I16)),
+            map(tag("i32"), |span| (span, BaseType::I32)),
+            map(tag("i64"), |span| (span, BaseType::I64)),
+            map(tag("u8"), |span| (span, BaseType::U8)),
+            map(tag("u16"), |span| (span, BaseType::U16)),
+            map(tag("u32"), |span| (span, BaseType::U32)),
+            map(tag("u64"), |span| (span, BaseType::U64)),
+            map(tag("f32"), |span| (span, BaseType::F32)),
+            map(tag("f64"), |span| (span, BaseType::F64)),
             map(tag("string"), |span| (span, BaseType::String)),
-            map(tag("bytes"), |span| (span, BaseType::Bytes)),
+            map(tag("data"), |span| (span, BaseType::Data)),
             map(tag("timestamp"), |span| (span, BaseType::Timestamp)),
         ))),
         |(span, basetyp)| Type {
@@ -205,7 +209,7 @@ fn arraytyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     let span = i.clone();
     map(
         preceded(
-            terminated(spaced(tag("Array")), spaced(char('<'))),
+            terminated(spaced(tag("array")), spaced(char('<'))),
             terminated(typ, spaced(char('>'))),
         ),
         move |t| Type {
@@ -220,7 +224,7 @@ fn optiontyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     let span = i.clone();
     map(
         preceded(
-            terminated(spaced(tag("Option")), spaced(char('<'))),
+            terminated(spaced(tag("option")), spaced(char('<'))),
             terminated(typ, spaced(char('>'))),
         ),
         move |t| Type {
@@ -235,7 +239,7 @@ fn maptyp<E: ParseError<Span>>(i: Span) -> IResult<Span, Type, E> {
     let span = i.clone();
     map(
         preceded(
-            terminated(spaced(tag("Map")), spaced(char('<'))),
+            terminated(spaced(tag("map")), spaced(char('<'))),
             terminated(
                 separated_pair(spaced(typ), char(','), spaced(typ)),
                 spaced(char('>')),

@@ -1,0 +1,2 @@
+
+server fn get_some_bytes() -> (value: data)

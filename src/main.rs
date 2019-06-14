@@ -9,7 +9,7 @@ pub(crate) mod checker;
 pub(crate) mod codegen;
 pub(crate) mod parser;
 
-const VERSION: &str = "0.2.0";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() {
     env_logger::init();
