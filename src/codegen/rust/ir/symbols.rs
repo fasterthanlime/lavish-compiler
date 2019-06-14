@@ -275,7 +275,7 @@ impl<'a> Display for Enum<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
             s.comment(&self.node.comment);
-            s.write(derive().clone().debug().clone().serialize().deserialize());
+            s.write(derive().clone().debug().serialize().deserialize());
             s.write("#[repr(u32)]").lf();
             s.write("pub enum ").write(self.node.name.text());
             s.in_block(|s| {

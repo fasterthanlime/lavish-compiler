@@ -1,4 +1,5 @@
 use crate::codegen::rust::prelude::*;
+use std::collections::HashSet;
 
 pub trait WriteTo: Display {
     fn write_to(&self, s: &mut Scope) {
@@ -322,37 +323,48 @@ impl Display for _Enum {
 }
 
 pub struct Derive {
-    items: Vec<String>,
+    items: HashSet<String>,
 }
 
 impl Derive {
     pub fn debug(mut self) -> Self {
-        self.items.push("Debug".into());
+        self.items.insert("Debug".into());
         self
     }
 
     pub fn clone(mut self) -> Self {
-        self.items.push("Clone".into());
+        self.items.insert("Clone".into());
         self
     }
 
     pub fn serialize(mut self) -> Self {
-        self.items.push(Traits::Serialize());
+        self.items.insert(Traits::Serialize());
         self
     }
 
     pub fn deserialize(mut self) -> Self {
-        self.items.push(Traits::Deserialize());
+        self.items.insert(Traits::Deserialize());
         self
     }
 }
 
 impl Display for Derive {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "#[derive({items})]", items = self.items.join(", "))
+        writeln!(
+            f,
+            "#[derive({items})]",
+            items = self
+                .items
+                .iter()
+                .map(|x| x.clone())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
 
 pub fn derive() -> Derive {
-    Derive { items: Vec::new() }
+    Derive {
+        items: HashSet::new(),
+    }
 }
