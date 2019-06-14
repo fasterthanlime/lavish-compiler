@@ -188,7 +188,7 @@ impl<'a> Atom<'a> {
 impl<'a> Display for Atom<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
-            s.write(derive().debug().serialize());
+            s.write(derive().clone().debug().serialize());
             s.write(allow().non_camel_case().unused());
             s.write(serde_untagged());
             let mut e = _enum(self.name);

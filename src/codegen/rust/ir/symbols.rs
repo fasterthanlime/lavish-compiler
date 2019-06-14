@@ -49,7 +49,7 @@ impl<'a> Struct<'a> {
 impl<'a> Display for Struct<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
-            s.write(derive().debug().serialize().deserialize());
+            s.write(derive().clone().debug().serialize().deserialize());
             s.write("pub struct ").write(self.node.name());
             s.in_block(|s| {
                 for f in &self.node.fields {
@@ -104,7 +104,7 @@ impl<'a> Display for Function<'a> {
                     })
                     .write_to(s);
 
-                s.write(derive().debug().serialize().deserialize());
+                s.write(derive().clone().debug().serialize().deserialize());
                 s.write("pub struct Params");
                 s.in_block(|s| {
                     for f in &self.node.params {
@@ -114,7 +114,7 @@ impl<'a> Display for Function<'a> {
 
                 s.lf();
 
-                s.write(derive().debug().serialize().deserialize());
+                s.write(derive().clone().debug().serialize().deserialize());
                 s.write("pub struct Results");
                 s.in_block(|s| {
                     for f in &self.node.results {
@@ -275,7 +275,7 @@ impl<'a> Display for Enum<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
             s.comment(&self.node.comment);
-            s.write(derive().debug().serialize().deserialize());
+            s.write(derive().clone().debug().clone().serialize().deserialize());
             s.write("#[repr(u32)]").lf();
             s.write("pub enum ").write(self.node.name.text());
             s.in_block(|s| {

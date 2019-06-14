@@ -331,6 +331,11 @@ impl Derive {
         self
     }
 
+    pub fn clone(mut self) -> Self {
+        self.items.push("Clone".into());
+        self
+    }
+
     pub fn serialize(mut self) -> Self {
         self.items.push(Traits::Serialize());
         self
