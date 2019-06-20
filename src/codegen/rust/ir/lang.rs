@@ -350,16 +350,9 @@ impl Derive {
 
 impl Display for Derive {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(
-            f,
-            "#[derive({items})]",
-            items = self
-                .items
-                .iter()
-                .map(|x| x.clone())
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
+        let mut items: Vec<String> = self.items.iter().cloned().collect();
+        items.sort();
+        writeln!(f, "#[derive({items})]", items = items.join(", "))
     }
 }
 
