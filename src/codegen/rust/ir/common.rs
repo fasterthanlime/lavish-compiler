@@ -6,6 +6,10 @@ impl Mods {
         "::lavish".into()
     }
 
+    pub fn io() -> String {
+        "::std::io".into()
+    }
+
     pub fn facts() -> String {
         format!("{lavish}::facts", lavish = Self::lavish())
     }
@@ -47,8 +51,20 @@ impl Traits {
         format!("{}::Deserialize", Mods::serde_derive())
     }
 
+    pub fn Factual() -> String {
+        format!("{}::Factual", Mods::facts())
+    }
+
     pub fn Atom() -> String {
         format!("{}::Atom", Mods::lavish())
+    }
+
+    pub fn Read() -> String {
+        format!("{}::Read", Mods::io())
+    }
+
+    pub fn Write() -> String {
+        format!("{}::Write", Mods::io())
     }
 }
 

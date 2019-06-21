@@ -21,13 +21,13 @@ impl<'a> Router<'a> {
         s.lf();
 
         _impl("Call")
-            .type_param("T", None)
-            .type_param("P", None)
+            .type_param("T")
+            .type_param("P")
             .body(|s| {
                 _fn("downcast")
                     .self_param("self")
-                    .type_param("PP", None)
-                    .type_param("F", Some(format!("Fn(P) -> Option<PP>")))
+                    .type_param("PP")
+                    .type_param_bound("F", format!("Fn(P) -> Option<PP>"))
                     .param("f: F")
                     .returns(format!(
                         "Result<Call<T, PP>, {Error}>",
@@ -99,7 +99,7 @@ impl<'a> Router<'a> {
         s.lf();
 
         _impl("Router")
-            .type_param("T", Some(t_bound))
+            .type_param_bound("T", t_bound)
             .body(|s| {
                 self.write_constructor(s);
                 self.write_handle(s);
@@ -114,7 +114,7 @@ impl<'a> Router<'a> {
             ),
             "Router",
         )
-        .type_param("T", Some(t_bound))
+        .type_param_bound("T", t_bound)
         .body(|s| {
             _fn("handle")
                 .self_param("&self")
@@ -187,27 +187,21 @@ impl<'a> Router<'a> {
 
         _fn("handle")
             .kw_pub()
-            .type_param(
+            .type_param_bound(
                 "S",
-                Some(format!(
-                    "Fn() -> {Slottable}<P, R>",
-                    Slottable = stack.Slottable()
-                )),
+                format!("Fn() -> {Slottable}<P, R>", Slottable = stack.Slottable()),
             )
-            .type_param("P", None)
-            .type_param(
+            .type_param("P")
+            .type_param_bound(
                 "R",
-                Some(format!(
-                    "{Implementable}<P>",
-                    Implementable = stack.Implementable()
-                )),
+                format!("{Implementable}<P>", Implementable = stack.Implementable()),
             )
-            .type_param(
+            .type_param_bound(
                 "F",
-                Some(format!(
+                format!(
                     "Fn(Call<T, P>) -> Result<R, {Error}> + 'static + Send + Sync",
                     Error = Structs::Error()
-                )),
+                ),
             )
             .self_param("&mut self")
             .param("s: S")

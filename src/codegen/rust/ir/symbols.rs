@@ -49,15 +49,55 @@ impl<'a> Struct<'a> {
 impl<'a> Display for Struct<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
+            let stack = &self.node.stack;
+
             s.write(derive().clone().debug().serialize().deserialize());
             s.write("pub struct ").write(self.node.name());
             s.in_block(|s| {
                 for f in &self.node.fields {
-                    s.write(Field::new(self.node.stack.anchor(f)))
-                        .write(",")
-                        .lf();
+                    s.write(Field::new(stack.anchor(f))).write(",").lf();
                 }
             });
+
+            s.lf();
+            _impl_trait(
+                format!(
+                    "{Factual}<{TT}>",
+                    Factual = Traits::Factual(),
+                    TT = stack.TranslationTables()
+                ),
+                self.node.name(),
+            )
+            .body(|s| {
+                _fn("read")
+                    .self_bound("Sized")
+                    .type_param_bound("R", Traits::Read())
+                    .param(format!(
+                        "rd: &mut {facts}::Reader<R>",
+                        facts = Mods::facts()
+                    ))
+                    .returns(format!(
+                        "Result<Self, {facts}::Error>",
+                        facts = Mods::facts()
+                    ))
+                    .body(|s| {
+                        s.write("unimplemented!()").lf();
+                    })
+                    .write_to(s);
+                s.lf();
+                _fn("write")
+                    .self_bound("Sized")
+                    .type_param_bound("W", Traits::Write())
+                    .self_param("&self")
+                    .param(format!("tt: &{TT}", TT = stack.TranslationTables()))
+                    .param("wr: &mut W")
+                    .returns(format!("Result<(), {facts}::Error>", facts = Mods::facts()))
+                    .body(|s| {
+                        s.write("unimplemented!()").lf();
+                    })
+                    .write_to(s);
+            })
+            .write_to(s);
         })
     }
 }
@@ -225,14 +265,8 @@ impl<'a> Display for Field<'a> {
 
             {
                 use ast::BaseType as T;
-                match &self.node.typ.kind {
-                    ast::TypeKind::Base(typ) => match typ {
-                        T::Data => {
-                            writeln!(s, "#[serde(with = {:?})]", "::lavish::serde_bytes").unwrap()
-                        }
-                        _ => {}
-                    },
-                    _ => {}
+                if let ast::TypeKind::Base(T::Data) = &self.node.typ.kind {
+                    writeln!(s, "#[serde(with = {:?})]", "::lavish::serde_bytes").unwrap()
                 }
             }
             write!(

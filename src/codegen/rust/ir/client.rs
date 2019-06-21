@@ -30,14 +30,11 @@ impl<'a> Client<'a> {
 
             _fn("call")
                 .kw_pub()
-                .type_param(
+                .type_param_bound(
                     "P",
-                    Some(format!(
-                        "{Callable}<R>",
-                        Callable = self.body.stack.Callable()
-                    )),
+                    format!("{Callable}<R>", Callable = self.body.stack.Callable()),
                 )
-                .type_param("R", None)
+                .type_param("R")
                 .self_param("&self")
                 .param("p: P")
                 .returns(format!("Result<R, {Error}>", Error = Structs::Error()))

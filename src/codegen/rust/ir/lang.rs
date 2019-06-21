@@ -47,6 +47,7 @@ pub struct _Fn<'a> {
     name: String,
     ret: Option<String>,
     body: Option<Box<Fn(&mut Scope) + 'a>>,
+    self_bound: Option<String>,
 }
 
 impl<'a> _Fn<'a> {
@@ -79,13 +80,25 @@ impl<'a> _Fn<'a> {
         self
     }
 
-    pub fn type_param<N>(mut self, name: N, bound: Option<String>) -> Self
+    pub fn type_param<N>(mut self, name: N) -> Self
     where
         N: Into<String>,
     {
         self.type_params.push(TypeParam {
             name: name.into(),
-            bound: bound,
+            bound: None,
+        });
+        self
+    }
+
+    pub fn type_param_bound<N, B>(mut self, name: N, bound: B) -> Self
+    where
+        N: Into<String>,
+        B: Into<String>,
+    {
+        self.type_params.push(TypeParam {
+            name: name.into(),
+            bound: Some(bound.into()),
         });
         self
     }
@@ -95,6 +108,14 @@ impl<'a> _Fn<'a> {
         N: Into<String>,
     {
         self.params.push(name.into());
+        self
+    }
+
+    pub fn self_bound<B>(mut self, bound: B) -> Self
+    where
+        B: Into<String>,
+    {
+        self.self_bound = Some(bound.into());
         self
     }
 }
@@ -127,10 +148,13 @@ impl<'a> Display for _Fn<'a> {
                 s.write(" -> ").write(ret);
             }
 
-            if self.type_params.iter().any(|tp| tp.bound.is_some()) {
+            if self.self_bound.is_some() || self.type_params.iter().any(|tp| tp.bound.is_some()) {
                 s.lf();
                 s.write("where").lf();
                 s.in_scope(|s| {
+                    if let Some(bound) = self.self_bound.as_ref() {
+                        writeln!(s, "Self: {bound},", bound = bound).unwrap();
+                    }
                     for tp in &self.type_params {
                         if let Some(bound) = tp.bound.as_ref() {
                             writeln!(s, "{name}: {bound},", name = tp.name, bound = bound).unwrap();
@@ -162,6 +186,7 @@ where
         self_param: None,
         body: None,
         ret: None,
+        self_bound: None,
     }
 }
 
@@ -173,10 +198,25 @@ pub struct _Impl<'a> {
 }
 
 impl<'a> _Impl<'a> {
-    pub fn type_param(mut self, name: &str, bound: Option<&str>) -> Self {
+    pub fn type_param<N>(mut self, name: N) -> Self
+    where
+        N: Into<String>,
+    {
         self.type_params.push(TypeParam {
             name: name.into(),
-            bound: bound.map(|x| x.into()),
+            bound: None,
+        });
+        self
+    }
+
+    pub fn type_param_bound<N, B>(mut self, name: N, bound: B) -> Self
+    where
+        N: Into<String>,
+        B: Into<String>,
+    {
+        self.type_params.push(TypeParam {
+            name: name.into(),
+            bound: Some(bound.into()),
         });
         self
     }
