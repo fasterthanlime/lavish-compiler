@@ -28,7 +28,12 @@ impl<'a> Protocol<'a> {
 
         s.write("pub struct TranslationTables").in_block(|s| {
             self.body.for_each_struct_of_schema(&mut |st| {
-                writeln!(s, "{variant}: TranslationTable,", variant = st.variant()).unwrap();
+                writeln!(
+                    s,
+                    "pub {variant}: TranslationTable,",
+                    variant = st.variant()
+                )
+                .unwrap();
             });
         });
         s.lf();

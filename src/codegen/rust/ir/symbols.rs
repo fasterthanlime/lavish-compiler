@@ -93,7 +93,24 @@ impl<'a> Display for Struct<'a> {
                     .param("wr: &mut W")
                     .returns(format!("Result<(), {facts}::Error>", facts = Mods::facts()))
                     .body(|s| {
-                        s.write("unimplemented!()").lf();
+                        write!(
+                            s,
+                            "tt.{variant}.write(wr, |wr, i| match i",
+                            variant = self.node.variant()
+                        )
+                        .unwrap();
+                        s.in_terminated_block(")", |s| {
+                            for (index, field) in self.node.fields.iter().enumerate() {
+                                writeln!(
+                                    s,
+                                    "{index} => self.{field}.write(tt, wr),",
+                                    index = index,
+                                    field = field.name.text()
+                                )
+                                .unwrap();
+                            }
+                            writeln!(s, "_ => unreachable!(),").unwrap();
+                        });
                     })
                     .write_to(s);
             })
