@@ -6,6 +6,10 @@ impl Mods {
         "::lavish".into()
     }
 
+    pub fn facts() -> String {
+        format!("{lavish}::facts", lavish = Self::lavish())
+    }
+
     pub fn chrono() -> String {
         format!("{lavish}::chrono", lavish = Self::lavish())
     }

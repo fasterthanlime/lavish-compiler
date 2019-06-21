@@ -127,3 +127,17 @@ impl<'a> RustFn for ast::Anchored<'a, &ast::FunctionDecl> {
         format!("{module}::Handler", module = self.module(stack))
     }
 }
+
+pub trait RustStruct {
+    fn variant(&self) -> String;
+}
+
+impl<'a> RustStruct for ast::Anchored<'a, &ast::StructDecl> {
+    fn variant(&self) -> String {
+        self.names()
+            .iter()
+            .map(|x| x.to_camel_case())
+            .collect::<Vec<_>>()
+            .join("_")
+    }
+}

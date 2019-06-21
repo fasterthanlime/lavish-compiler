@@ -270,6 +270,12 @@ impl<'a> Anchored<'a, &NamespaceBody> {
         }
     }
 
+    pub fn for_each_struct(&self, cb: &mut FnMut(Anchored<&StructDecl>)) {
+        for f in &self.structs {
+            cb(self.stack.anchor(f));
+        }
+    }
+
     pub fn for_each_namespace(&self, cb: &mut FnMut(Anchored<&NamespaceBody>)) {
         for ns in &self.namespaces {
             cb(self.stack.push(ns).anchor(&ns.body));
@@ -283,9 +289,22 @@ impl<'a> Anchored<'a, &NamespaceBody> {
         });
         self.for_each_namespace(&mut |ns| ns.for_each_fun_of_schema(cb));
     }
+
+    pub fn for_each_struct_of_schema(&self, cb: &mut FnMut(Anchored<&StructDecl>)) {
+        self.for_each_struct(&mut |f| {
+            cb(f);
+        });
+        self.for_each_namespace(&mut |ns| ns.for_each_struct_of_schema(cb));
+    }
 }
 
 impl<'a> Anchored<'a, &FunctionDecl> {
+    pub fn names(&self) -> Vec<&str> {
+        let mut names = self.stack.names();
+        names.push(self.name().into());
+        names
+    }
+
     pub fn for_each_fun_of_schema(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
         if let Some(body) = self.body.as_ref() {
             self.stack
@@ -293,12 +312,6 @@ impl<'a> Anchored<'a, &FunctionDecl> {
                 .anchor(body)
                 .for_each_fun_of_schema(cb);
         }
-    }
-
-    pub fn names(&self) -> Vec<&str> {
-        let mut names = self.stack.names();
-        names.push(self.name().into());
-        names
     }
 
     pub fn method(&self) -> String {
@@ -311,6 +324,12 @@ impl<'a> Anchored<'a, &FunctionDecl> {
 }
 
 impl<'a> Anchored<'a, &StructDecl> {
+    pub fn names(&self) -> Vec<&str> {
+        let mut names = self.stack.names();
+        names.push(self.name().into());
+        names
+    }
+
     pub fn name(&self) -> &str {
         self.inner.name.text()
     }

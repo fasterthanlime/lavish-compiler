@@ -11,12 +11,53 @@ impl<'a> Display for Protocol<'a> {
             s.in_block(|s| {
                 self.write_atoms(s);
                 self.write_specializations(s);
+                self.write_translation_tables(s);
             });
         })
     }
 }
 
 impl<'a> Protocol<'a> {
+    fn write_translation_tables(&self, s: &mut Scope) {
+        writeln!(
+            s,
+            "use {facts}::{{OffsetList, TranslationTable}};",
+            facts = Mods::facts()
+        )
+        .unwrap();
+
+        s.write("pub struct TranslationTables").in_block(|s| {
+            self.body.for_each_struct_of_schema(&mut |st| {
+                writeln!(s, "{variant}: TranslationTable,", variant = st.variant()).unwrap();
+            });
+        });
+        s.lf();
+
+        s.write("impl TranslationTables").in_block(|s| {
+            _fn("identity")
+                .returns("Self")
+                .body(|s| {
+                    s.write("Self").in_block(|s| {
+                        self.body.for_each_struct_of_schema(&mut |st| {
+                            let mut values: Vec<String> = Vec::new();
+                            for i in 0..st.fields.len() {
+                                values.push(format!("{}", i));
+                            }
+
+                            writeln!(
+                                s,
+                                "{variant}: TranslationTable::Mapped(OffsetList(vec![{values}])),",
+                                variant = st.variant(),
+                                values = values.join(", "),
+                            )
+                            .unwrap();
+                        });
+                    });
+                })
+                .write_to(s);
+        });
+    }
+
     fn write_atoms(&self, s: &mut Scope) {
         for a in &[
             Atom {
