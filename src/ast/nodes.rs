@@ -148,11 +148,15 @@ pub struct Import {
 #[derive(Debug, Clone)]
 pub struct Identifier {
     pub span: Span,
+    pub synthetic_name: Option<String>,
 }
 
 impl Identifier {
     pub fn text(&self) -> &str {
-        self.span.slice()
+        match self.synthetic_name.as_ref() {
+            Some(name) => name,
+            None => self.span.slice(),
+        }
     }
 }
 
@@ -228,8 +232,8 @@ pub struct FunctionDecl {
     pub loc: Span,
     pub comment: Option<Comment>,
     pub name: Identifier,
-    pub params: Vec<Field>,
-    pub results: Vec<Field>,
+    pub params: StructDecl,
+    pub results: StructDecl,
     pub body: Option<NamespaceBody>,
     pub kind: Kind,
     pub side: Side,

@@ -104,23 +104,8 @@ impl<'a> Display for Function<'a> {
                     })
                     .write_to(s);
 
-                s.write(derive().clone().debug().serialize().deserialize());
-                s.write("pub struct Params");
-                s.in_block(|s| {
-                    for f in &self.node.params {
-                        s.write(Field::new(stack.anchor(f))).write(",").lf();
-                    }
-                });
-
-                s.lf();
-
-                s.write(derive().clone().debug().serialize().deserialize());
-                s.write("pub struct Results");
-                s.in_block(|s| {
-                    for f in &self.node.results {
-                        s.write(Field::new(stack.anchor(f))).write(",").lf();
-                    }
-                });
+                s.write(Struct::new(stack.anchor(&self.node.params)));
+                s.write(Struct::new(stack.anchor(&self.node.results)));
 
                 s.lf();
 

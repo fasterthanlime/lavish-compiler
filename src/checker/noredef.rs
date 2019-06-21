@@ -109,14 +109,8 @@ impl Visitable for &ast::StructDecl {
 
 impl Visitable for &ast::FunctionDecl {
     fn visit(self, v: &mut Visitor) {
-        v.check_dupes("param", &self.params);
-        for p in &self.params {
-            v.visit(p);
-        }
-        v.check_dupes("result", &self.results);
-        for p in &self.results {
-            v.visit(p);
-        }
+        v.visit(&self.params);
+        v.visit(&self.results);
 
         if let Some(body) = self.body.as_ref() {
             v.visit(body);

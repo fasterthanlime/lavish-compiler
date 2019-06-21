@@ -98,12 +98,8 @@ impl Visitable for &ast::FunctionDecl {
                 format_comment(&self.comment),
             ),
         );
-        for f in &self.params {
-            v.visit(f);
-        }
-        for f in &self.results {
-            v.visit(f);
-        }
+        v.visit(&self.params);
+        v.visit(&self.results);
 
         if let Some(body) = self.body.as_ref() {
             v.visit(body);

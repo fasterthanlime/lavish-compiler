@@ -184,7 +184,10 @@ fn id<E: ParseError<Span>>(i: Span) -> IResult<Span, Identifier, E> {
     let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
     map(take_while1(move |c| chars.contains(c)), |span: Span| {
-        Identifier { span }
+        Identifier {
+            span,
+            synthetic_name: None,
+        }
     })(i)
 }
 
@@ -335,6 +338,26 @@ fn fields<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
     )(i)
 }
 
+fn named_struct<E: ParseError<Span>, S: Into<String>>(
+    synthetic_name: S,
+) -> impl Fn(Span) -> IResult<Span, StructDecl, E> {
+    let synthetic_name = synthetic_name.into();
+
+    move |i: Span| {
+        let synthetic_name = synthetic_name.clone();
+        let (i, loc) = spaced(loc)(i)?;
+        map(fields, move |fields| StructDecl {
+            loc: loc.clone(),
+            comment: None,
+            fields,
+            name: Identifier {
+                span: loc.clone(),
+                synthetic_name: Some(synthetic_name.clone()),
+            },
+        })(i)
+    }
+}
+
 fn enum_variant<E: ParseError<Span>>(i: Span) -> IResult<Span, EnumVariant, E> {
     let (i, comment) = opt(comment)(i)?;
     let (i, loc) = spaced(loc)(i)?;
@@ -363,12 +386,16 @@ fn side<E: ParseError<Span>>(i: Span) -> IResult<Span, Side, E> {
 }
 
 // Results, in the context of a function declaration: `-> (fields)`
-fn results<E: ParseError<Span>>(i: Span) -> IResult<Span, Vec<Field>, E> {
+fn results<E: ParseError<Span>>(i: Span) -> IResult<Span, StructDecl, E> {
     let (i, _) = spaced(tag("->"))(i)?;
 
     context(
         "result list",
-        cut(delimited(char('('), fields, preceded(sp, char(')')))),
+        cut(delimited(
+            char('('),
+            named_struct("Results"),
+            preceded(sp, char(')')),
+        )),
     )(i)
 }
 
@@ -388,7 +415,7 @@ fn fndecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
                     sp,
                     context(
                         "parameter list",
-                        delimited(char('('), fields, preceded(sp, char(')'))),
+                        delimited(char('('), named_struct("Params"), preceded(sp, char(')'))),
                     ),
                 ),
                 opt(results),
@@ -401,11 +428,23 @@ fn fndecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
                 kind: Kind::Request,
                 name: name.clone(),
                 params,
-                results: results.unwrap_or_default(),
+                results: results.unwrap_or_else(|| default_results(loc.clone())),
                 body,
             },
         )),
     )(i)
+}
+
+fn default_results(loc: Span) -> StructDecl {
+    StructDecl {
+        comment: None,
+        fields: Vec::new(),
+        loc: loc.clone(),
+        name: Identifier {
+            span: loc.clone(),
+            synthetic_name: Some("Results".into()),
+        },
+    }
 }
 
 // Function body (nested functions)
@@ -431,7 +470,7 @@ fn notifdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
                     sp,
                     context(
                         "parameter list",
-                        delimited(char('('), fields, preceded(sp, char(')'))),
+                        delimited(char('('), named_struct("Params"), preceded(sp, char(')'))),
                     ),
                 ),
             )),
@@ -442,7 +481,7 @@ fn notifdecl<E: ParseError<Span>>(i: Span) -> IResult<Span, FunctionDecl, E> {
                 side,
                 name: name.clone(),
                 params,
-                results: Vec::new(),
+                results: default_results(loc.clone()),
                 body: None,
             },
         )),
