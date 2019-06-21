@@ -294,6 +294,9 @@ impl<'a> Anchored<'a, &NamespaceBody> {
         self.for_each_struct(&mut |f| {
             cb(f);
         });
+        self.for_each_fun(&mut |f| {
+            f.for_each_struct_of_schema(cb);
+        });
         self.for_each_namespace(&mut |ns| ns.for_each_struct_of_schema(cb));
     }
 }
@@ -311,6 +314,15 @@ impl<'a> Anchored<'a, &FunctionDecl> {
                 .push(self.inner)
                 .anchor(body)
                 .for_each_fun_of_schema(cb);
+        }
+    }
+
+    pub fn for_each_struct_of_schema(&self, cb: &mut FnMut(Anchored<&StructDecl>)) {
+        let stack = self.stack.push(self.inner);
+        cb(stack.anchor(&self.params));
+        cb(stack.anchor(&self.results));
+        if let Some(body) = self.body.as_ref() {
+            stack.anchor(body).for_each_struct_of_schema(cb);
         }
     }
 
