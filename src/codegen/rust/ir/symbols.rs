@@ -81,7 +81,22 @@ impl<'a> Display for Struct<'a> {
                         facts = Mods::facts()
                     ))
                     .body(|s| {
-                        s.write("unimplemented!()").lf();
+                        writeln!(
+                            s,
+                            "rd.expect_array_len({len})?;",
+                            len = self.node.fields.len()
+                        )
+                        .unwrap();
+                        s.write("Ok(Self").in_terminated_block(")", |s| {
+                            for field in &self.node.fields {
+                                writeln!(
+                                    s,
+                                    "{field}: Self::subread(rd)?,",
+                                    field = field.name.text()
+                                )
+                                .unwrap();
+                            }
+                        });
                     })
                     .write_to(s);
                 s.lf();
