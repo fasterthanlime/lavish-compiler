@@ -1,5 +1,4 @@
 use crate::parser::Span;
-use crc::crc32::checksum_castagnoli;
 use log::*;
 use simple_error::SimpleError;
 use std::collections::HashMap;
@@ -355,12 +354,6 @@ pub struct EnumVariant {
     pub loc: Span,
     pub comment: Option<Comment>,
     pub name: Identifier,
-}
-
-impl EnumVariant {
-    pub fn hash(&self) -> u32 {
-        checksum_castagnoli(self.name.text().as_bytes())
-    }
 }
 
 #[derive(Debug, Clone)]

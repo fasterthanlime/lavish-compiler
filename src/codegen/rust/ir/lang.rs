@@ -377,6 +377,11 @@ impl Derive {
         self
     }
 
+    pub fn copy(mut self) -> Self {
+        self.items.insert("Copy".into());
+        self
+    }
+
     pub fn serialize(mut self) -> Self {
         self.items.insert(Traits::Serialize());
         self

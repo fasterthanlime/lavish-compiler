@@ -27,11 +27,22 @@ impl<'a> Protocol<'a> {
         .unwrap();
 
         s.write("pub struct TranslationTables").in_block(|s| {
+            s.line("// structs");
             self.body.for_each_struct_of_schema(&mut |st| {
                 writeln!(
                     s,
                     "pub {variant}: TranslationTable,",
                     variant = st.variant()
+                )
+                .unwrap();
+            });
+
+            s.line("// enums");
+            self.body.for_each_enum_of_schema(&mut |en| {
+                writeln!(
+                    s,
+                    "pub {variant}: TranslationTable,",
+                    variant = en.variant()
                 )
                 .unwrap();
             });
@@ -44,6 +55,7 @@ impl<'a> Protocol<'a> {
                 .returns("Self")
                 .body(|s| {
                     s.write("Self").in_block(|s| {
+                        s.line("// structs");
                         self.body.for_each_struct_of_schema(&mut |st| {
                             let mut values: Vec<String> = Vec::new();
                             for i in 0..st.fields.len() {
@@ -58,6 +70,22 @@ impl<'a> Protocol<'a> {
                             )
                             .unwrap();
                         });
+
+                        s.line("// enums");
+                        self.body.for_each_enum_of_schema(&mut |en| {
+                            let mut values: Vec<String> = Vec::new();
+                            for i in 0..en.variants.len() {
+                                values.push(format!("{}", i));
+                            }
+
+                            writeln!(
+                                s,
+                                "{variant}: TranslationTable::Mapped(OffsetList(vec![{values}])),",
+                                variant = en.variant(),
+                                values = values.join(", "),
+                            )
+                            .unwrap();
+                        })
                     });
                 })
                 .write_to(s);

@@ -80,6 +80,10 @@ impl Structs {
         format!("{}::Error", Mods::lavish())
     }
 
+    pub fn FactsError() -> String {
+        format!("{}::Error", Mods::facts())
+    }
+
     pub fn Arc() -> String {
         format!("{}::Arc", Mods::sync())
     }

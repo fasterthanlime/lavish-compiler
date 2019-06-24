@@ -146,3 +146,17 @@ impl<'a> RustStruct for ast::Anchored<'a, &ast::StructDecl> {
             .join("_")
     }
 }
+
+pub trait RustEnum {
+    fn variant(&self) -> String;
+}
+
+impl<'a> RustEnum for ast::Anchored<'a, &ast::EnumDecl> {
+    fn variant(&self) -> String {
+        self.names()
+            .iter()
+            .map(|x| x.to_camel_case())
+            .collect::<Vec<_>>()
+            .join("_")
+    }
+}

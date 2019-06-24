@@ -325,22 +325,99 @@ impl<'a> Enum<'a> {
 impl<'a> Display for Enum<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
+            let stack = &self.node.stack;
+
             s.comment(&self.node.comment);
-            s.write(derive().clone().debug().serialize().deserialize());
+            s.write(derive().clone().copy().debug().serialize().deserialize());
             s.write("#[repr(u32)]").lf();
             s.write("pub enum ").write(self.node.name.text());
             s.in_block(|s| {
-                for v in &self.node.variants {
+                for (i, v) in self.node.variants.iter().enumerate() {
                     s.comment(&v.comment);
-                    writeln!(
-                        s,
-                        "{name} = 0x{hash:x},",
-                        name = v.name.text(),
-                        hash = v.hash()
-                    )
-                    .unwrap();
+                    writeln!(s, "{name} = {i},", name = v.name.text(), i = i).unwrap();
                 }
             });
+
+            s.lf();
+            _impl_trait(
+                format!(
+                    "{Factual}<{TT}>",
+                    Factual = Traits::Factual(),
+                    TT = stack.TranslationTables()
+                ),
+                self.node.name(),
+            )
+            .body(|s| {
+                _fn("read")
+                    .self_bound("Sized")
+                    .type_param_bound("R", Traits::Read())
+                    .param(format!(
+                        "rd: &mut {facts}::Reader<R>",
+                        facts = Mods::facts()
+                    ))
+                    .returns(format!(
+                        "Result<Self, {facts}::Error>",
+                        facts = Mods::facts()
+                    ))
+                    .body(|s| {
+                        writeln!(s, "let value: u32 = rd.read_int()?;").unwrap();
+                        writeln!(s, "use {name} as E;", name = self.node.name()).unwrap();
+                        s.write("Ok(match value").in_terminated_block(")", |s| {
+                            for (i, variant) in self.node.variants.iter().enumerate() {
+                                writeln!(
+                                    s,
+                                    "{i} => E::{variant},",
+                                    i = i,
+                                    variant = variant.name.text()
+                                )
+                                .unwrap();
+                            }
+                            writeln!(
+                                s,
+                                "_ => return Err({Error}::IncompatibleSchema(format!({msg:?}, value))),",
+                                Error = Structs::FactsError(),
+                                msg = format!(
+                                    "Received unrecognized enum variant for {}: {{:#?}}",
+                                    self.node.name()
+                                )
+                            )
+                            .unwrap();
+                        });
+                    })
+                    .write_to(s);
+                s.lf();
+                _fn("write")
+                    .self_bound("Sized")
+                    .type_param_bound("W", Traits::Write())
+                    .self_param("&self")
+                    .param(format!("tt: &{TT}", TT = stack.TranslationTables()))
+                    .param("wr: &mut W")
+                    .returns(format!("Result<(), {facts}::Error>", facts = Mods::facts()))
+                    .body(|s| {
+                        writeln!(
+                            s,
+                            "let offsets = tt.{variant}.validate()?;",
+                            variant = self.node.variant()
+                        )
+                        .unwrap();
+                        writeln!(s, "match offsets.get(*self as usize)").unwrap();
+                        s.in_block(|s| {
+                            writeln!(s, "Some(value) => value.write(tt, wr),").unwrap();
+                            writeln!(
+                                s,
+                                "None => Err({Error}::IncompatibleSchema(format!({msg:?}, self))),",
+                                Error = Structs::FactsError(),
+                                msg = format!(
+                                    "Enum variant for {} not known by the peer: {{:#?}}",
+                                    self.node.name()
+                                )
+                            )
+                            .unwrap();
+                        });
+                    })
+                    .write_to(s);
+            })
+            .write_to(s);
         })
     }
 }
