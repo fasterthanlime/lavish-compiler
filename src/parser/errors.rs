@@ -18,6 +18,10 @@ pub enum Error {
     Source(SourceError),
     Checker(checker::Error),
     Unknown(UnknownError),
+
+    // Used for tests
+    #[allow(unused)]
+    UnexpectedSourceError(UnexpectedSourceError),
 }
 
 impl<'a> fmt::Display for Error {
@@ -26,6 +30,7 @@ impl<'a> fmt::Display for Error {
             Error::IO(e) => write!(f, "{}", e),
             Error::Source(e) => write!(f, "{:#?}", e),
             Error::Checker(e) => write!(f, "{:#?}", e),
+            Error::UnexpectedSourceError(e) => write!(f, "{:#?}", e),
             Error::Unknown(_) => write!(f, "unknown error"),
         }
     }
@@ -40,6 +45,21 @@ pub struct SourceError {
 impl<'a> fmt::Debug for SourceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         print_errors(f, &self.inner)
+    }
+}
+
+pub struct UnexpectedSourceError {
+    pub expected: String,
+    pub actual: Option<Box<Error>>,
+}
+
+impl<'a> fmt::Debug for UnexpectedSourceError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(actual) = self.actual.as_ref() {
+            write!(f, "expected {}, got {}", self.expected, actual)
+        } else {
+            write!(f, "expected {}, got no error", self.expected)
+        }
     }
 }
 
