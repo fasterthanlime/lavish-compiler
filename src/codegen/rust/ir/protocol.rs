@@ -40,6 +40,7 @@ impl<'a> Protocol<'a> {
 
         s.write("impl TranslationTables").in_block(|s| {
             _fn("identity")
+                .kw_pub()
                 .returns("Self")
                 .body(|s| {
                     s.write("Self").in_block(|s| {
