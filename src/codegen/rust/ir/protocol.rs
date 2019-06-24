@@ -21,36 +21,26 @@ impl<'a> Protocol<'a> {
     fn write_translation_tables(&self, s: &mut Scope) {
         writeln!(
             s,
-            "use {facts}::{{OffsetList, TranslationTable}};",
+            "use {facts}::{{OffsetList, TypeMapping}};",
             facts = Mods::facts()
         )
         .unwrap();
 
-        s.write("pub struct TranslationTables").in_block(|s| {
+        s.write("pub struct ProtocolMapping").in_block(|s| {
             s.line("// structs");
             self.body.for_each_struct_of_schema(&mut |st| {
-                writeln!(
-                    s,
-                    "pub {variant}: TranslationTable,",
-                    variant = st.variant()
-                )
-                .unwrap();
+                writeln!(s, "pub {variant}: TypeMapping,", variant = st.variant()).unwrap();
             });
 
             s.line("// enums");
             self.body.for_each_enum_of_schema(&mut |en| {
-                writeln!(
-                    s,
-                    "pub {variant}: TranslationTable,",
-                    variant = en.variant()
-                )
-                .unwrap();
+                writeln!(s, "pub {variant}: TypeMapping,", variant = en.variant()).unwrap();
             });
         });
         s.lf();
 
-        s.write("impl TranslationTables").in_block(|s| {
-            _fn("identity")
+        s.write("impl Default for ProtocolMapping").in_block(|s| {
+            _fn("default")
                 .kw_pub()
                 .returns("Self")
                 .body(|s| {
@@ -64,7 +54,7 @@ impl<'a> Protocol<'a> {
 
                             writeln!(
                                 s,
-                                "{variant}: TranslationTable::Mapped(OffsetList(vec![{values}])),",
+                                "{variant}: TypeMapping::Mapped(OffsetList(vec![{values}])),",
                                 variant = st.variant(),
                                 values = values.join(", "),
                             )
@@ -80,7 +70,7 @@ impl<'a> Protocol<'a> {
 
                             writeln!(
                                 s,
-                                "{variant}: TranslationTable::Mapped(OffsetList(vec![{values}])),",
+                                "{variant}: TypeMapping::Mapped(OffsetList(vec![{values}])),",
                                 variant = en.variant(),
                                 values = values.join(", "),
                             )
@@ -210,62 +200,86 @@ impl<'a> Atom<'a> {
             .write_to(s);
     }
 
-    fn implement_deserialize(&self, s: &mut Scope) {
-        _fn("deserialize")
-            .param("method: &str")
-            .param(format!(
-                "de: &mut {Deserializer}",
-                Deserializer = Structs::Deserializer()
-            ))
-            .returns(format!("{es}::Result<Self>", es = Mods::es()))
-            .body(|s| {
-                writeln!(s, "use {es}::deserialize as __DS;", es = Mods::es()).unwrap();
-                writeln!(s, "use {serde}::de::Error;", serde = Mods::serde()).unwrap();
-                s.lf();
+    fn implement_factual(&self, s: &mut Scope) {
+        let stack = &self.proto.body.stack;
 
-                s.write("match method");
-                s.in_block(|s| {
-                    self.for_each_fun(&mut |f| {
-                        s.line(format!("{method} => ", method = quoted(f.method())));
-                        s.scope()
-                            .write("Ok")
-                            .in_list(Brackets::Round, |l| {
-                                l.item(format!(
-                                    "{name}::{variant}(__DS::<{module}::{name}>(de)?)",
-                                    name = &self.name,
-                                    variant = f.variant(),
-                                    module = f.module(&self.proto.body.stack),
-                                ));
-                            })
-                            .write(",")
-                            .lf();
+        _impl_trait(
+            format!(
+                "{Factual}<{M}>",
+                Factual = Traits::Factual(),
+                M = stack.ProtocolMapping()
+            ),
+            self.name,
+        )
+        .body(|s| {
+            _fn("read")
+                .self_bound("Sized")
+                .type_param_bound("R", Traits::Read())
+                .param(format!(
+                    "rd: &mut {Reader}<R>",
+                    Reader = Structs::FactsReader()
+                ))
+                .returns(format!(
+                    "Result<Self, {Error}>",
+                    Error = Structs::FactsError()
+                ))
+                .body(|s| {
+                    writeln!(s, "let len = rd.read_array_len()?;").unwrap();
+                    write!(s, "if len != 2").unwrap();
+                    s.in_block(|s| {
+                        // FIXME: this might not be ideal, this probably
+                        // should be a proper facts error
+                        writeln!(s, "unreachable!();").unwrap();
                     });
-                    s.write("_ =>").lf();
-                    s.scope()
-                        .write("Err")
-                        .in_parens(|s| {
-                            s.write(format!("{es}::Error::custom", es = Mods::es()))
-                                .in_parens(|s| {
-                                    s.write("format!").in_parens_list(|l| {
-                                        l.item(quoted("unknown method: {}"));
-                                        l.item("method")
-                                    });
-                                });
-                        })
-                        .write(",")
-                        .lf();
-                });
-            })
-            .write_to(s);
+
+                    writeln!(s, "let typ: u32 = rd.read_int()?;").unwrap();
+
+                    s.write("match typ");
+                    s.in_block(|s| {
+                        let mut i = 0;
+                        self.for_each_fun(&mut |f| {
+                            s.line(format!("{i} => ", i = i));
+                            writeln!(
+                                s,
+                                "Ok({name}::{variant}(Self::subread()?))",
+                                name = &self.name,
+                                variant = f.variant(),
+                            )
+                            .unwrap();
+
+                            i += 1;
+                        });
+                        // FIXME: proper error
+                        s.write("_ => unreachable!(),").lf();
+                    });
+                })
+                .write_to(s);
+
+            s.lf();
+            _fn("write")
+                .type_param_bound("W", Traits::Write())
+                .self_param("&self")
+                .param(format!("mapping: &{M}", M = stack.ProtocolMapping()))
+                .param("wr: &mut W")
+                .returns(format!(
+                    "Result<(), {Error}>",
+                    Error = Structs::FactsError()
+                ))
+                .body(|s| {
+                    // TODO:
+                    s.line("unimplemented!()");
+                })
+                .write_to(s);
+        })
+        .write_to(s);
     }
 }
 
 impl<'a> Display for Atom<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
-            s.write(derive().clone().debug().serialize());
+            s.write(derive().clone().debug());
             s.write(allow().non_camel_case().unused());
-            s.write(serde_untagged());
             let mut e = _enum(self.name);
             e.kw_pub();
             self.for_each_fun(&mut |f| {
@@ -281,9 +295,10 @@ impl<'a> Display for Atom<'a> {
             _impl_trait(Traits::Atom(), self.name)
                 .body(|s| {
                     self.implement_method(s);
-                    self.implement_deserialize(s);
                 })
                 .write_to(s);
+
+            self.implement_factual(s);
         })
     }
 }

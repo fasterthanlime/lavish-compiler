@@ -10,7 +10,7 @@ pub trait RustStack {
     fn Caller(&self) -> String;
     fn Callable(&self) -> String;
     fn Implementable(&self) -> String;
-    fn TranslationTables(&self) -> String;
+    fn ProtocolMapping(&self) -> String;
     fn Slottable(&self) -> String;
     fn SideClient(&self, side: ast::Side) -> String;
     fn Params(&self) -> String;
@@ -44,8 +44,8 @@ impl<'a> RustStack for ast::Stack<'a> {
         format!("{}::Implementable", self.protocol())
     }
 
-    fn TranslationTables(&self) -> String {
-        format!("{}::TranslationTables", self.protocol())
+    fn ProtocolMapping(&self) -> String {
+        format!("{}::ProtocolMapping", self.protocol())
     }
 
     fn Slottable(&self) -> String {
