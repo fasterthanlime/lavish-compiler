@@ -11,7 +11,9 @@ mod tests {
             let mut r = server::Router::new(Arc::new(()));
             r.handle(get_some_bytes, |_| {
                 let value = vec![5, 1, 2, 9];
-                Ok(get_some_bytes::Results { value })
+                Ok(get_some_bytes::Results {
+                    value: value.into(),
+                })
             });
             lavish::serve(r, "localhost:0")?.local_addr()
         };
@@ -20,7 +22,7 @@ mod tests {
         let client = lavish::connect(r, addr)?.client();
 
         let value = client.call(get_some_bytes::Params {})?.value;
-        assert_eq!(value, [5, 1, 2, 9]);
+        assert_eq!(&value[..], &[5, 1, 2, 9]);
 
         Ok(())
     }

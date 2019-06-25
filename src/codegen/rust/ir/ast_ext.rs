@@ -16,7 +16,7 @@ pub trait RustStack {
     fn Params(&self) -> String;
     fn NotificationParams(&self) -> String;
     fn Results(&self) -> String;
-    fn triplet(&self) -> String;
+    fn quadruplet(&self) -> String;
 }
 
 impl<'a> RustStack for ast::Stack<'a> {
@@ -68,9 +68,10 @@ impl<'a> RustStack for ast::Stack<'a> {
         format!("{}::Results", self.protocol())
     }
 
-    fn triplet(&self) -> String {
+    fn quadruplet(&self) -> String {
         format!(
-            "{P}, {NP}, {R}",
+            "{M}, {P}, {NP}, {R}",
+            M = self.ProtocolMapping(),
             P = self.Params(),
             NP = self.NotificationParams(),
             R = self.Results(),

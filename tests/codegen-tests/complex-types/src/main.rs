@@ -14,9 +14,9 @@ mod tests {
                 let optional_array =
                     vec![Some("first".to_string()), None, Some("third".to_string())];
 
-                let mut optional_map = HashMap::<i32, Option<Vec<u8>>>::new();
+                let mut optional_map = HashMap::<i32, Option<lavish::facts::Bin>>::new();
                 optional_map.insert(45, None);
-                optional_map.insert(91, Some(vec![9, 1]));
+                optional_map.insert(91, Some(vec![9, 1].into()));
 
                 let mut scores = HashMap::<String, i32>::new();
                 scores.insert("Giselle".into(), 256);

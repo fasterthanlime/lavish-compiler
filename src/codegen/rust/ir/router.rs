@@ -108,9 +108,9 @@ impl<'a> Router<'a> {
 
         _impl_trait(
             format!(
-                "{lavish}::Handler<Client, {triplet}>",
+                "{lavish}::Handler<Client, {quadruplet}>",
                 lavish = Mods::lavish(),
-                triplet = self.body.stack.triplet()
+                quadruplet = self.body.stack.quadruplet()
             ),
             "Router",
         )

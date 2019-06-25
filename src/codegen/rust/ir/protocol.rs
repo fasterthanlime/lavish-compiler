@@ -26,7 +26,13 @@ impl<'a> Protocol<'a> {
         )
         .unwrap();
 
+        s.write(derive().debug());
         s.write("pub struct ProtocolMapping").in_block(|s| {
+            s.line("// builtins");
+            for builtin in get_builtins() {
+                writeln!(s, "pub __{variant}: TypeMapping,", variant = builtin.1).unwrap();
+            }
+
             s.line("// structs");
             self.body.for_each_struct_of_schema(&mut |st| {
                 writeln!(s, "pub {variant}: TypeMapping,", variant = st.variant()).unwrap();
@@ -41,10 +47,29 @@ impl<'a> Protocol<'a> {
 
         s.write("impl Default for ProtocolMapping").in_block(|s| {
             _fn("default")
-                .kw_pub()
                 .returns("Self")
                 .body(|s| {
                     s.write("Self").in_block(|s| {
+                        s.line("// builtins");
+                        for builtin in get_builtins() {
+                            let mut values: Vec<String> = Vec::new();
+                            let mut i = 0;
+                            self.body.for_each_fun_of_schema(&mut |f| {
+                                if f.kind == builtin.0 {
+                                    values.push(format!("{}", i));
+                                    i += 1;
+                                }
+                            });
+
+                            writeln!(
+                                s,
+                                "__{variant}: TypeMapping::Mapped(OffsetList(vec![{values}])),",
+                                variant = builtin.1,
+                                values = values.join(", "),
+                            )
+                            .unwrap();
+                        }
+
                         s.line("// structs");
                         self.body.for_each_struct_of_schema(&mut |st| {
                             let mut values: Vec<String> = Vec::new();
@@ -80,6 +105,13 @@ impl<'a> Protocol<'a> {
                 })
                 .write_to(s);
         });
+
+        writeln!(
+            s,
+            "impl {facts}::Mapping for ProtocolMapping {{}}",
+            facts = Mods::facts()
+        )
+        .unwrap();
     }
 
     fn write_atoms(&self, s: &mut Scope) {
@@ -107,18 +139,18 @@ impl<'a> Protocol<'a> {
     fn write_specializations(&self, s: &mut Scope) {
         writeln!(
             s,
-            "pub type {name} = {lavish}::{name}<{triplet}>;",
+            "pub type {name} = {lavish}::{name}<{quadruplet}>;",
             lavish = Mods::lavish(),
-            triplet = self.body.stack.triplet(),
+            quadruplet = self.body.stack.quadruplet(),
             name = "Caller",
         )
         .unwrap();
 
         writeln!(
             s,
-            "pub type {name}<CL> = {lavish}::{name}<CL, {triplet}>;",
+            "pub type {name}<CL> = {lavish}::{name}<CL, {quadruplet}>;",
             lavish = Mods::lavish(),
-            triplet = self.body.stack.triplet(),
+            quadruplet = self.body.stack.quadruplet(),
             name = "Handler",
         )
         .unwrap();
@@ -238,10 +270,10 @@ impl<'a> Atom<'a> {
                     s.in_block(|s| {
                         let mut i = 0;
                         self.for_each_fun(&mut |f| {
-                            s.line(format!("{i} => ", i = i));
                             writeln!(
                                 s,
-                                "Ok({name}::{variant}(Self::subread()?))",
+                                "{i} => Ok({name}::{variant}(Self::subread(rd)?)),",
+                                i = i,
                                 name = &self.name,
                                 variant = f.variant(),
                             )
@@ -266,8 +298,24 @@ impl<'a> Atom<'a> {
                     Error = Structs::FactsError()
                 ))
                 .body(|s| {
-                    // TODO:
-                    s.line("unimplemented!()");
+                    writeln!(s, "let o = &mapping.__{slot};", slot = self.name).unwrap();
+                    write!(s, "match self").unwrap();
+                    s.in_block(|s| {
+                        let mut i = 0;
+                        self.for_each_fun(&mut |f| {
+                            writeln!(
+                                s,
+                                "{name}::{variant}(value) =>\n    o.write_union(wr, mapping, {name:?}, {variant:?}, {index}, value),",
+                                index = i,
+                                name = &self.name,
+                                variant = f.variant(),
+                            )
+                            .unwrap();
+
+                            i += 1;
+                        });
+                        writeln!(s, "_ => unreachable!(),").unwrap();
+                    });
                 })
                 .write_to(s);
         })
@@ -292,13 +340,24 @@ impl<'a> Display for Atom<'a> {
             });
             e.write_to(s);
 
-            _impl_trait(Traits::Atom(), self.name)
-                .body(|s| {
-                    self.implement_method(s);
-                })
-                .write_to(s);
+            _impl_trait(
+                format!("{Atom}<ProtocolMapping>", Atom = Traits::Atom()),
+                self.name,
+            )
+            .body(|s| {
+                self.implement_method(s);
+            })
+            .write_to(s);
 
             self.implement_factual(s);
         })
     }
+}
+
+fn get_builtins() -> Vec<(ast::Kind, String)> {
+    vec![
+        (ast::Kind::Request, "Params".into()),
+        (ast::Kind::Request, "Results".into()),
+        (ast::Kind::Notification, "NotificationParams".into()),
+    ]
 }
