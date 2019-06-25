@@ -1,3 +1,4 @@
+use crate::ast;
 use crate::parser::Span;
 use log::*;
 use simple_error::SimpleError;
@@ -95,7 +96,16 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn resolve(&self, name: &str) -> Result<PathBuf, SimpleError> {
+    pub fn resolve(&self, build: &ast::Build) -> Result<PathBuf, SimpleError> {
+        if let Some(from) = build.from.as_ref() {
+            // TODO: test for relative paths, otherwise
+            // fall back on HTTP
+            let path = self.dir.join(&from.path.value);
+            return Ok(path);
+        }
+
+        let name = build.name.text().to_string();
+
         let source_name = format!("{}{}", name, LAVISH_EXT);
 
         let self_path = self.dir.join(&source_name);
