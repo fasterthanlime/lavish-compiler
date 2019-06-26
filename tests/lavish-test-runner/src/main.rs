@@ -6,7 +6,7 @@ fn status<S: Into<String>>(s: S) {
     println!("{}", s.into().blue());
 }
 
-fn case<S: Into<String>>(s: S) {
+fn task<S: Into<String>>(s: S) {
     println!("{}", s.into().yellow());
 }
 
@@ -56,73 +56,84 @@ target rust {
     wrapper = lib
 }
 
-build test from {{SCHEMA_PATH_STRING}}
+{{BUILDS}}
 "#;
+
+struct CodegenCase {
+    name: String,
+    schema_path: path::PathBuf,
+}
 
 impl Context {
     fn run_codegen_tests(&self) {
         let codegen_dir = self.tests_dir.join("codegen");
-        status("Codegen tests");
+        task("Codegen tests");
+
+        let mut cases = Vec::<CodegenCase>::new();
+        for schema_path in codegen_dir
+            .read_dir()
+            .expect("rust codegen tests dir should exist")
+        {
+            let schema_path = schema_path.unwrap().path();
+            let extension = match schema_path.extension() {
+                Some(x) => x,
+                None => continue,
+            };
+            if extension != "lavish" {
+                continue;
+            }
+
+            let name = schema_path.file_stem().unwrap().to_string_lossy();
+            cases.push(CodegenCase {
+                name: name.into(),
+                schema_path,
+            });
+        }
+        status(format!("Found {} codegen tests", cases.len()));
 
         // Rust
         {
-            status("Rust codegen tests");
+            task("Rust codegen...");
 
             let tmp_dir = codegen_dir.join(".tmp");
-            let target_dir = tmp_dir.join("target");
-            let harness_dir = tmp_dir.join("harness");
+            let target_dir = tmp_dir.join("rust_target");
+            let harness_dir = tmp_dir.join("rust_harness");
 
-            for test_file in codegen_dir
-                .read_dir()
-                .expect("rust codegen tests dir should exist")
+            if harness_dir.exists() {
+                fs::remove_dir_all(&harness_dir).unwrap();
+            }
+            fs::create_dir_all(&harness_dir).unwrap();
+
+            let cargo_path = harness_dir.join("Cargo.toml");
+            let cargo_template =
+                RUST_CODEGEN_CARGO_TEMPLATE.replace("{{LAVISH_REVISION}}", LAVISH_REVISION);
+            fs::write(&cargo_path, cargo_template).unwrap();
+
+            let src_dir = harness_dir.join("src");
+            fs::create_dir_all(&src_dir).unwrap();
+
             {
-                let test_file = test_file.unwrap().path();
-                let name = test_file
-                    .file_stem()
-                    .unwrap()
-                    .to_str()
-                    .expect("valid rust codegen test name");
-                let extension = match test_file.extension() {
-                    Some(x) => x,
-                    None => continue,
-                };
-                if extension != "lavish" {
-                    continue;
+                let mut builds = Vec::<String>::new();
+                for case in &cases {
+                    builds.push(format!(
+                        "build {name} from {path:?}",
+                        name = case.name.replace("-", "_"),
+                        path = case.schema_path
+                    ));
                 }
-                case(format!("{}...", name));
-
-                if harness_dir.exists() {
-                    fs::remove_dir_all(&harness_dir).unwrap();
-                }
-                fs::create_dir_all(&harness_dir).unwrap();
-
-                let cargo_path = harness_dir.join("Cargo.toml");
-                let cargo_template =
-                    RUST_CODEGEN_CARGO_TEMPLATE.replace("{{LAVISH_REVISION}}", LAVISH_REVISION);
-                fs::write(&cargo_path, cargo_template).unwrap();
-
-                let src_dir = harness_dir.join("src");
-                fs::create_dir_all(&src_dir).unwrap();
 
                 let rules_path = src_dir.join("lavish-rules");
-                let rules_template = RUST_CODEGEN_LAVISH_RULES_TEMPLATE.replace(
-                    "{{SCHEMA_PATH_STRING}}",
-                    &format!("{:?}", test_file.to_string_lossy()),
-                );
+                let rules_template =
+                    RUST_CODEGEN_LAVISH_RULES_TEMPLATE.replace("{{BUILDS}}", &builds.join("\n"));
                 fs::write(&rules_path, &rules_template).unwrap();
-
-                run(Command::new(&self.compiler_path).args(&["build", &src_dir.to_string_lossy()]));
-
-                run(Command::new("cargo")
-                    .args(&[
-                        "check",
-                        "--quiet",
-                        "--manifest-path",
-                        &cargo_path.to_string_lossy(),
-                    ])
-                    .env("CARGO_TARGET_DIR", target_dir.clone())
-                    .current_dir(&harness_dir));
             }
+
+            run(Command::new(&self.compiler_path).args(&["build", &src_dir.to_string_lossy()]));
+
+            run(Command::new("cargo")
+                .args(&["check", "--manifest-path", &cargo_path.to_string_lossy()])
+                .env("CARGO_TARGET_DIR", target_dir)
+                .current_dir(&harness_dir));
         }
     }
 
