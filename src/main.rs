@@ -18,6 +18,7 @@ fn main() {
         .version(VERSION)
         .author("Amos Wenger <amoswenger@gmail.com>")
         .about("A service definition file compiler")
+        .arg(Arg::with_name("verbose").short("v").long("verbose"))
         .subcommand(
             SubCommand::with_name("build").arg(
                 Arg::with_name("workspace")
@@ -36,11 +37,15 @@ fn main() {
         )
         .get_matches();
 
+    let opts = Opts {
+        verbose: matches.is_present("verbose"),
+    };
+
     match matches.subcommand() {
         ("build", Some(cmd)) => {
             let workspace_path = Path::new(cmd.value_of("workspace").unwrap());
-            let workspace = parse_workspace(workspace_path).unwrap();
-            codegen::codegen(&workspace).unwrap();
+            let workspace = parse_workspace(&opts, workspace_path).unwrap();
+            codegen::codegen(&opts, &workspace).unwrap();
         }
         ("print", Some(cmd)) => {
             let schema_path = Path::new(cmd.value_of("schema").unwrap());
@@ -57,7 +62,14 @@ fn main() {
 
 use simple_error::SimpleError;
 
-fn parse_workspace(workspace_path: &Path) -> Result<ast::Workspace, Box<dyn std::error::Error>> {
+pub struct Opts {
+    verbose: bool,
+}
+
+fn parse_workspace(
+    opts: &Opts,
+    workspace_path: &Path,
+) -> Result<ast::Workspace, Box<dyn std::error::Error>> {
     let rules_path = workspace_path.join("lavish-rules");
     if !rules_path.exists() {
         return Err(Box::new(SimpleError::new(format!(
@@ -77,11 +89,15 @@ fn parse_workspace(workspace_path: &Path) -> Result<ast::Workspace, Box<dyn std:
         members: HashMap::new(),
     };
 
-    println!("{} builds", workspace.rules.builds.len());
+    if opts.verbose {
+        println!("Building {} modules", workspace.rules.builds.len());
+    }
     for build in &workspace.rules.builds {
         let name = build.name.text().to_string();
         let source_path = workspace.resolve(&build)?;
-        println!("Parsing {} from {:?}", name, source_path);
+        if opts.verbose {
+            println!("Parsing {} from {:?}", name, source_path);
+        }
         let source = parser::Source::from_path(&source_path)?;
         let schema = parser::parse_schema(source)?;
 

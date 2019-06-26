@@ -1,0 +1,9 @@
+[package]
+name = "lavish-test-runner"
+version = "0.1.0"
+authors = ["Amos Wenger <amoswenger@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+colored = "1.8.0"
+fs_extra = "1.1.0"
