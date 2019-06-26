@@ -2489,7 +2489,6 @@ pub mod schema {
                 )
             }
         }
-        pub type Runtime = ::lavish::Runtime<Client>;
         pub struct Call<T, P> {
             pub state: ::std::sync::Arc<T>,
             pub client: super::client::Client,
@@ -2584,7 +2583,6 @@ pub mod schema {
                 )
             }
         }
-        pub type Runtime = ::lavish::Runtime<Client>;
         pub struct Call<T, P> {
             pub state: ::std::sync::Arc<T>,
             pub client: super::server::Client,

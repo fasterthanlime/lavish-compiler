@@ -34,12 +34,11 @@ fn main() {
     };
 
     context.run_codegen_tests();
-    context.run_integration_tests();
+    context.run_compliance_tests();
 
     status("All done!")
 }
 
-const LAVISH_REVISION: &str = "ced097658a9246bfc2d7d68f03e97ce0ca98c4d4";
 const RUST_CODEGEN_CARGO_TEMPLATE: &str = r#"
 [package]
 name = "test"
@@ -48,7 +47,7 @@ edition = "2018"
 
 [dependencies.lavish]
 git = "https://github.com/lavish-lang/lavish-rs"
-rev = "{{LAVISH_REVISION}}"
+rev = "master"
 "#;
 
 const RUST_CODEGEN_LAVISH_RULES_TEMPLATE: &str = r#"
@@ -105,9 +104,7 @@ impl Context {
             fs::create_dir_all(&harness_dir).unwrap();
 
             let cargo_path = harness_dir.join("Cargo.toml");
-            let cargo_template =
-                RUST_CODEGEN_CARGO_TEMPLATE.replace("{{LAVISH_REVISION}}", LAVISH_REVISION);
-            fs::write(&cargo_path, cargo_template).unwrap();
+            fs::write(&cargo_path, &RUST_CODEGEN_CARGO_TEMPLATE).unwrap();
 
             let src_dir = harness_dir.join("src");
             fs::create_dir_all(&src_dir).unwrap();
@@ -137,8 +134,8 @@ impl Context {
         }
     }
 
-    fn run_integration_tests(&self) {
-        println!("Should run integration tests!");
+    fn run_compliance_tests(&self) {
+        task("Compliance tests");
     }
 }
 

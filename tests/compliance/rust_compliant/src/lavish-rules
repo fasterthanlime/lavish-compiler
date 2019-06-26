@@ -1,0 +1,5 @@
+target rust {
+    wrapper = none
+}
+
+build compliance from "../../schema/compliance.lavish"

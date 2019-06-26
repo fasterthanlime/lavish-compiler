@@ -1,3 +1,0 @@
-target rust
-
-build integration from "../schema/integration.lavish"
