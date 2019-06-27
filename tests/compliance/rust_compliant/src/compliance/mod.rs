@@ -640,7 +640,7 @@ pub mod schema {
             }
             #[derive(Clone, Debug)]
             pub struct Params {
-                pub x: u8,
+                pub x: u16,
             }
 
             impl ::lavish::facts::Factual<super::super::super::protocol::ProtocolMapping> for Params {
@@ -988,7 +988,7 @@ pub mod schema {
             }
             #[derive(Clone, Debug)]
             pub struct Params {
-                pub x: i8,
+                pub x: i16,
             }
 
             impl ::lavish::facts::Factual<super::super::super::protocol::ProtocolMapping> for Params {

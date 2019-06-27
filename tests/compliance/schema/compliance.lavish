@@ -1,12 +1,12 @@
 
 namespace types {
     server fn identity_u8(x: u8) -> (x: u8)
-    server fn identity_u16(x: u8) -> (x: u16)
+    server fn identity_u16(x: u16) -> (x: u16)
     server fn identity_u32(x: u32) -> (x: u32)
     server fn identity_u64(x: u64) -> (x: u64)
 
     server fn identity_i8(x: i8) -> (x: i8)
-    server fn identity_i16(x: i8) -> (x: i16)
+    server fn identity_i16(x: i16) -> (x: i16)
     server fn identity_i32(x: i32) -> (x: i32)
     server fn identity_i64(x: i64) -> (x: i64)
 
