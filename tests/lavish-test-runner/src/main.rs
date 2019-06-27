@@ -1,5 +1,5 @@
 use colored::*;
-use std::process::Command;
+use std::process::{self, Command};
 use std::{env, fs, path};
 
 fn status<S: Into<String>>(s: S) {
@@ -22,15 +22,18 @@ fn main() {
     let tests_dir = cwd.join("tests");
 
     if !tests_dir.exists() {
-        panic!("test dir {:?} does not exist (wrong working directory?)")
+        panic!(
+            "test dir {:?} does not exist (wrong working directory?)",
+            tests_dir
+        )
     }
 
     status("Building lavish compiler...");
-    run(Command::new("cargo").args(&["build"]));
+    Command::new("cargo").args(&["build"]).run_verbose();
 
     let context = Context {
-        tests_dir: tests_dir.into(),
-        compiler_path: cwd.join("target").join("debug").join("lavish").into(),
+        tests_dir,
+        compiler_path: cwd.join("target").join("debug").join("lavish"),
     };
 
     context.run_codegen_tests();
@@ -61,6 +64,62 @@ target rust {
 struct CodegenCase {
     name: String,
     schema_path: path::PathBuf,
+}
+
+#[derive(Debug)]
+struct ComplianceCase {
+    language: String,
+    exec: String,
+    args: Vec<String>,
+}
+
+struct ServerInstance {
+    address: String,
+    child: process::Child,
+}
+
+impl ComplianceCase {
+    fn spawn_server(&self) -> ServerInstance {
+        let mut args = self.args.clone();
+        args.push("server".into());
+        let mut child = Command::new(&self.exec)
+            .stdin(process::Stdio::piped())
+            .stdout(process::Stdio::piped())
+            .stderr(process::Stdio::piped())
+            .args(args)
+            .spawn()
+            .expect("launch server");
+
+        status("Server spawned, reading address...");
+        use std::io::{BufRead, BufReader};
+        let address = {
+            BufReader::new(child.stdout.as_mut().unwrap())
+                .lines()
+                .next()
+                .expect("read lines from server")
+                .expect("server writes non-empty line")
+        };
+        status(format!("Got address: {}", address));
+
+        ServerInstance { child, address }
+    }
+
+    fn run_client(&self, server: &ServerInstance) {
+        let mut args = self.args.clone();
+        args.push("client".into());
+        args.push(server.address.clone());
+        let status = Command::new(&self.exec)
+            .args(args)
+            .status()
+            .expect("launch client");
+        if !status.success() {
+            println!(
+                "{}",
+                format!("Client failed to run, exited with {:?}", status.code()).red()
+            );
+            process::exit(1);
+        }
+    }
 }
 
 impl Context {
@@ -125,21 +184,89 @@ impl Context {
                 fs::write(&rules_path, &rules_template).unwrap();
             }
 
-            run(Command::new(&self.compiler_path).args(&["build", &src_dir.to_string_lossy()]));
+            Command::new(&self.compiler_path)
+                .args(&["build", &src_dir.to_string_lossy()])
+                .run_verbose();
 
-            run(Command::new("cargo")
+            Command::new("cargo")
                 .args(&["check", "--manifest-path", &cargo_path.to_string_lossy()])
                 .env("CARGO_TARGET_DIR", target_dir)
-                .current_dir(&harness_dir));
+                .run_verbose();
         }
     }
 
     fn run_compliance_tests(&self) {
+        let compliance_dir = self.tests_dir.join("compliance");
         task("Compliance tests");
+
+        let mut cases = Vec::<ComplianceCase>::new();
+
+        {
+            task("Prepare rust");
+            let rust_dir = compliance_dir.join("rust_compliant");
+
+            let src_dir = rust_dir.join("src");
+            Command::new(&self.compiler_path)
+                .args(&["build", &src_dir.to_string_lossy()])
+                .run_verbose();
+
+            let cargo_path = rust_dir.join("Cargo.toml");
+            Command::new("cargo")
+                .args(&["build", "--manifest-path", &cargo_path.to_string_lossy()])
+                .run_verbose();
+
+            let exec_path = rust_dir.join("target").join("debug").join("rust_compliant");
+            cases.push(ComplianceCase {
+                language: "rust".into(),
+                exec: exec_path.to_string_lossy().into(),
+                args: vec![],
+            });
+        }
+
+        let mut pairs = Vec::<(&ComplianceCase, &ComplianceCase)>::new();
+
+        for lhs in &cases {
+            for rhs in &cases {
+                pairs.push((&lhs, &rhs));
+            }
+        }
+        status("{} pairs to test");
+
+        for pair in &pairs {
+            task(format!(
+                "Compliance {}<->{}",
+                pair.0.language, pair.1.language
+            ));
+            status(format!("L: {:#?}", pair.0));
+            status(format!("R: {:#?}", pair.1));
+
+            status("Starting server...");
+            let mut server = pair.0.spawn_server();
+
+            status("Running client");
+            pair.1.run_client(&server);
+
+            status("Killing server...");
+            server.child.kill().unwrap();
+        }
     }
 }
 
-fn run(c: &mut Command) {
-    println!("{}", format!("{:?}", c).blue());
-    c.status().unwrap();
+pub trait RunVerbose {
+    fn run_verbose(&mut self);
 }
+
+impl RunVerbose for Command {
+    fn run_verbose(&mut self) {
+        println!("{}", format!("{:?}", self).blue());
+        let status = self.status().unwrap();
+        if !status.success() {
+            println!(
+                "{}",
+                format!("Process failed with code {:?}", status.code()).red()
+            );
+            std::process::exit(1);
+        }
+    }
+}
+
