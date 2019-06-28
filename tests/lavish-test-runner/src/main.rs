@@ -1,4 +1,7 @@
+#![warn(clippy::all)]
+
 use colored::*;
+use os_pipe::pipe;
 use std::process::{self, Command};
 use std::{env, fs, path};
 
@@ -69,8 +72,9 @@ struct CodegenCase {
 #[derive(Debug)]
 struct ComplianceCase {
     language: String,
-    exec: String,
+    exec: path::PathBuf,
     args: Vec<String>,
+    working_dir: Option<path::PathBuf>,
 }
 
 struct ServerInstance {
@@ -82,22 +86,41 @@ impl ComplianceCase {
     fn spawn_server(&self) -> ServerInstance {
         let mut args = self.args.clone();
         args.push("server".into());
-        let mut child = Command::new(&self.exec)
-            .stdin(process::Stdio::piped())
-            .stdout(process::Stdio::piped())
-            .stderr(process::Stdio::piped())
-            .args(args)
-            .spawn()
-            .expect("launch server");
+
+        let (stdout_read, stdout_write) = pipe().unwrap();
+
+        let child = {
+            let mut cmd = Command::new(&self.exec);
+            if let Some(cwd) = self.working_dir.as_ref() {
+                cmd.current_dir(cwd);
+            }
+            cmd.stdin(process::Stdio::null())
+                .stdout(stdout_write)
+                .stderr(process::Stdio::inherit())
+                .args(args)
+                .spawn()
+                .expect("launch server")
+        };
 
         status("Server spawned, reading address...");
         use std::io::{BufRead, BufReader};
         let address = {
-            BufReader::new(child.stdout.as_mut().unwrap())
-                .lines()
+            let mut lines = BufReader::new(stdout_read).lines();
+
+            let ret = lines
                 .next()
                 .expect("read lines from server")
-                .expect("server writes non-empty line")
+                .expect("server writes non-empty line");
+
+            std::thread::spawn(move || {
+                for line in lines {
+                    if let Ok(line) = line {
+                        println!("server: {}", line);
+                    }
+                }
+            });
+
+            ret
         };
         status(format!("Got address: {}", address));
 
@@ -218,8 +241,31 @@ impl Context {
             let exec_path = rust_dir.join("target").join("debug").join("rust_compliant");
             cases.push(ComplianceCase {
                 language: "rust".into(),
-                exec: exec_path.to_string_lossy().into(),
+                exec: exec_path.clone(),
                 args: vec![],
+                working_dir: None,
+            });
+        }
+
+        {
+            task("Prepare typescript");
+            let ts_dir = compliance_dir.join("ts_compliant");
+
+            Command::new("npm")
+                .args(&["ci"])
+                .current_dir(&ts_dir)
+                .run_verbose();
+
+            let ts_node_path = path::PathBuf::from(".")
+                .join("node_modules")
+                .join(".bin")
+                .join("ts-node");
+
+            cases.push(ComplianceCase {
+                language: "typescript".into(),
+                exec: ts_node_path.clone(),
+                args: vec![".".into()],
+                working_dir: Some(ts_dir.clone()),
             });
         }
 
@@ -233,21 +279,26 @@ impl Context {
         status("{} pairs to test");
 
         for pair in &pairs {
+            let (client, server) = &pair;
             task(format!(
-                "Compliance {}<->{}",
-                pair.0.language, pair.1.language
+                "Compliance: {} client <-> {} server",
+                client.language, server.language
             ));
-            status(format!("L: {:#?}", pair.0));
-            status(format!("R: {:#?}", pair.1));
 
-            status("Starting server...");
-            let mut server = pair.0.spawn_server();
+            status(format!(
+                "Starting server {:?} {:?}",
+                server.exec, server.args
+            ));
+            let mut server_instance = server.spawn_server();
 
-            status("Running client");
-            pair.1.run_client(&server);
+            status(format!(
+                "Running client {:?} {:?}",
+                client.exec, client.args
+            ));
+            client.run_client(&server_instance);
 
             status("Killing server...");
-            server.child.kill().unwrap();
+            server_instance.child.kill().unwrap();
         }
     }
 }
@@ -269,4 +320,3 @@ impl RunVerbose for Command {
         }
     }
 }
-

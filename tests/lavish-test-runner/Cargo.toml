@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 colored = "1.8.0"
 fs_extra = "1.1.0"
+os_pipe = "0.8.1"
