@@ -617,7 +617,7 @@ mod tests {
     macro_rules! parse_failing {
         ($parse: ident, $name: ident, $needle: expr) => {
             #[test]
-            fn $name() -> Result<(), Error> {
+            fn $name() -> Result<(), Box<dyn std::error::Error>> {
                 let res = $parse(Source::from_string(include_str!(concat!(
                     "tests/",
                     stringify!($name),
@@ -630,16 +630,10 @@ mod tests {
                         if msg.contains($needle) {
                             Ok(())
                         } else {
-                            Err(Error::UnexpectedSourceError(UnexpectedSourceError {
-                                expected: $needle.into(),
-                                actual: Some(Box::new(e)),
-                            }))
+                            Err(format!("Expected error '{}', got: {:#?}", $needle, e).into())
                         }
                     }
-                    Ok(_) => Err(Error::UnexpectedSourceError(UnexpectedSourceError {
-                        expected: $needle.into(),
-                        actual: None,
-                    })),
+                    Ok(_) => Err(format!("Expected error '{}', got none", $needle,).into()),
                 }
             }
         };
