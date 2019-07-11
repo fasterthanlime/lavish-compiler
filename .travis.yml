@@ -8,5 +8,5 @@ before_install:
 script:
     - cargo build --verbose
     - cargo test --verbose
-    - scripts/run-tests.sh
+    - scripts/tests.sh
 

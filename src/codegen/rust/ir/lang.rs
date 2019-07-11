@@ -35,10 +35,6 @@ pub fn allow() -> Allow {
     Allow { items: Vec::new() }
 }
 
-pub fn serde_untagged() -> impl Display {
-    "#[serde(untagged)]\n"
-}
-
 pub struct _Fn<'a> {
     kw_pub: bool,
     self_param: Option<String>,
@@ -377,13 +373,8 @@ impl Derive {
         self
     }
 
-    pub fn serialize(mut self) -> Self {
-        self.items.insert(Traits::Serialize());
-        self
-    }
-
-    pub fn deserialize(mut self) -> Self {
-        self.items.insert(Traits::Deserialize());
+    pub fn copy(mut self) -> Self {
+        self.items.insert("Copy".into());
         self
     }
 }

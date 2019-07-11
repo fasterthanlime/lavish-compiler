@@ -52,15 +52,15 @@ impl fmt::Display for Error {
         write!(f, "codegen error: {}", self.message)
     }
 }
+use crate::Opts;
 
-pub fn codegen(workspace: &ast::Workspace) -> Result {
+pub fn codegen(opts: &Opts, workspace: &ast::Workspace) -> Result {
     let generator = match &workspace.rules.target {
-        ast::Target::Rust(target) => rust::Generator::new(target.clone()),
+        ast::Target::Rust(target) => rust::Generator::new(&opts, target.clone()),
         _ => panic!("Unimplemented target: {:#?}", workspace.rules.target),
     };
 
     generator.emit_workspace(&workspace)?;
 
-    println!("Codegen done!");
     Ok(())
 }

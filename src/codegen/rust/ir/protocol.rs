@@ -21,28 +21,56 @@ impl<'a> Protocol<'a> {
     fn write_translation_tables(&self, s: &mut Scope) {
         writeln!(
             s,
-            "use {facts}::{{OffsetList, TranslationTable}};",
+            "use {facts}::{{OffsetList, TypeMapping}};",
             facts = Mods::facts()
         )
         .unwrap();
 
-        s.write("pub struct TranslationTables").in_block(|s| {
+        s.write(derive().debug());
+        s.write("pub struct ProtocolMapping").in_block(|s| {
+            s.line("// builtins");
+            for builtin in get_builtins() {
+                writeln!(s, "pub __{variant}: TypeMapping,", variant = builtin.1).unwrap();
+            }
+
+            s.line("// structs");
             self.body.for_each_struct_of_schema(&mut |st| {
-                writeln!(
-                    s,
-                    "pub {variant}: TranslationTable,",
-                    variant = st.variant()
-                )
-                .unwrap();
+                writeln!(s, "pub {variant}: TypeMapping,", variant = st.variant()).unwrap();
+            });
+
+            s.line("// enums");
+            self.body.for_each_enum_of_schema(&mut |en| {
+                writeln!(s, "pub {variant}: TypeMapping,", variant = en.variant()).unwrap();
             });
         });
         s.lf();
 
-        s.write("impl TranslationTables").in_block(|s| {
-            _fn("identity")
+        s.write("impl Default for ProtocolMapping").in_block(|s| {
+            _fn("default")
                 .returns("Self")
                 .body(|s| {
                     s.write("Self").in_block(|s| {
+                        s.line("// builtins");
+                        for builtin in get_builtins() {
+                            let mut values: Vec<String> = Vec::new();
+                            let mut i = 0;
+                            self.body.for_each_fun_of_schema(&mut |f| {
+                                if f.kind == builtin.0 {
+                                    values.push(format!("{}", i));
+                                    i += 1;
+                                }
+                            });
+
+                            writeln!(
+                                s,
+                                "__{variant}: TypeMapping::Mapped(OffsetList(vec![{values}])),",
+                                variant = builtin.1,
+                                values = values.join(", "),
+                            )
+                            .unwrap();
+                        }
+
+                        s.line("// structs");
                         self.body.for_each_struct_of_schema(&mut |st| {
                             let mut values: Vec<String> = Vec::new();
                             for i in 0..st.fields.len() {
@@ -51,16 +79,39 @@ impl<'a> Protocol<'a> {
 
                             writeln!(
                                 s,
-                                "{variant}: TranslationTable::Mapped(OffsetList(vec![{values}])),",
+                                "{variant}: TypeMapping::Mapped(OffsetList(vec![{values}])),",
                                 variant = st.variant(),
                                 values = values.join(", "),
                             )
                             .unwrap();
                         });
+
+                        s.line("// enums");
+                        self.body.for_each_enum_of_schema(&mut |en| {
+                            let mut values: Vec<String> = Vec::new();
+                            for i in 0..en.variants.len() {
+                                values.push(format!("{}", i));
+                            }
+
+                            writeln!(
+                                s,
+                                "{variant}: TypeMapping::Mapped(OffsetList(vec![{values}])),",
+                                variant = en.variant(),
+                                values = values.join(", "),
+                            )
+                            .unwrap();
+                        })
                     });
                 })
                 .write_to(s);
         });
+
+        writeln!(
+            s,
+            "impl {facts}::Mapping for ProtocolMapping {{}}",
+            facts = Mods::facts()
+        )
+        .unwrap();
     }
 
     fn write_atoms(&self, s: &mut Scope) {
@@ -88,18 +139,18 @@ impl<'a> Protocol<'a> {
     fn write_specializations(&self, s: &mut Scope) {
         writeln!(
             s,
-            "pub type {name} = {lavish}::{name}<{triplet}>;",
+            "pub type {name} = {lavish}::{name}<{quadruplet}>;",
             lavish = Mods::lavish(),
-            triplet = self.body.stack.triplet(),
+            quadruplet = self.body.stack.quadruplet(),
             name = "Caller",
         )
         .unwrap();
 
         writeln!(
             s,
-            "pub type {name}<CL> = {lavish}::{name}<CL, {triplet}>;",
+            "pub type {name}<CL> = {lavish}::{name}<CL, {quadruplet}>;",
             lavish = Mods::lavish(),
-            triplet = self.body.stack.triplet(),
+            quadruplet = self.body.stack.quadruplet(),
             name = "Handler",
         )
         .unwrap();
@@ -181,62 +232,102 @@ impl<'a> Atom<'a> {
             .write_to(s);
     }
 
-    fn implement_deserialize(&self, s: &mut Scope) {
-        _fn("deserialize")
-            .param("method: &str")
-            .param(format!(
-                "de: &mut {Deserializer}",
-                Deserializer = Structs::Deserializer()
-            ))
-            .returns(format!("{es}::Result<Self>", es = Mods::es()))
-            .body(|s| {
-                writeln!(s, "use {es}::deserialize as __DS;", es = Mods::es()).unwrap();
-                writeln!(s, "use {serde}::de::Error;", serde = Mods::serde()).unwrap();
-                s.lf();
+    fn implement_factual(&self, s: &mut Scope) {
+        let stack = &self.proto.body.stack;
 
-                s.write("match method");
-                s.in_block(|s| {
-                    self.for_each_fun(&mut |f| {
-                        s.line(format!("{method} => ", method = quoted(f.method())));
-                        s.scope()
-                            .write("Ok")
-                            .in_list(Brackets::Round, |l| {
-                                l.item(format!(
-                                    "{name}::{variant}(__DS::<{module}::{name}>(de)?)",
-                                    name = &self.name,
-                                    variant = f.variant(),
-                                    module = f.module(&self.proto.body.stack),
-                                ));
-                            })
-                            .write(",")
-                            .lf();
+        _impl_trait(
+            format!(
+                "{Factual}<{M}>",
+                Factual = Traits::Factual(),
+                M = stack.ProtocolMapping()
+            ),
+            self.name,
+        )
+        .body(|s| {
+            _fn("read")
+                .self_bound("Sized")
+                .type_param_bound("R", Traits::Read())
+                .param(format!(
+                    "rd: &mut {Reader}<R>",
+                    Reader = Structs::FactsReader()
+                ))
+                .returns(format!(
+                    "Result<Self, {Error}>",
+                    Error = Structs::FactsError()
+                ))
+                .body(|s| {
+                    writeln!(s, "let len = rd.read_array_len()?;").unwrap();
+                    write!(s, "if len != 2").unwrap();
+                    s.in_block(|s| {
+                        // FIXME: this might not be ideal, this probably
+                        // should be a proper facts error
+                        writeln!(s, "unreachable!();").unwrap();
                     });
-                    s.write("_ =>").lf();
-                    s.scope()
-                        .write("Err")
-                        .in_parens(|s| {
-                            s.write(format!("{es}::Error::custom", es = Mods::es()))
-                                .in_parens(|s| {
-                                    s.write("format!").in_parens_list(|l| {
-                                        l.item(quoted("unknown method: {}"));
-                                        l.item("method")
-                                    });
-                                });
-                        })
-                        .write(",")
-                        .lf();
-                });
-            })
-            .write_to(s);
+
+                    writeln!(s, "let typ: u32 = rd.read_int()?;").unwrap();
+
+                    s.write("match typ");
+                    s.in_block(|s| {
+                        let mut i = 0;
+                        self.for_each_fun(&mut |f| {
+                            writeln!(
+                                s,
+                                "{i} => Ok({name}::{variant}(Self::subread(rd)?)),",
+                                i = i,
+                                name = &self.name,
+                                variant = f.variant(),
+                            )
+                            .unwrap();
+
+                            i += 1;
+                        });
+                        // FIXME: proper error
+                        s.write("_ => unreachable!(),").lf();
+                    });
+                })
+                .write_to(s);
+
+            s.lf();
+            _fn("write")
+                .type_param_bound("W", Traits::Write())
+                .self_param("&self")
+                .param(format!("mapping: &{M}", M = stack.ProtocolMapping()))
+                .param("wr: &mut W")
+                .returns(format!(
+                    "Result<(), {Error}>",
+                    Error = Structs::FactsError()
+                ))
+                .body(|s| {
+                    writeln!(s, "let o = &mapping.__{slot};", slot = self.name).unwrap();
+                    write!(s, "match self").unwrap();
+                    s.in_block(|s| {
+                        let mut i = 0;
+                        self.for_each_fun(&mut |f| {
+                            writeln!(
+                                s,
+                                "{name}::{variant}(value) =>\n    o.write_union(wr, mapping, {name:?}, {variant:?}, {index}, value),",
+                                index = i,
+                                name = &self.name,
+                                variant = f.variant(),
+                            )
+                            .unwrap();
+
+                            i += 1;
+                        });
+                        writeln!(s, "_ => unreachable!(),").unwrap();
+                    });
+                })
+                .write_to(s);
+        })
+        .write_to(s);
     }
 }
 
 impl<'a> Display for Atom<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
-            s.write(derive().clone().debug().serialize());
+            s.write(derive().clone().debug());
             s.write(allow().non_camel_case().unused());
-            s.write(serde_untagged());
             let mut e = _enum(self.name);
             e.kw_pub();
             self.for_each_fun(&mut |f| {
@@ -249,12 +340,24 @@ impl<'a> Display for Atom<'a> {
             });
             e.write_to(s);
 
-            _impl_trait(Traits::Atom(), self.name)
-                .body(|s| {
-                    self.implement_method(s);
-                    self.implement_deserialize(s);
-                })
-                .write_to(s);
+            _impl_trait(
+                format!("{Atom}<ProtocolMapping>", Atom = Traits::Atom()),
+                self.name,
+            )
+            .body(|s| {
+                self.implement_method(s);
+            })
+            .write_to(s);
+
+            self.implement_factual(s);
         })
     }
+}
+
+fn get_builtins() -> Vec<(ast::Kind, String)> {
+    vec![
+        (ast::Kind::Request, "Params".into()),
+        (ast::Kind::Request, "Results".into()),
+        (ast::Kind::Notification, "NotificationParams".into()),
+    ]
 }

@@ -1,6 +1,6 @@
 [package]
 name = "lavish-compiler"
-version = "0.3.3"
+version = "0.4.0"
 authors = ["Amos Wenger <amoswenger@gmail.com>"]
 edition = "2018"
 description = "Compiler for the Lavish IDL"
@@ -20,7 +20,7 @@ name = "lavish"
 path = "src/main.rs"
 
 [dependencies]
-nom = "5.0.0-beta2"
+nom = "5.0.0"
 simple-error = "0.2.0"
 colored = "1.8.0"
 clap = "2.33.0"
@@ -28,7 +28,6 @@ indexmap = "1.0.2"
 heck = "0.3.1"
 log = "0.4.6"
 env_logger = "0.6.1"
-crc = "1.8.1"
 
 [dev-dependencies]
 strip-ansi-escapes = "0.1.0"

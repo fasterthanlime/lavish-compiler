@@ -51,7 +51,7 @@ impl<'a> Display for Struct<'a> {
         Scope::fmt(f, |s| {
             let stack = &self.node.stack;
 
-            s.write(derive().clone().debug().serialize().deserialize());
+            s.write(derive().clone().debug());
             s.write("pub struct ").write(self.node.name());
             s.in_block(|s| {
                 for f in &self.node.fields {
@@ -62,9 +62,9 @@ impl<'a> Display for Struct<'a> {
             s.lf();
             _impl_trait(
                 format!(
-                    "{Factual}<{TT}>",
+                    "{Factual}<{M}>",
                     Factual = Traits::Factual(),
-                    TT = stack.TranslationTables()
+                    M = stack.ProtocolMapping()
                 ),
                 self.node.name(),
             )
@@ -73,12 +73,12 @@ impl<'a> Display for Struct<'a> {
                     .self_bound("Sized")
                     .type_param_bound("R", Traits::Read())
                     .param(format!(
-                        "rd: &mut {facts}::Reader<R>",
-                        facts = Mods::facts()
+                        "rd: &mut {Reader}<R>",
+                        Reader = Structs::FactsReader()
                     ))
                     .returns(format!(
-                        "Result<Self, {facts}::Error>",
-                        facts = Mods::facts()
+                        "Result<Self, {Error}>",
+                        Error = Structs::FactsError()
                     ))
                     .body(|s| {
                         writeln!(
@@ -101,16 +101,18 @@ impl<'a> Display for Struct<'a> {
                     .write_to(s);
                 s.lf();
                 _fn("write")
-                    .self_bound("Sized")
                     .type_param_bound("W", Traits::Write())
                     .self_param("&self")
-                    .param(format!("tt: &{TT}", TT = stack.TranslationTables()))
+                    .param(format!("mapping: &{M}", M = stack.ProtocolMapping()))
                     .param("wr: &mut W")
-                    .returns(format!("Result<(), {facts}::Error>", facts = Mods::facts()))
+                    .returns(format!(
+                        "Result<(), {Error}>",
+                        Error = Structs::FactsError()
+                    ))
                     .body(|s| {
                         write!(
                             s,
-                            "tt.{variant}.write(wr, |wr, i| match i",
+                            "mapping.{variant}.write(wr, |wr, i| match i",
                             variant = self.node.variant()
                         )
                         .unwrap();
@@ -118,7 +120,7 @@ impl<'a> Display for Struct<'a> {
                             for (index, field) in self.node.fields.iter().enumerate() {
                                 writeln!(
                                     s,
-                                    "{index} => self.{field}.write(tt, wr),",
+                                    "{index} => self.{field}.write(mapping, wr),",
                                     index = index,
                                     field = field.name.text()
                                 )
@@ -295,12 +297,6 @@ impl<'a> Display for Field<'a> {
         Scope::fmt(f, |s| {
             s.comment(&self.node.comment);
 
-            {
-                use ast::BaseType as T;
-                if let ast::TypeKind::Base(T::Data) = &self.node.typ.kind {
-                    writeln!(s, "#[serde(with = {:?})]", "::lavish::serde_bytes").unwrap()
-                }
-            }
             write!(
                 s,
                 "pub {name}: {typ}",
@@ -325,22 +321,99 @@ impl<'a> Enum<'a> {
 impl<'a> Display for Enum<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
+            let stack = &self.node.stack;
+
             s.comment(&self.node.comment);
-            s.write(derive().clone().debug().serialize().deserialize());
+            s.write(derive().clone().copy().debug());
             s.write("#[repr(u32)]").lf();
             s.write("pub enum ").write(self.node.name.text());
             s.in_block(|s| {
-                for v in &self.node.variants {
+                for (i, v) in self.node.variants.iter().enumerate() {
                     s.comment(&v.comment);
-                    writeln!(
-                        s,
-                        "{name} = 0x{hash:x},",
-                        name = v.name.text(),
-                        hash = v.hash()
-                    )
-                    .unwrap();
+                    writeln!(s, "{name} = {i},", name = v.name.text(), i = i).unwrap();
                 }
             });
+
+            s.lf();
+            _impl_trait(
+                format!(
+                    "{Factual}<{M}>",
+                    Factual = Traits::Factual(),
+                    M = stack.ProtocolMapping()
+                ),
+                self.node.name(),
+            )
+            .body(|s| {
+                _fn("read")
+                    .self_bound("Sized")
+                    .type_param_bound("R", Traits::Read())
+                    .param(format!(
+                        "rd: &mut {facts}::Reader<R>",
+                        facts = Mods::facts()
+                    ))
+                    .returns(format!(
+                        "Result<Self, {facts}::Error>",
+                        facts = Mods::facts()
+                    ))
+                    .body(|s| {
+                        writeln!(s, "let value: u32 = rd.read_int()?;").unwrap();
+                        writeln!(s, "use {name} as E;", name = self.node.name()).unwrap();
+                        s.write("Ok(match value").in_terminated_block(")", |s| {
+                            for (i, variant) in self.node.variants.iter().enumerate() {
+                                writeln!(
+                                    s,
+                                    "{i} => E::{variant},",
+                                    i = i,
+                                    variant = variant.name.text()
+                                )
+                                .unwrap();
+                            }
+                            writeln!(
+                                s,
+                                "_ => return Err({Error}::IncompatibleSchema(format!({msg:?}, value))),",
+                                Error = Structs::FactsError(),
+                                msg = format!(
+                                    "Received unrecognized enum variant for {}: {{:#?}}",
+                                    self.node.name()
+                                )
+                            )
+                            .unwrap();
+                        });
+                    })
+                    .write_to(s);
+                s.lf();
+                _fn("write")
+                    .self_bound("Sized")
+                    .type_param_bound("W", Traits::Write())
+                    .self_param("&self")
+                    .param(format!("mapping: &{M}", M = stack.ProtocolMapping()))
+                    .param("wr: &mut W")
+                    .returns(format!("Result<(), {facts}::Error>", facts = Mods::facts()))
+                    .body(|s| {
+                        writeln!(
+                            s,
+                            "let offsets = mapping.{variant}.validate()?;",
+                            variant = self.node.variant()
+                        )
+                        .unwrap();
+                        writeln!(s, "match offsets.get(*self as usize)").unwrap();
+                        s.in_block(|s| {
+                            writeln!(s, "Some(value) => value.write(mapping, wr),").unwrap();
+                            writeln!(
+                                s,
+                                "None => Err({Error}::IncompatibleSchema(format!({msg:?}, self))),",
+                                Error = Structs::FactsError(),
+                                msg = format!(
+                                    "Enum variant for {} not known by the peer: {{:#?}}",
+                                    self.node.name()
+                                )
+                            )
+                            .unwrap();
+                        });
+                    })
+                    .write_to(s);
+            })
+            .write_to(s);
         })
     }
 }

@@ -10,13 +10,13 @@ pub trait RustStack {
     fn Caller(&self) -> String;
     fn Callable(&self) -> String;
     fn Implementable(&self) -> String;
-    fn TranslationTables(&self) -> String;
+    fn ProtocolMapping(&self) -> String;
     fn Slottable(&self) -> String;
     fn SideClient(&self, side: ast::Side) -> String;
     fn Params(&self) -> String;
     fn NotificationParams(&self) -> String;
     fn Results(&self) -> String;
-    fn triplet(&self) -> String;
+    fn quadruplet(&self) -> String;
 }
 
 impl<'a> RustStack for ast::Stack<'a> {
@@ -44,8 +44,8 @@ impl<'a> RustStack for ast::Stack<'a> {
         format!("{}::Implementable", self.protocol())
     }
 
-    fn TranslationTables(&self) -> String {
-        format!("{}::TranslationTables", self.protocol())
+    fn ProtocolMapping(&self) -> String {
+        format!("{}::ProtocolMapping", self.protocol())
     }
 
     fn Slottable(&self) -> String {
@@ -68,9 +68,10 @@ impl<'a> RustStack for ast::Stack<'a> {
         format!("{}::Results", self.protocol())
     }
 
-    fn triplet(&self) -> String {
+    fn quadruplet(&self) -> String {
         format!(
-            "{P}, {NP}, {R}",
+            "{M}, {P}, {NP}, {R}",
+            M = self.ProtocolMapping(),
             P = self.Params(),
             NP = self.NotificationParams(),
             R = self.Results(),
@@ -138,6 +139,20 @@ pub trait RustStruct {
 }
 
 impl<'a> RustStruct for ast::Anchored<'a, &ast::StructDecl> {
+    fn variant(&self) -> String {
+        self.names()
+            .iter()
+            .map(|x| x.to_camel_case())
+            .collect::<Vec<_>>()
+            .join("_")
+    }
+}
+
+pub trait RustEnum {
+    fn variant(&self) -> String;
+}
+
+impl<'a> RustEnum for ast::Anchored<'a, &ast::EnumDecl> {
     fn variant(&self) -> String {
         self.names()
             .iter()

@@ -72,7 +72,7 @@ impl GeneratesRust for ast::BaseType {
             T::F32 => write!(f, "f32"),
             T::F64 => write!(f, "f64"),
             T::String => write!(f, "String"),
-            T::Data => write!(f, "Vec<u8>"),
+            T::Data => write!(f, "{facts}::Bin", facts = Mods::facts()),
             T::Timestamp => write!(
                 f,
                 "{chrono}::DateTime<{chrono}::offset::Utc>",

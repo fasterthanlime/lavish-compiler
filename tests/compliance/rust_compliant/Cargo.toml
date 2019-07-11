@@ -1,0 +1,9 @@
+[package]
+name = "rust_compliant"
+version = "0.1.0"
+authors = ["Amos Wenger <amoswenger@gmail.com>"]
+edition = "2018"
+
+[dependencies.lavish]
+git = "https://github.com/lavish-lang/lavish-rs"
+rev = "master"

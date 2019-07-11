@@ -126,6 +126,13 @@ impl<'a> Stack<'a> {
             .collect()
     }
 
+    pub fn names_and(&self, addition: &'a str) -> Vec<&str> {
+        self.names()
+            .into_iter()
+            .chain(std::iter::once(addition))
+            .collect()
+    }
+
     pub fn lookup_struct(&self, mode: LookupMode, down: &[&'a str]) -> Option<RelativePath<'a>> {
         use log::*;
         debug!(
@@ -276,6 +283,12 @@ impl<'a> Anchored<'a, &NamespaceBody> {
         }
     }
 
+    pub fn for_each_enum(&self, cb: &mut FnMut(Anchored<&EnumDecl>)) {
+        for f in &self.enums {
+            cb(self.stack.anchor(f));
+        }
+    }
+
     pub fn for_each_namespace(&self, cb: &mut FnMut(Anchored<&NamespaceBody>)) {
         for ns in &self.namespaces {
             cb(self.stack.push(ns).anchor(&ns.body));
@@ -299,13 +312,21 @@ impl<'a> Anchored<'a, &NamespaceBody> {
         });
         self.for_each_namespace(&mut |ns| ns.for_each_struct_of_schema(cb));
     }
+
+    pub fn for_each_enum_of_schema(&self, cb: &mut FnMut(Anchored<&EnumDecl>)) {
+        self.for_each_enum(&mut |f| {
+            cb(f);
+        });
+        self.for_each_fun(&mut |f| {
+            f.for_each_enum_of_schema(cb);
+        });
+        self.for_each_namespace(&mut |ns| ns.for_each_enum_of_schema(cb));
+    }
 }
 
 impl<'a> Anchored<'a, &FunctionDecl> {
     pub fn names(&self) -> Vec<&str> {
-        let mut names = self.stack.names();
-        names.push(self.name().into());
-        names
+        self.stack.names_and(self.name())
     }
 
     pub fn for_each_fun_of_schema(&self, cb: &mut FnMut(Anchored<&FunctionDecl>)) {
@@ -326,6 +347,13 @@ impl<'a> Anchored<'a, &FunctionDecl> {
         }
     }
 
+    pub fn for_each_enum_of_schema(&self, cb: &mut FnMut(Anchored<&EnumDecl>)) {
+        let stack = self.stack.push(self.inner);
+        if let Some(body) = self.body.as_ref() {
+            stack.anchor(body).for_each_enum_of_schema(cb);
+        }
+    }
+
     pub fn method(&self) -> String {
         self.names().join(".")
     }
@@ -337,9 +365,17 @@ impl<'a> Anchored<'a, &FunctionDecl> {
 
 impl<'a> Anchored<'a, &StructDecl> {
     pub fn names(&self) -> Vec<&str> {
-        let mut names = self.stack.names();
-        names.push(self.name().into());
-        names
+        self.stack.names_and(self.name())
+    }
+
+    pub fn name(&self) -> &str {
+        self.inner.name.text()
+    }
+}
+
+impl<'a> Anchored<'a, &EnumDecl> {
+    pub fn names(&self) -> Vec<&str> {
+        self.stack.names_and(self.name())
     }
 
     pub fn name(&self) -> &str {

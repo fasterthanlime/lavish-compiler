@@ -145,32 +145,6 @@ impl<'a> Scope<'a> {
         self
     }
 
-    pub fn in_parens_list<F>(&mut self, f: F) -> &mut Self
-    where
-        F: Fn(&mut List),
-    {
-        self.in_list(Brackets::Round, f)
-    }
-
-    pub fn in_brackets<F>(&mut self, brackets: Brackets, f: F) -> &mut Self
-    where
-        F: Fn(&mut Scope),
-    {
-        {
-            self.write(brackets.open());
-            f(self);
-            self.write(brackets.close());
-        }
-        self
-    }
-
-    pub fn in_parens<F>(&mut self, f: F) -> &mut Self
-    where
-        F: Fn(&mut Scope),
-    {
-        self.in_brackets(Brackets::Round, f)
-    }
-
     pub fn fresh_line(&self) -> bool {
         self.state == ScopeState::NeedIndent
     }

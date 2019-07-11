@@ -59,15 +59,6 @@ impl<'a> Router<'a> {
             .write_to(s);
     }
 
-    fn define_runtime(&self, s: &mut Scope) {
-        writeln!(
-            s,
-            "pub type Runtime = {lavish}::Runtime<Client>;",
-            lavish = Mods::lavish(),
-        )
-        .unwrap();
-    }
-
     fn define_slot(&self, s: &mut Scope) {
         s.write(format!(
             "pub type SlotReturn = Result<{protocol}::Results, {Error}>;",
@@ -108,9 +99,9 @@ impl<'a> Router<'a> {
 
         _impl_trait(
             format!(
-                "{lavish}::Handler<Client, {triplet}>",
+                "{lavish}::Handler<Client, {quadruplet}>",
                 lavish = Mods::lavish(),
-                triplet = self.body.stack.triplet()
+                quadruplet = self.body.stack.quadruplet()
             ),
             "Router",
         )
@@ -220,7 +211,6 @@ impl<'a> Router<'a> {
 impl<'a> Display for Router<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Scope::fmt(f, |s| {
-            self.define_runtime(s);
             self.define_call(s);
             self.define_slot(s);
             self.define_router(s);

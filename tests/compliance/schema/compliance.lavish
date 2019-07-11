@@ -1,0 +1,84 @@
+
+namespace types {
+    server fn identity_u8(x: u8) -> (x: u8)
+    server fn identity_u16(x: u16) -> (x: u16)
+    server fn identity_u32(x: u32) -> (x: u32)
+    server fn identity_u64(x: u64) -> (x: u64)
+
+    server fn identity_i8(x: i8) -> (x: i8)
+    server fn identity_i16(x: i16) -> (x: i16)
+    server fn identity_i32(x: i32) -> (x: i32)
+    server fn identity_i64(x: i64) -> (x: i64)
+
+    server fn identity_multiple(x: i32, y: string, z: bool) -> (x: i32, y: string, z: bool)
+
+    // Test values: true, false
+    server fn identity_bool(x: bool) -> (x: bool)
+
+    // Test values:
+    // - empty array (fixarray)
+    // - 300 items (array16)
+    // - 100K items (array32)
+    server fn identity_string(x: string) -> (x: string)
+
+    // Test values:
+    // - empty data (bin8)
+    // - 8 bytes, with a null byte in the middle (bin8)
+    // - 300 bytes (bin16)
+    // - 100K bytes (bin32)
+    server fn identity_data(x: data) -> (x: data)
+
+    // Test values:
+    // - 0 sec / 0 nsec (epoch)
+    // - 2019 timestamp, with & without nanos (32-bit timestamp)
+    // - 1969 timestamp, with & without nanos (64-bit timestamp becaues negative secs)
+    // - 2200 timestamp, with & without nanos (64-bit timestamp)
+    // - 2600 timestamp, with & without nanos (96-bit timestamp)
+    server fn identity_timestamp(x: timestamp) -> (x: timestamp)
+
+    // Test values:
+    // - empty array (fixarray)
+    // - 300 items (array16)
+    // - 100K items (array32)
+    server fn identity_array_string(x: array<string>) -> (x: array<string>)
+    server fn identity_array_option_u32(x: array<option<u32>>) -> (x: array<option<u32>>)
+    server fn identity_option_array_u8(x: option<array<u8>>) -> (x: option<array<u8>>)
+
+    server fn identity_map_string_bool(x: map<string, bool>) -> (x: map<string, bool>)
+
+    struct Participant {
+        name: string,
+        age: i16,
+    }
+    server fn identity_struct(x: Participant) -> (x: Participant)
+
+    enum Mood {
+        Positive,
+        Neutral,
+        Negative,
+    }
+    server fn identity_enum(x: Mood) -> (x: Mood)
+
+    // TODO: implement
+    // union Either {
+    //     Mood,
+    //     Participant,
+    // }
+    // server fn identity_union(x: Either) -> (x: Either)
+}
+
+namespace layered {
+    // Server will respond with ok = true if the client
+    // succeeds with the challenge.
+    server fn login() -> (ok: bool) {
+        // The client must replied with md5(concat(input, secret))
+        // Both client & servers must be using the same secret,
+        // which is "cheese"
+        client fn challenge(input: string) -> (hashed: string)
+    }
+}
+
+namespace lifetime {
+    server fn shutdown()
+}
+
